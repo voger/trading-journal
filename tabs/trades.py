@@ -556,7 +556,11 @@ class TradesTab(BaseTab):
 
         rows_data = []
         for t in trades: rows_data.append((t['entry_date'] or '', 'trade', t))
-        for ev in events: rows_data.append((ev['event_date'] or '', 'event', ev))
+        for ev in events:
+            ev_date = (ev['event_date'] or '')[:10]
+            if period_from is not None and ev_date < str(period_from): continue
+            if flt_period == "Last Month" and ev_date > str(period_to): continue
+            rows_data.append((ev_date, 'event', ev))
         rows_data.sort(key=lambda x: x[0], reverse=True)
 
         self.table.setUpdatesEnabled(False)
