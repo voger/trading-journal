@@ -1,7 +1,7 @@
 """Trades tab — KPI cards, split-pane table+preview, filters, CRUD actions."""
 import csv
 import os, shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -29,6 +29,16 @@ from asset_modules import get_module
 
 SCREENSHOTS_DIR = os.path.join(get_app_data_dir(), 'screenshots')
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
+
+
+class _NumItem(QTableWidgetItem):
+    """QTableWidgetItem that sorts numerically when the cell text is a number."""
+    def __lt__(self, other):
+        try:
+            return float(self.text().replace('+', '').replace(',', '')) < \
+                   float(other.text().replace('+', '').replace(',', ''))
+        except (ValueError, AttributeError):
+            return self.text() < other.text()
 
 
 # ── KPI Card Widget ──────────────────────────────────────────────────────
@@ -107,6 +117,12 @@ class TradesTab(BaseTab):
         self.flt_status.addItems(["All Status", "Open", "Closed"]); filt.addWidget(self.flt_status)
         self.flt_grade = QComboBox()
         self.flt_grade.addItems(["All Grades", "A", "B", "C", "D", "F"]); filt.addWidget(self.flt_grade)
+        self.flt_period = QComboBox()
+        self.flt_period.addItems([
+            "All Time", "This Month", "Last Month",
+            "This Year", "Last 30 Days", "Last 90 Days",
+        ])
+        filt.addWidget(self.flt_period)
         self.flt_exit = QComboBox()
         self.flt_exit.addItems(["All Exits", "target_hit", "trailing_stop", "manual",
                                 "stop_loss", "time_exit", "stop_out"]); filt.addWidget(self.flt_exit)
@@ -116,7 +132,7 @@ class TradesTab(BaseTab):
         filt.addWidget(btn_clear); filt.addStretch()
         layout.addLayout(filt)
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
-                  self.flt_grade, self.flt_exit, self.flt_outcome]:
+                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period]:
             w.currentIndexChanged.connect(self.refresh)
 
         # ── Split pane: Table (left) | Preview (right) ──
@@ -405,7 +421,7 @@ class TradesTab(BaseTab):
 
     def _clear_filters(self):
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
-                  self.flt_grade, self.flt_exit, self.flt_outcome]:
+                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period]:
             w.blockSignals(True); w.setCurrentIndex(0); w.blockSignals(False)
         self.refresh()
 
@@ -474,6 +490,23 @@ class TradesTab(BaseTab):
         flt_grade = self.flt_grade.currentText()
         flt_exit = self.flt_exit.currentText()
         flt_outcome = self.flt_outcome.currentText()
+        flt_period = self.flt_period.currentText()
+
+        # Compute date range for the period filter
+        today = datetime.now().date()
+        period_from = None
+        if flt_period == "This Month":
+            period_from = today.replace(day=1)
+        elif flt_period == "Last Month":
+            first_this = today.replace(day=1)
+            period_from = (first_this - timedelta(days=1)).replace(day=1)
+            period_to = first_this - timedelta(days=1)
+        elif flt_period == "This Year":
+            period_from = today.replace(month=1, day=1)
+        elif flt_period == "Last 30 Days":
+            period_from = today - timedelta(days=30)
+        elif flt_period == "Last 90 Days":
+            period_from = today - timedelta(days=90)
 
         filtered = []
         for t in trades:
@@ -488,6 +521,10 @@ class TradesTab(BaseTab):
             if flt_outcome == "Winners" and pnl <= 0: continue
             if flt_outcome == "Losers" and pnl >= 0: continue
             if flt_outcome == "Breakeven" and pnl != 0: continue
+            if period_from is not None:
+                entry = (t['entry_date'] or '')[:10]
+                if entry < str(period_from): continue
+                if flt_period == "Last Month" and entry > str(period_to): continue
             filtered.append(t)
         trades = filtered
 
@@ -563,7 +600,7 @@ class TradesTab(BaseTab):
                           status_text]
 
                 for col, val in enumerate(cells):
-                    item = QTableWidgetItem(val)
+                    item = _NumItem(val)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     if col == pnl_idx:
                         item.setForeground(pc)
@@ -585,7 +622,7 @@ class TradesTab(BaseTab):
                 cells += [''] * len(mod_cols)
                 cells += [f"{amt:+.2f}", ev['description'] or '', '', '']
                 for col, val in enumerate(cells):
-                    item = QTableWidgetItem(val)
+                    item = _NumItem(val)
                     item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                     item.setBackground(bg)
                     if col == instr_idx:
