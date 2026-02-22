@@ -37,7 +37,6 @@ def create_backup(app_dir: str, backup_dir: str = None) -> str:
     backup_path = os.path.join(backup_dir, backup_name)
 
     manifest = {
-        'app_version': '2.3.0',
         'backup_date': datetime.now().isoformat(),
         'backup_name': backup_name,
     }

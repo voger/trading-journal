@@ -1,6 +1,4 @@
-"""
-Trading Journal v2.3.0 — Main Application
-"""
+"""Trading Journal — Main Application"""
 import sys, os, shutil
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # Running as PyInstaller bundle: resources are in _MEIPASS (_internal/)
@@ -27,7 +25,7 @@ from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
-APP_VERSION = "2.3.0"
+APP_VERSION = "2.3.1"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
