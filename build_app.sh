@@ -131,7 +131,7 @@ python3 -m PyInstaller \
     main.py
 
 # ── Verify the build ──
-echo "[3/4] Verifying build..."
+echo "[3/5] Verifying build..."
 EXECUTABLE=""
 if [ -f "dist/$APP_NAME/$APP_NAME" ]; then
     EXECUTABLE="dist/$APP_NAME/$APP_NAME"
@@ -145,8 +145,113 @@ if [ -z "$EXECUTABLE" ]; then
 fi
 echo "  ✓ Executable found: $EXECUTABLE"
 
+# ── Generate Linux desktop integration script ──
+if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "cygwin" && "$OSTYPE" != "win32" ]]; then
+    echo "[4/5] Generating Linux desktop integration script..."
+    cat > "dist/$APP_NAME/install.sh" << 'INSTALL_SCRIPT'
+#!/usr/bin/env bash
+# Trading Journal — Linux desktop integration
+#
+# Usage:
+#   bash install.sh            # install (register icon + launcher entry)
+#   bash install.sh uninstall  # remove desktop integration files
+#
+# NOTE: If you move this folder after installing, re-run this script
+#       so the launcher paths are updated.
+
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXECUTABLE="$APP_DIR/TradingJournal"
+DESKTOP_ID="trading-journal"
+ICON_NAME="$DESKTOP_ID"
+ICON_SRC="$APP_DIR/icon.png"
+ICON_DEST="$HOME/.local/share/icons/hicolor/256x256/apps/${DESKTOP_ID}.png"
+DESKTOP_DEST="$HOME/.local/share/applications/${DESKTOP_ID}.desktop"
+
+_refresh_caches() {
+    command -v update-desktop-database &>/dev/null \
+        && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+    command -v gtk-update-icon-cache &>/dev/null \
+        && gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+}
+
+do_install() {
+    if [ ! -f "$EXECUTABLE" ]; then
+        echo "ERROR: Executable not found at $EXECUTABLE"
+        exit 1
+    fi
+    if [ ! -f "$ICON_SRC" ]; then
+        echo "ERROR: icon.png not found at $ICON_SRC"
+        exit 1
+    fi
+
+    echo "Installing Trading Journal desktop integration..."
+
+    # Install icon into hicolor theme
+    mkdir -p "$(dirname "$ICON_DEST")"
+    cp "$ICON_SRC" "$ICON_DEST"
+    echo "  ✓ Icon installed to $ICON_DEST"
+
+    # Write .desktop file
+    mkdir -p "$(dirname "$DESKTOP_DEST")"
+    cat > "$DESKTOP_DEST" << EOF
+[Desktop Entry]
+Name=Trading Journal
+Comment=Personal trading journal and performance analytics
+Exec=$EXECUTABLE
+Icon=$ICON_NAME
+Type=Application
+Categories=Finance;Office;
+Terminal=false
+StartupWMClass=TradingJournal
+EOF
+    echo "  ✓ Launcher entry written to $DESKTOP_DEST"
+
+    _refresh_caches
+
+    echo ""
+    echo "Done. Trading Journal should now appear in your application launcher."
+    echo ""
+    echo "NOTE: If you move the app folder, re-run this script to update the paths."
+}
+
+do_uninstall() {
+    echo "Removing Trading Journal desktop integration..."
+    local removed=0
+
+    if [ -f "$ICON_DEST" ]; then
+        rm -f "$ICON_DEST"
+        echo "  ✓ Removed icon ($ICON_DEST)"
+        removed=1
+    fi
+    if [ -f "$DESKTOP_DEST" ]; then
+        rm -f "$DESKTOP_DEST"
+        echo "  ✓ Removed launcher entry ($DESKTOP_DEST)"
+        removed=1
+    fi
+
+    if [ "$removed" -eq 0 ]; then
+        echo "  Nothing to remove (integration was not installed from this location)."
+    else
+        _refresh_caches
+        echo ""
+        echo "Done. You can now delete the TradingJournal folder."
+    fi
+}
+
+case "${1:-install}" in
+    uninstall|remove) do_uninstall ;;
+    install|*)        do_install ;;
+esac
+INSTALL_SCRIPT
+
+    chmod +x "dist/$APP_NAME/install.sh"
+    echo "  ✓ install.sh generated (run with 'uninstall' argument to reverse)"
+fi
+
 # ── Create portable archive ──
-echo "[4/4] Creating portable archive..."
+echo "[5/5] Creating portable archive..."
 cd dist
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     if command -v 7z &>/dev/null; then
@@ -165,5 +270,9 @@ echo ""
 echo "═══════════════════════════════════════════"
 echo "  Build complete!"
 echo ""
-echo "  Run:  $EXECUTABLE"
+echo "  Run:      $EXECUTABLE"
+if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "cygwin" && "$OSTYPE" != "win32" ]]; then
+echo "  Install:  bash dist/$APP_NAME/install.sh"
+echo "  Remove:   bash dist/$APP_NAME/install.sh uninstall"
+fi
 echo "═══════════════════════════════════════════"

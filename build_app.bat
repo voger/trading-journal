@@ -36,7 +36,7 @@ python --version
 echo [*] Virtual env: %VIRTUAL_ENV%
 
 REM ── Check deps ──
-echo [0/4] Checking dependencies...
+echo [0/5] Checking dependencies...
 python -c "import PyQt6" 2>nul || (
     echo   Installing dependencies...
     pip install -r requirements.txt
@@ -48,13 +48,24 @@ python -m PyInstaller --version 2>nul || (
 )
 
 REM ── Clean ──
-echo [1/4] Cleaning previous builds...
+echo [1/5] Cleaning previous builds...
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist %APP_NAME%.spec del %APP_NAME%.spec
 
+REM ── Generate icon.ico from PNG sources ──
+echo [2/5] Generating icon.ico...
+python -c "from PIL import Image; imgs=[Image.open(f'icon_{s}.png').resize((s,s)) for s in [256,128,64,48,32,16]]; imgs[0].save('icon.ico', sizes=[(s,s) for s in [256,128,64,48,32,16]], append_images=imgs[1:])" 2>nul
+if exist icon.ico (
+    echo   icon.ico generated successfully.
+    set ICON_ARG=--icon icon.ico
+) else (
+    echo   WARNING: Could not generate icon.ico - executable will use default icon.
+    set ICON_ARG=
+)
+
 REM ── Build ──
-echo [2/4] Running PyInstaller...
+echo [3/5] Running PyInstaller...
 python -m PyInstaller ^
     --name "%APP_NAME%" ^
     --onedir ^
@@ -62,6 +73,7 @@ python -m PyInstaller ^
     --noconfirm ^
     --clean ^
     --paths "." ^
+    %ICON_ARG% ^
     --add-data "icon.png:." ^
     --add-data "icon.svg:." ^
     --add-data "requirements.txt:." ^
@@ -101,7 +113,7 @@ python -m PyInstaller ^
     main.py
 
 REM ── Verify ──
-echo [3/4] Verifying build...
+echo [4/5] Verifying build...
 if exist "dist\%APP_NAME%\%APP_NAME%.exe" (
     echo   OK: dist\%APP_NAME%\%APP_NAME%.exe
 ) else (
@@ -109,8 +121,12 @@ if exist "dist\%APP_NAME%\%APP_NAME%.exe" (
     exit /b 1
 )
 
+REM ── Copy desktop integration script ──
+copy /Y install.ps1 "dist\%APP_NAME%\install.ps1" >nul
+echo   install.ps1 copied (run with -Uninstall to reverse).
+
 REM ── Archive ──
-echo [4/4] Creating archive...
+echo [5/5] Creating archive...
 cd dist
 if exist "%ProgramFiles%\7-Zip\7z.exe" (
     "%ProgramFiles%\7-Zip\7z.exe" a "%APP_NAME%_windows.zip" "%APP_NAME%\" > nul
@@ -123,5 +139,7 @@ cd ..
 echo.
 echo ═══════════════════════════════════════════
 echo   Build complete!
-echo   Run: dist\%APP_NAME%\%APP_NAME%.exe
+echo   Run:       dist\%APP_NAME%\%APP_NAME%.exe
+echo   Install:   powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1
+echo   Uninstall: powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1 -Uninstall
 echo ═══════════════════════════════════════════

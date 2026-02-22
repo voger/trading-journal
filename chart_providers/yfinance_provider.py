@@ -45,7 +45,8 @@ class YFinanceProvider(ChartProvider):
         ticker = yf.Ticker(yf_symbol)
         df = ticker.history(start=start_date.strftime('%Y-%m-%d'),
                             end=end_padded.strftime('%Y-%m-%d'),
-                            interval=yf_tf)
+                            interval=yf_tf,
+                            auto_adjust=False)
 
         if df is None or df.empty:
             raise ValueError(f"No data returned for {yf_symbol} ({symbol})")
