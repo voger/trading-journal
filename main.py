@@ -12,7 +12,7 @@ sys.path.insert(0, _install_dir)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QComboBox, QLabel, QPushButton, QMessageBox,
-    QFileDialog,
+    QFileDialog, QStyleFactory,
 )
 from PyQt6.QtGui import QAction, QIcon
 
@@ -235,6 +235,7 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle(QStyleFactory.create('Fusion'))  # Fusion respects QSS fully on all platforms
     if os.path.exists(ICON_PATH):
         app.setWindowIcon(QIcon(ICON_PATH))
     w = MainWindow(); w.show(); sys.exit(app.exec())
