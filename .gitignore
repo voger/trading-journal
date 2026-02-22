@@ -20,6 +20,10 @@ venv/
 
 # Application data (user-specific)
 trading_journal.db
+trading_journal.db-shm
+trading_journal.db-wal
+*.db-shm
+*.db-wal
 charts/
 screenshots/
 backups/

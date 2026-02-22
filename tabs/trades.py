@@ -23,11 +23,11 @@ from database import (
     get_setup_types, save_trade_rule_checks, create_account,
     get_import_logs, get_trade_stats,
     get_trade_rule_checks, get_trades_for_export, EXPORT_COLUMNS,
+    get_app_data_dir,
 )
 from asset_modules import get_module
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCREENSHOTS_DIR = os.path.join(PROJECT_DIR, 'screenshots')
+SCREENSHOTS_DIR = os.path.join(get_app_data_dir(), 'screenshots')
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 
@@ -806,10 +806,6 @@ class TradesTab(BaseTab):
                             except Exception as e:
                                 QMessageBox.critical(dlg, "Error", str(e))
                         btn.clicked.connect(_ac); lay.addWidget(btn)
-
-                        # If no accounts at all, auto-click to create immediately
-                        if not accounts:
-                            _ac()
                 except Exception:
                     pass
 

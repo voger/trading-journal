@@ -5,10 +5,28 @@ SQLite database initialization, schema creation, and data access functions.
 
 import sqlite3
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
 DB_NAME = "trading_journal.db"
+
+
+def get_app_data_dir() -> str:
+    """Return the platform-appropriate user data directory for Trading Journal.
+
+    Linux:   $XDG_DATA_HOME/TradingJournal  (~/.local/share/TradingJournal)
+    macOS:   ~/Library/Application Support/TradingJournal
+    Windows: %APPDATA%\\TradingJournal
+    """
+    if sys.platform == 'win32':
+        base = os.environ.get('APPDATA', os.path.expanduser('~'))
+    elif sys.platform == 'darwin':
+        base = os.path.join(os.path.expanduser('~'), 'Library', 'Application Support')
+    else:
+        base = os.environ.get('XDG_DATA_HOME',
+                               os.path.join(os.path.expanduser('~'), '.local', 'share'))
+    return os.path.join(base, 'TradingJournal')
 
 
 def get_db_path(app_data_dir: str = None) -> str:

@@ -1,16 +1,15 @@
 """
 Trading Journal v1.3.0 — Main Application
 """
-import sys, os
+import sys, os, shutil
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    # Running as PyInstaller bundle: resources are in _MEIPASS (_internal/),
-    # user data (DB) lives beside the executable
+    # Running as PyInstaller bundle: resources are in _MEIPASS (_internal/)
     _resource_dir = sys._MEIPASS
-    PROJECT_DIR = os.path.dirname(sys.executable)
+    _install_dir = os.path.dirname(sys.executable)
 else:
-    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-    _resource_dir = PROJECT_DIR
-sys.path.insert(0, PROJECT_DIR)
+    _install_dir = os.path.dirname(os.path.abspath(__file__))
+    _resource_dir = _install_dir
+sys.path.insert(0, _install_dir)
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -21,7 +20,7 @@ from PyQt6.QtGui import QAction, QIcon
 
 
 from database import (
-    init_database, get_connection,
+    init_database, get_connection, get_app_data_dir,
     get_accounts, get_account, create_account, update_account, delete_account,
 )
 from dialogs import AccountDialog
@@ -39,7 +38,22 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1100, 700); self.resize(1350, 850)
         if os.path.exists(ICON_PATH):
             self.setWindowIcon(QIcon(ICON_PATH))
-        self.app_dir = PROJECT_DIR
+
+        # User data goes in the XDG/platform data directory, not beside the source
+        self.app_dir = get_app_data_dir()
+        os.makedirs(self.app_dir, exist_ok=True)
+
+        # One-time migration: copy DB (and screenshots/charts) from old location
+        _old_db = os.path.join(_install_dir, 'trading_journal.db')
+        _new_db = os.path.join(self.app_dir, 'trading_journal.db')
+        if not os.path.exists(_new_db) and os.path.exists(_old_db):
+            shutil.copy2(_old_db, _new_db)
+            for _sub in ('screenshots', 'charts'):
+                _src = os.path.join(_install_dir, _sub)
+                _dst = os.path.join(self.app_dir, _sub)
+                if os.path.exists(_src) and not os.path.exists(_dst):
+                    shutil.copytree(_src, _dst)
+
         self.db_path = init_database(os.path.join(self.app_dir, 'trading_journal.db'))
         self.conn = get_connection(self.db_path)
         self._build_ui()
