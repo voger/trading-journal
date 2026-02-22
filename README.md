@@ -151,7 +151,8 @@ trading_journal/
 ├── build_app.sh         # Linux/macOS build script
 ├── build_app.bat        # Windows build script
 ├── requirements.txt     # Python dependencies
-└── icon.png             # Application icon
+├── icons/               # Application icons (PNG sizes + SVG)
+└── install.ps1          # Windows desktop integration script
 ```
 
 ---

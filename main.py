@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
 APP_VERSION = "2.3.0"
-ICON_PATH = os.path.join(_resource_dir, 'icon.png')
+ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
 class MainWindow(QMainWindow):

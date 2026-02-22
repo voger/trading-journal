@@ -55,10 +55,10 @@ if exist %APP_NAME%.spec del %APP_NAME%.spec
 
 REM ── Generate icon.ico from PNG sources ──
 echo [2/5] Generating icon.ico...
-python -c "from PIL import Image; imgs=[Image.open(f'icon_{s}.png').resize((s,s)) for s in [256,128,64,48,32,16]]; imgs[0].save('icon.ico', sizes=[(s,s) for s in [256,128,64,48,32,16]], append_images=imgs[1:])" 2>nul
-if exist icon.ico (
-    echo   icon.ico generated successfully.
-    set ICON_ARG=--icon icon.ico
+python -c "from PIL import Image; imgs=[Image.open(f'icons/icon_{s}.png').resize((s,s)) for s in [256,128,64,48,32,16]]; imgs[0].save('icons/icon.ico', sizes=[(s,s) for s in [256,128,64,48,32,16]], append_images=imgs[1:])" 2>nul
+if exist icons\icon.ico (
+    echo   icons\icon.ico generated successfully.
+    set ICON_ARG=--icon icons\icon.ico
 ) else (
     echo   WARNING: Could not generate icon.ico - executable will use default icon.
     set ICON_ARG=
@@ -74,8 +74,7 @@ python -m PyInstaller ^
     --clean ^
     --paths "." ^
     %ICON_ARG% ^
-    --add-data "icon.png:." ^
-    --add-data "icon.svg:." ^
+    --add-data "icons:icons" ^
     --add-data "requirements.txt:." ^
     --hidden-import "plugins" ^
     --hidden-import "plugins.trading212_plugin" ^

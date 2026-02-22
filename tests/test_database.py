@@ -425,15 +425,15 @@ class TestAppIcon:
     """Verify app icon files exist."""
 
     def test_icon_png_exists(self):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icon.png')
-        assert os.path.isfile(path), "icon.png should exist in project root"
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons', 'icon.png')
+        assert os.path.isfile(path), "icon.png should exist in icons/"
 
     def test_icon_svg_exists(self):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icon.svg')
-        assert os.path.isfile(path), "icon.svg should exist in project root"
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons', 'icon.svg')
+        assert os.path.isfile(path), "icon.svg should exist in icons/"
 
     def test_icon_png_is_valid_image(self):
-        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icon.png')
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'icons', 'icon.png')
         with open(path, 'rb') as f:
             header = f.read(8)
         # PNG magic bytes

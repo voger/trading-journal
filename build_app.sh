@@ -92,8 +92,7 @@ python3 -m PyInstaller \
     --noconfirm \
     --clean \
     --paths "." \
-    --add-data "icon.png:." \
-    --add-data "icon.svg:." \
+    --add-data "icons:icons" \
     --add-data "requirements.txt:." \
     --hidden-import "plugins" \
     --hidden-import "plugins.trading212_plugin" \
@@ -165,7 +164,7 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXECUTABLE="$APP_DIR/TradingJournal"
 DESKTOP_ID="trading-journal"
 ICON_NAME="$DESKTOP_ID"
-ICON_SRC="$APP_DIR/icon.png"
+ICON_SRC="$APP_DIR/icons/icon.png"
 ICON_DEST="$HOME/.local/share/icons/hicolor/256x256/apps/${DESKTOP_ID}.png"
 DESKTOP_DEST="$HOME/.local/share/applications/${DESKTOP_ID}.desktop"
 

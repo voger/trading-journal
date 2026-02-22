@@ -37,4 +37,4 @@ Thumbs.db
 *.log
 
 # Generated during Windows build
-icon.ico
+icons/icon.ico
