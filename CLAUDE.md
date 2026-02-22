@@ -45,10 +45,10 @@ The import mode is selected by `IMPORT_MODE` on the plugin module (`'trades'` or
 
 ### Key modules
 
-- **`database.py`** — All SQLite access. Single connection per session (`sqlite3.Row` factory, WAL mode, FK enforcement). Schema in `SCHEMA_SQL` constant; `init_database()` is idempotent.
+- **`database.py`** — All SQLite access. Single connection per session (`sqlite3.Row` factory, WAL mode, FK enforcement). Schema in `SCHEMA_SQL` constant; `init_database()` is idempotent. `get_app_data_dir()` returns the platform data directory (`~/.local/share/TradingJournal` on Linux, `%APPDATA%\TradingJournal` on Windows, `~/Library/Application Support/TradingJournal` on macOS).
 - **`fifo_engine.py`** — Stocks-only. Reads all executions for an (account, instrument) pair, splits them into round trips (a round trip ends when shares reach 0), writes `trades` + `lot_consumptions`. Forex trades bypass this entirely.
 - **`import_manager.py`** — Orchestrates import: plugin selection → validate → parse → `_import_trades` or `_import_executions`. Plugins are loaded dynamically via `importlib` at startup.
-- **`main.py`** — App entry point. Wires tabs together, handles account CRUD and backup/restore.
+- **`main.py`** — App entry point. Wires tabs together, handles account CRUD and backup/restore. On first run, migrates the database from the old project-directory location to the XDG data directory automatically.
 
 ### Plugin system (`plugins/`)
 
@@ -73,11 +73,20 @@ Each tab is a `QWidget` subclass with a `refresh()` method and receives `(conn, 
 
 `ChartProvider` subclasses registered in `chart_providers/__init__.py`. Each exposes `fetch_ohlc()`, `display_timeframes()`, `normalize_symbol()`, and `requires_api_key`. API keys are stored in the `app_settings` DB table, not in files.
 
+Note: `yfinance_provider.py` fetches with `auto_adjust=False` to return raw (unadjusted) OHLC prices, matching the actual traded prices recorded in the database.
+
+### Icons (`icons/`)
+
+All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`icon_32.png`, `icon_48.png`, `icon_64.png`, `icon_128.png`, `icon_256.png`). The Windows build generates `icons/icon.ico` from these at build time (gitignored).
+
 ### Build notes
 
 - `build_app.sh` / `build_app.bat` use PyInstaller `--onedir`. PyInstaller version is **6.x** — `--add-data` uses `:` as separator on all platforms (not `;`).
+- Icons are bundled with `--add-data "icons:icons"` (the whole folder, not individual files).
 - Both scripts include `--hidden-import` entries for all dynamically loaded modules (plugins, asset modules, chart providers, `executions_dialog`).
-- The `.spec` file in the repo is auto-generated and can be ignored; the scripts are the source of truth.
+- `build_app.sh` (Linux) generates `dist/TradingJournal/install.sh` for desktop integration (`.desktop` file + hicolor icon). Run with `uninstall` argument to reverse.
+- `build_app.bat` (Windows) generates `icons/icon.ico` and copies `install.ps1` to the dist folder. Run with `-Uninstall` to reverse.
+- `TradingJournal.spec` is checked in and kept in sync with the build scripts. It is the PyInstaller source of truth for CI or manual builds (`pyinstaller TradingJournal.spec`).
 
 ### Testing
 
