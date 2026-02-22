@@ -64,8 +64,13 @@ class BreakdownTable(QWidget):
                 self.table.setColumnWidth(i, width)
         lay.addWidget(self.table)
 
-    def populate(self, breakdowns):
+    def populate(self, breakdowns, currency=''):
         """Fill table with breakdown data."""
+        # Update currency-bearing column headers
+        cur = f" ({currency})" if currency else ''
+        for col, (key, label, _) in enumerate(_BD_COLUMNS):
+            suffix = cur if key in ('net_pnl', 'avg_win', 'avg_loss', 'expectancy') else ''
+            self.table.setHorizontalHeaderItem(col, QTableWidgetItem(label + suffix))
         profit_fg = QColor(0, 130, 0)
         loss_fg = QColor(200, 0, 0)
         neutral_fg = QColor(100, 100, 100)
@@ -424,9 +429,10 @@ class StatsTab(BaseTab):
         self.stats_text.setHtml(html)
 
         # Breakdown sub-tabs
+        currency = acct['currency'] if acct else ''
         for group_by, bt in self.bd_tables.items():
             data = get_trade_breakdowns(self.conn, aid, group_by)
-            bt.populate(data)
+            bt.populate(data, currency=currency)
 
     def _on_info_clicked(self, url):
         """Handle clicks on ⓘ info icons in the overview."""

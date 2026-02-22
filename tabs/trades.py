@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence
 
 from tabs import BaseTab
 from dialogs import TradeDialog
@@ -92,6 +92,12 @@ class TradesTab(BaseTab):
         b = QPushButton("Export CSV..."); b.clicked.connect(self._on_export); tb.addWidget(b)
         b = QPushButton("Import..."); b.clicked.connect(self._on_import); tb.addWidget(b)
         layout.addLayout(tb)
+
+        # ── Keyboard shortcuts ──
+        QShortcut(QKeySequence("Ctrl+N"), self).activated.connect(self._on_new)
+        QShortcut(QKeySequence("Return"),  self).activated.connect(self._on_edit)
+        QShortcut(QKeySequence("Delete"),  self).activated.connect(self._on_delete)
+        QShortcut(QKeySequence("F5"),      self).activated.connect(self.refresh)
 
         # ── KPI Bar ──
         kpi_row = QHBoxLayout()
@@ -662,14 +668,30 @@ class TradesTab(BaseTab):
 
     # ── CRUD ──
 
+    def _validate_trade(self, v) -> str:
+        """Return an error message string if v has invalid fields, else ''."""
+        errors = []
+        if not v.get('instrument_id'):
+            errors.append("Instrument is required.")
+        if not v.get('entry_date'):
+            errors.append("Entry Date is required.")
+        if (v.get('entry_price') or 0) <= 0:
+            errors.append("Entry Price must be greater than zero.")
+        if (v.get('position_size') or 0) <= 0:
+            errors.append("Position Size must be greater than zero.")
+        if v.get('exit_date') and v.get('entry_date') and v['exit_date'] < v['entry_date']:
+            errors.append("Exit Date cannot be before Entry Date.")
+        return "\n".join(errors)
+
     def _on_new(self):
         if not get_accounts(self.conn):
             QMessageBox.warning(self, "No Accounts", "Create an account first."); return
         dlg = TradeDialog(self, self.conn, default_account_id=self.aid())
         if dlg.exec():
             v = dlg.get_values()
-            if not v.get('instrument_id') or not v.get('entry_date'):
-                QMessageBox.warning(self, "Error", "Instrument and Entry Date required."); return
+            err = self._validate_trade(v)
+            if err:
+                QMessageBox.warning(self, "Validation Error", err); return
             try:
                 tid = create_trade(self.conn, **v)
                 self._save_screenshots(tid, dlg)
@@ -690,6 +712,9 @@ class TradesTab(BaseTab):
         if dlg.exec():
             try:
                 vals = dlg.get_values()
+                err = self._validate_trade(vals)
+                if err:
+                    QMessageBox.warning(self, "Validation Error", err); return
                 chart_json = dlg.chart_widget.get_cached_data_json()
                 if chart_json: vals['chart_data'] = chart_json
                 update_trade(self.conn, tid, **vals)
