@@ -291,6 +291,20 @@ class TradeChartWidget(QWidget):
             import matplotlib.pyplot as plt
             plt.close(fig)
 
+            # Auto-save OHLC data to DB so the trade dialog can load it
+            trade_id = self.trade.get('id') if isinstance(self.trade, dict) else None
+            if self.conn and trade_id:
+                json_str = self.get_cached_data_json()
+                try:
+                    self.conn.execute(
+                        "UPDATE trades SET chart_data = ? WHERE id = ?",
+                        (json_str, trade_id))
+                    self.conn.commit()
+                    if isinstance(self.trade, dict):
+                        self.trade['chart_data'] = json_str
+                except Exception:
+                    pass
+
             status = (f"{len(bars)} bars  {norm_sym} ({tf})  "
                       f"{bars[0].timestamp:%Y-%m-%d} \u2192 {bars[-1].timestamp:%Y-%m-%d}")
             if capped:

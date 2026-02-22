@@ -396,6 +396,8 @@ class TradesTab(BaseTab):
         cached = t['chart_data'] if 'chart_data' in t.keys() else None
         if cached:
             self.pv_chart.load_cached_data(cached)
+        else:
+            self.pv_chart._show_placeholder()
 
         self.pv_edit_btn.setVisible(True)
 

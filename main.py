@@ -2,7 +2,14 @@
 Trading Journal v1.3.0 — Main Application
 """
 import sys, os
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # Running as PyInstaller bundle: resources are in _MEIPASS (_internal/),
+    # user data (DB) lives beside the executable
+    _resource_dir = sys._MEIPASS
+    PROJECT_DIR = os.path.dirname(sys.executable)
+else:
+    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+    _resource_dir = PROJECT_DIR
 sys.path.insert(0, PROJECT_DIR)
 
 from PyQt6.QtWidgets import (
@@ -22,7 +29,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
 APP_VERSION = "2.2.0"
-ICON_PATH = os.path.join(PROJECT_DIR, 'icon.png')
+ICON_PATH = os.path.join(_resource_dir, 'icon.png')
 
 
 class MainWindow(QMainWindow):
