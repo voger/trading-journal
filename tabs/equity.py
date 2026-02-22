@@ -113,6 +113,10 @@ class EquityTab(BaseTab):
 
         events = get_equity_events(self.conn, aid)
         for ev in events:
+            # Interest payments are included in the balance but not marked on
+            # the chart — they're too frequent and too small to be useful.
+            if (ev['event_type'] or '').lower() == 'interest':
+                continue
             try:
                 d = datetime.strptime(ev['event_date'][:10], '%Y-%m-%d')
                 amt = ev['amount']
