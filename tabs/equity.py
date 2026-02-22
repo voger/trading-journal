@@ -41,6 +41,8 @@ class EquityTab(BaseTab):
         h = self.deposits_table.horizontalHeader(); h.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.deposits_table)
         b = QPushButton("Refresh"); b.clicked.connect(self.force_refresh); layout.addWidget(b)
+        self._event_lines = []  # parallel to events list; None for events with no chart marker
+        self.deposits_table.itemSelectionChanged.connect(self._on_event_selected)
 
     def mark_dirty(self):
         self._dirty = True
@@ -77,22 +79,39 @@ class EquityTab(BaseTab):
         self.account_label.setText(f"{acct['name']} — {currency}" if acct else "")
 
         data = get_equity_curve_data(self.conn, aid)
-        if not data:
+        events = get_equity_events(self.conn, aid)
+
+        if not data and not events:
             ax = self.fig.add_subplot(111)
             ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center', fontsize=14, color='gray')
             ax.set_axis_off(); self.canvas.draw()
             self.deposits_table.setRowCount(0); self.info_label.setText(""); return
 
-        initial = data[0]['initial_balance'] if data else 0
-        balance = initial; dates = []; balances = [initial]
+        initial = acct['initial_balance'] if acct else 0
+
+        # Build a merged chronological timeline of trades and account events so
+        # that deposits/withdrawals shift the running balance at the right point,
+        # matching the way MT4's detailed statement renders the equity curve.
+        # Each entry: (date, amount, event_row_or_None)
+        timeline = []
         for t in data:
             pnl = (t['pnl_account_currency'] or 0) + (t['swap'] or 0) + (t['commission'] or 0)
-            balance += pnl
             try:
                 d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
-                dates.append(d); balances.append(balance)
+                timeline.append((d, pnl, None))
             except: continue
-        if len(dates) < 1: return
+        for ev in events:
+            try:
+                d = datetime.strptime(ev['event_date'][:10], '%Y-%m-%d')
+                timeline.append((d, ev['amount'], ev))
+            except: continue
+        timeline.sort(key=lambda x: x[0])
+
+        if not timeline: return
+        balance = initial; dates = []; balances = [initial]
+        for d, amount, _ in timeline:
+            balance += amount
+            dates.append(d); balances.append(balance)
         dates.insert(0, dates[0])
 
         ax = self.fig.add_subplot(111)
@@ -111,22 +130,25 @@ class EquityTab(BaseTab):
         ax.plot(dates, balances, color=line_color, linewidth=1.5)
         ax.axhline(y=initial, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
 
-        events = get_equity_events(self.conn, aid)
+        self._event_lines = []
         for ev in events:
             # Interest payments are included in the balance but not marked on
             # the chart — they're too frequent and too small to be useful.
             if (ev['event_type'] or '').lower() == 'interest':
+                self._event_lines.append(None)
                 continue
             try:
                 d = datetime.strptime(ev['event_date'][:10], '%Y-%m-%d')
                 amt = ev['amount']
                 color = profit_color if amt > 0 else loss_color
                 label = f"+{amt:.0f}" if amt > 0 else f"{amt:.0f}"
-                ax.axvline(x=d, color=color, linestyle=':', linewidth=1.2, alpha=0.7)
+                vline = ax.axvline(x=d, color=color, linestyle=':', linewidth=1.2, alpha=0.7)
+                self._event_lines.append(vline)
                 ylim = ax.get_ylim()
                 ax.annotate(label, xy=(d, ylim[1] - (ylim[1]-ylim[0])*0.05),
                            fontsize=8, color=color, ha='center', fontweight='bold')
-            except: pass
+            except:
+                self._event_lines.append(None)
 
         ax.set_title(f'Equity Curve ({currency})', fontsize=13, fontweight='bold')
         ax.set_ylabel(f'Balance ({currency})')
@@ -143,3 +165,23 @@ class EquityTab(BaseTab):
                 if col == 2: item.setForeground(color)
                 self.deposits_table.setItem(row, col, item)
         self.info_label.setText("")
+
+    def _on_event_selected(self):
+        if self.canvas is None:
+            return
+        # Reset all event lines to default style
+        for line in self._event_lines:
+            if line is not None:
+                line.set_linewidth(1.2)
+                line.set_alpha(0.7)
+                line.set_linestyle(':')
+        # Highlight the selected row's line
+        selected = self.deposits_table.selectedItems()
+        if selected:
+            row = self.deposits_table.row(selected[0])
+            if row < len(self._event_lines) and self._event_lines[row] is not None:
+                line = self._event_lines[row]
+                line.set_linewidth(2.5)
+                line.set_alpha(1.0)
+                line.set_linestyle('-')
+        self.canvas.draw()

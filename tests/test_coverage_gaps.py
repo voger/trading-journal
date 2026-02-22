@@ -420,6 +420,185 @@ class TestEquityEvents:
         events = db.get_equity_events(conn, account_id=forex_account)
         assert events[0]['event_date'] <= events[1]['event_date']
 
+    def test_get_equity_events_includes_interest(self, conn, forex_account):
+        """Interest events are included in the balance timeline (just not as markers)."""
+        db.add_account_event(conn, forex_account, 'interest', 0.12,
+                             event_date='2025-01-31',
+                             broker_ticket_id='INT1')
+        events = db.get_equity_events(conn, account_id=forex_account)
+        assert len(events) == 1
+        assert events[0]['event_type'] == 'interest'
+
+    def test_get_equity_events_account_isolation(self, conn, forex_account):
+        other = db.create_account(conn, name='Other', broker='X',
+                                   currency='EUR', asset_type='forex')
+        db.add_account_event(conn, forex_account, 'deposit', 1000,
+                             event_date='2025-01-01', broker_ticket_id='D1')
+        db.add_account_event(conn, other, 'deposit', 2000,
+                             event_date='2025-01-01', broker_ticket_id='D2')
+        events = db.get_equity_events(conn, account_id=forex_account)
+        assert len(events) == 1
+        assert events[0]['amount'] == 1000
+
+
+# ── Equity Balance Calculation ───────────────────────────────────────────
+
+class TestEquityBalanceCalculation:
+    """
+    Tests for the merged timeline balance calculation used by the Equity Curve tab.
+    Mirrors the logic in tabs/equity.py:_render() without importing PyQt6.
+    """
+
+    def _make_closed_trade(self, conn, aid, exit_date, pnl, commission=0, swap=0):
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        return db.create_trade(conn, account_id=aid, instrument_id=iid,
+                               direction='long', entry_date='2025-01-01',
+                               entry_price=1.1, position_size=1,
+                               status='closed', exit_date=exit_date,
+                               exit_price=1.15,
+                               pnl_account_currency=pnl,
+                               commission=commission, swap=swap)
+
+    def _build_balance_series(self, conn, account_id):
+        """Mirror equity.py _render() balance logic: merge trades + events, sorted by date."""
+        from datetime import datetime as dt
+        acct = db.get_account(conn, account_id)
+        data = db.get_equity_curve_data(conn, account_id=account_id)
+        events = db.get_equity_events(conn, account_id=account_id)
+
+        initial = acct['initial_balance']
+        timeline = []
+        for t in data:
+            pnl = (t['pnl_account_currency'] or 0) + (t['swap'] or 0) + (t['commission'] or 0)
+            try:
+                d = dt.strptime(t['exit_date'][:10], '%Y-%m-%d')
+                timeline.append((d, pnl))
+            except Exception:
+                continue
+        for ev in events:
+            try:
+                d = dt.strptime(ev['event_date'][:10], '%Y-%m-%d')
+                timeline.append((d, ev['amount']))
+            except Exception:
+                continue
+        timeline.sort(key=lambda x: x[0])
+
+        balance = initial
+        balances = [initial]
+        for _, amount in timeline:
+            balance += amount
+            balances.append(balance)
+        return balances
+
+    def test_initial_balance_is_starting_point(self, conn):
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=10000)
+        self._make_closed_trade(conn, aid, '2025-01-15', 200)
+        balances = self._build_balance_series(conn, aid)
+        assert balances[0] == 10000
+        assert balances[-1] == 10200
+
+    def test_deposit_shifts_balance_up(self, conn):
+        """A deposit between two trades must jump the balance at the right point."""
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=5000)
+        self._make_closed_trade(conn, aid, '2025-01-15', 100)   # → 5100
+        db.add_account_event(conn, aid, 'deposit', 1000,
+                             event_date='2025-02-01', broker_ticket_id='D1')   # → 6100
+        self._make_closed_trade(conn, aid, '2025-03-01', 50)    # → 6150
+        balances = self._build_balance_series(conn, aid)
+        # balances: [5000, 5100, 6100, 6150]
+        assert balances[0] == 5000
+        assert abs(balances[1] - 5100) < 0.01
+        assert abs(balances[2] - 6100) < 0.01
+        assert abs(balances[3] - 6150) < 0.01
+
+    def test_withdrawal_shifts_balance_down(self, conn):
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=8000)
+        self._make_closed_trade(conn, aid, '2025-01-15', 500)   # → 8500
+        db.add_account_event(conn, aid, 'withdrawal', -2000,
+                             event_date='2025-02-01', broker_ticket_id='W1')  # → 6500
+        balances = self._build_balance_series(conn, aid)
+        assert abs(balances[-1] - 6500) < 0.01
+
+    def test_interest_included_in_balance(self, conn):
+        """Interest events are small but must shift the running balance."""
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        db.add_account_event(conn, aid, 'interest', 0.50,
+                             event_date='2025-01-31', broker_ticket_id='INT1')
+        balances = self._build_balance_series(conn, aid)
+        assert abs(balances[-1] - 1000.50) < 0.001
+
+    def test_events_sorted_chronologically_with_trades(self, conn):
+        """Events inserted out of order must be sorted before balance accumulation."""
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=0)
+        # Insert in reverse chronological order
+        self._make_closed_trade(conn, aid, '2025-03-01', 300)   # 3rd
+        db.add_account_event(conn, aid, 'deposit', 1000,
+                             event_date='2025-01-01', broker_ticket_id='D1')  # 1st
+        self._make_closed_trade(conn, aid, '2025-02-01', 200)   # 2nd
+        balances = self._build_balance_series(conn, aid)
+        # Chronological: deposit +1000, trade +200, trade +300
+        # balances: [0, 1000, 1200, 1500]
+        assert balances[0] == 0
+        assert abs(balances[1] - 1000) < 0.01
+        assert abs(balances[2] - 1200) < 0.01
+        assert abs(balances[3] - 1500) < 0.01
+
+    def test_no_trades_only_events(self, conn):
+        """Account with deposits but no closed trades still shows a balance."""
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=0)
+        db.add_account_event(conn, aid, 'deposit', 5000,
+                             event_date='2025-01-01', broker_ticket_id='D1')
+        db.add_account_event(conn, aid, 'deposit', 3000,
+                             event_date='2025-02-01', broker_ticket_id='D2')
+        balances = self._build_balance_series(conn, aid)
+        assert balances[0] == 0
+        assert abs(balances[-1] - 8000) < 0.01
+
+    def test_no_trades_no_events_returns_initial_only(self, conn):
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=2500)
+        balances = self._build_balance_series(conn, aid)
+        # Only the starting point — no events to process
+        assert balances == [2500]
+
+    def test_commission_and_swap_included_in_pnl(self, conn):
+        """Commission and swap are factored into each trade's contribution."""
+        aid = db.create_account(conn, name='Acc', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        self._make_closed_trade(conn, aid, '2025-01-15', pnl=100,
+                                commission=-5, swap=-2)
+        balances = self._build_balance_series(conn, aid)
+        # 1000 + 100 + (-5) + (-2) = 1093
+        assert abs(balances[-1] - 1093) < 0.01
+
+    def test_account_isolation(self, conn):
+        """Events and trades from a different account must not appear."""
+        aid1 = db.create_account(conn, name='Acc1', broker='B',
+                                 currency='EUR', asset_type='forex',
+                                 initial_balance=1000)
+        aid2 = db.create_account(conn, name='Acc2', broker='B',
+                                 currency='EUR', asset_type='forex',
+                                 initial_balance=1000)
+        self._make_closed_trade(conn, aid1, '2025-01-15', 200)
+        db.add_account_event(conn, aid2, 'deposit', 9999,
+                             event_date='2025-01-01', broker_ticket_id='D2')
+        balances = self._build_balance_series(conn, aid1)
+        assert abs(balances[-1] - 1200) < 0.01
+
 
 # ── Backup / Restore ────────────────────────────────────────────────────
 
