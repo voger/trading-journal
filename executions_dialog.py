@@ -11,6 +11,15 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
 
+def _get_trade_currency(conn, trade_id):
+    """Return the account currency for the given trade, defaulting to '€'."""
+    row = conn.execute(
+        "SELECT a.currency FROM trades t JOIN accounts a ON a.id = t.account_id WHERE t.id = ?",
+        (trade_id,)
+    ).fetchone()
+    return row['currency'] if row else '€'
+
+
 class ExecutionsDialog(QDialog):
     """Full-size read-only view of executions and FIFO lot matching."""
 
@@ -26,6 +35,7 @@ class ExecutionsDialog(QDialog):
         )
         self.conn = conn
         self.trade_id = trade_id
+        self._currency = _get_trade_currency(conn, trade_id)
         self._build()
         self._populate()
 
@@ -132,7 +142,7 @@ class ExecutionsDialog(QDialog):
                     (l['sell_date'] or '')[:10],
                     f"{l['sell_price']:.4f}",
                     f"{l['shares_consumed']:.6f}",
-                    f"€{pnl:+.2f}",
+                    f"{self._currency}{pnl:+.2f}",
                 ]
                 for col, val in enumerate(cells):
                     item = QTableWidgetItem(val)
@@ -158,7 +168,7 @@ class ExecutionsDialog(QDialog):
                     ol.get('price_currency', '') or '',
                     f"{ol['original_shares']:.6f}",
                     f"{ol['remaining_shares']:.6f}",
-                    f"€{ol['cost_account']:.2f}" if ol.get('cost_account') else '',
+                    f"{self._currency}{ol['cost_account']:.2f}" if ol.get('cost_account') else '',
                 ]
                 for col, val in enumerate(cells):
                     item = QTableWidgetItem(val)
@@ -180,11 +190,11 @@ class ExecutionsDialog(QDialog):
             parts.append(f"{len(sells)} sell{'s' if len(sells) != 1 else ''}")
 
         broker_pnl = sum(e['broker_result'] or 0 for e in execs)
-        parts.append(f"Broker P&L: €{broker_pnl:+.2f}")
+        parts.append(f"Broker P&L: {self._currency}{broker_pnl:+.2f}")
 
         if lots:
             computed_pnl = sum(l['pnl_computed'] or 0 for l in lots)
-            parts.append(f"Computed P&L: €{computed_pnl:+.2f}")
+            parts.append(f"Computed P&L: {self._currency}{computed_pnl:+.2f}")
 
         remaining = total_bought - total_sold
         if abs(remaining) > 1e-9:
@@ -193,7 +203,7 @@ class ExecutionsDialog(QDialog):
         self.summary_label.setText("  |  ".join(parts))
 
 
-def get_execution_summary(conn, trade_id):
+def get_execution_summary(conn, trade_id, currency='€'):
     """Return a short summary string for the executions bar, or None if no executions."""
     from database import get_execution_count_for_trade
     count = get_execution_count_for_trade(conn, trade_id)
@@ -209,5 +219,5 @@ def get_execution_summary(conn, trade_id):
     parts = [f"{len(buys)} buy{'s' if len(buys) != 1 else ''}"]
     if sells:
         parts.append(f"{len(sells)} sell{'s' if len(sells) != 1 else ''}")
-    parts.append(f"Broker P&L: €{broker_pnl:+.2f}")
+    parts.append(f"Broker P&L: {currency}{broker_pnl:+.2f}")
     return "  |  ".join(parts)

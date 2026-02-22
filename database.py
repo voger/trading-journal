@@ -324,6 +324,7 @@ CREATE INDEX IF NOT EXISTS idx_trades_instrument ON trades(instrument_id);
 CREATE INDEX IF NOT EXISTS idx_trades_entry_date ON trades(entry_date);
 CREATE INDEX IF NOT EXISTS idx_trades_status ON trades(status);
 CREATE INDEX IF NOT EXISTS idx_trades_dedup ON trades(account_id, broker_ticket_id);
+CREATE INDEX IF NOT EXISTS idx_trades_account_status ON trades(account_id, status);
 CREATE INDEX IF NOT EXISTS idx_watchlist_account ON watchlist_items(account_id);
 CREATE INDEX IF NOT EXISTS idx_import_logs_account ON import_logs(account_id);
 CREATE INDEX IF NOT EXISTS idx_trade_charts_trade ON trade_charts(trade_id);
@@ -481,6 +482,11 @@ def _migrate(conn):
             CREATE INDEX IF NOT EXISTS idx_lot_consumptions_buy ON lot_consumptions(buy_execution_id);
             CREATE INDEX IF NOT EXISTS idx_lot_consumptions_sell ON lot_consumptions(sell_execution_id);
         """)
+
+    # Composite index for the most common stats filter (account + status)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trades_account_status ON trades(account_id, status)"
+    )
 
 
 # ── Data Access Functions ──────────────────────────────────────────────
@@ -719,18 +725,23 @@ def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=N
 
 # Stats helpers
 def get_trade_stats(conn: sqlite3.Connection, account_id=None):
-    """Get summary statistics for closed trades."""
+    """Get summary statistics for closed trades, plus open trade count."""
     sql = "SELECT * FROM trades WHERE status = 'closed' AND is_excluded = 0"
+    open_sql = "SELECT COUNT(*) AS cnt FROM trades WHERE status = 'open' AND is_excluded = 0"
     params = []
     if account_id is not None:
         sql += " AND account_id = ?"
+        open_sql += " AND account_id = ?"
         params.append(account_id)
     trades = conn.execute(sql, params).fetchall()
+    open_count = conn.execute(open_sql, params).fetchone()['cnt']
 
     if not trades:
         return None
 
-    return _compute_stats(trades)
+    result = _compute_stats(trades)
+    result['open_trades'] = open_count
+    return result
 
 
 def _compute_stats(trades):

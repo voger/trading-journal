@@ -361,9 +361,12 @@ class StatsTab(BaseTab):
 
         pf = stats['profit_factor']
         pfs = f"{pf:.2f}" if pf != float('inf') else "∞"
+        open_trades = stats.get('open_trades', 0)
+        open_txt = (f" &nbsp;<span style='color:#3b82f6'>+{open_trades} open</span>"
+                    if open_trades else "")
         html = f"""<h2>Performance Summary — {acct_label}</h2>
         <table cellpadding="6" style="font-size:11pt;">
-        <tr><td><b>Total:</b> {stats['total_trades']}</td>
+        <tr><td><b>Closed:</b> {stats['total_trades']}{open_txt}</td>
         <td style="color:#008200"><b>Won:</b> {stats['winners']}</td>
         <td style="color:#c80000"><b>Lost:</b> {stats['losers']}</td>
         <td><b>BE:</b> {stats['breakeven']}</td></tr></table>

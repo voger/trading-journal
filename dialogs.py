@@ -24,14 +24,13 @@ from PyQt6.QtGui import QPixmap, QIcon, QColor, QFont
 from database import (
     get_accounts, get_setup_types, get_setup_rules,
     get_setup_charts, get_trade_charts, get_trade_rule_checks,
-    get_or_create_instrument,
+    get_or_create_instrument, get_app_data_dir, get_account,
 )
 from asset_modules import get_module_choices
 
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-SCREENSHOTS_DIR = os.path.join(PROJECT_DIR, 'screenshots')
+SCREENSHOTS_DIR = os.path.join(get_app_data_dir(), 'screenshots')
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
-SETUP_CHARTS_DIR = os.path.join(PROJECT_DIR, 'setup_charts')
+SETUP_CHARTS_DIR = os.path.join(get_app_data_dir(), 'setup_charts')
 os.makedirs(SETUP_CHARTS_DIR, exist_ok=True)
 
 
@@ -507,9 +506,16 @@ class TradeDialog(QDialog):
         aid = self.account_combo.currentData()
         if aid is None:
             return 0
-        from database import get_account
         acct = get_account(self.conn, aid)
         return acct['initial_balance'] if acct else 0
+
+    def _get_account_currency(self):
+        """Get currency symbol for the currently selected account."""
+        aid = self.account_combo.currentData()
+        if aid is None:
+            return ''
+        acct = get_account(self.conn, aid)
+        return acct['currency'] if acct else ''
 
     def _calc_risk_percent(self):
         """Auto-calculate risk % from entry/SL/size/exit/P&L and account balance.
@@ -583,11 +589,12 @@ class TradeDialog(QDialog):
 
         # P&L
         pnl = self.pnl_spin.value()
+        currency = self._get_account_currency()
         if pnl != 0:
             color = "#16a34a" if pnl > 0 else "#dc2626"
-            self.metric_pnl.set_value(f"€{pnl:+.2f}", color)
+            self.metric_pnl.set_value(f"{currency}{pnl:+.2f}", color)
         else:
-            self.metric_pnl.set_value("€0.00", "#6b7280")
+            self.metric_pnl.set_value(f"{currency}0.00", "#6b7280")
 
         self._update_header()
 
@@ -597,7 +604,7 @@ class TradeDialog(QDialog):
 
     def _populate_executions(self, t):
         from executions_dialog import get_execution_summary
-        summary = get_execution_summary(self.conn, t['id'])
+        summary = get_execution_summary(self.conn, t['id'], currency=self._get_account_currency())
         if summary:
             self.exec_summary_label.setText(summary)
             self.exec_bar.setVisible(True)
