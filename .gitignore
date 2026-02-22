@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+.buildvenv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Application data (user-specific)
+trading_journal.db
+charts/
+screenshots/
+backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PyInstaller
+*.manifest
+*.log
