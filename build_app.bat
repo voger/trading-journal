@@ -1,21 +1,21 @@
 @echo off
-REM ──────────────────────────────────────────────────────────────
-REM build_app.bat — Package Trading Journal for Windows
+REM ---------------------------------------------------------------
+REM build_app.bat -- Package Trading Journal for Windows
 REM
 REM Usage:
 REM   1. Open Command Prompt in the project folder
 REM   2. Activate your venv:  venv\Scripts\activate
 REM   3. Run:  build_app.bat
-REM ──────────────────────────────────────────────────────────────
+REM ---------------------------------------------------------------
 setlocal
 
 set APP_NAME=TradingJournal
 
-echo ═══════════════════════════════════════════
+echo ===========================================
 echo   Building %APP_NAME% standalone package
-echo ═══════════════════════════════════════════
+echo ===========================================
 
-REM ── Check if venv is active ──
+REM -- Check if venv is active --
 if "%VIRTUAL_ENV%"=="" (
     if exist venv\Scripts\activate.bat (
         echo [*] Activating venv...
@@ -31,11 +31,11 @@ if "%VIRTUAL_ENV%"=="" (
     )
 )
 
-echo [*] Using Python: 
+echo [*] Using Python:
 python --version
 echo [*] Virtual env: %VIRTUAL_ENV%
 
-REM ── Check deps ──
+REM -- Check deps --
 echo [0/5] Checking dependencies...
 python -c "import PyQt6" 2>nul || (
     echo   Installing dependencies...
@@ -47,13 +47,14 @@ python -m PyInstaller --version 2>nul || (
     pip install pyinstaller
 )
 
-REM ── Clean ──
+REM -- Clean --
 echo [1/5] Cleaning previous builds...
 if exist build rmdir /s /q build
-if exist dist rmdir /s /q dist
-if exist %APP_NAME%.spec del %APP_NAME%.spec
+if exist dist  rmdir /s /q dist
+REM Only delete auto-generated spec files, not the committed TradingJournal.spec
+if exist %APP_NAME%_build.spec del %APP_NAME%_build.spec
 
-REM ── Generate icon.ico from PNG sources ──
+REM -- Generate icon.ico from PNG sources --
 echo [2/5] Generating icon.ico...
 python -c "from PIL import Image; imgs=[Image.open(f'icons/icon_{s}.png').resize((s,s)) for s in [256,128,64,48,32,16]]; imgs[0].save('icons/icon.ico', sizes=[(s,s) for s in [256,128,64,48,32,16]], append_images=imgs[1:])" 2>nul
 if exist icons\icon.ico (
@@ -64,7 +65,7 @@ if exist icons\icon.ico (
     set ICON_ARG=
 )
 
-REM ── Build ──
+REM -- Build --
 echo [3/5] Running PyInstaller...
 python -m PyInstaller ^
     --name "%APP_NAME%" ^
@@ -111,7 +112,7 @@ python -m PyInstaller ^
     --exclude-module "pytest" ^
     main.py
 
-REM ── Verify ──
+REM -- Verify --
 echo [4/5] Verifying build...
 if exist "dist\%APP_NAME%\%APP_NAME%.exe" (
     echo   OK: dist\%APP_NAME%\%APP_NAME%.exe
@@ -120,11 +121,11 @@ if exist "dist\%APP_NAME%\%APP_NAME%.exe" (
     exit /b 1
 )
 
-REM ── Copy desktop integration script ──
+REM -- Copy desktop integration script --
 copy /Y install.ps1 "dist\%APP_NAME%\install.ps1" >nul
 echo   install.ps1 copied (run with -Uninstall to reverse).
 
-REM ── Archive ──
+REM -- Archive --
 echo [5/5] Creating archive...
 cd dist
 if exist "%ProgramFiles%\7-Zip\7z.exe" (
@@ -136,9 +137,9 @@ if exist "%ProgramFiles%\7-Zip\7z.exe" (
 cd ..
 
 echo.
-echo ═══════════════════════════════════════════
+echo ===========================================
 echo   Build complete!
 echo   Run:       dist\%APP_NAME%\%APP_NAME%.exe
 echo   Install:   powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1
 echo   Uninstall: powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1 -Uninstall
-echo ═══════════════════════════════════════════
+echo ===========================================
