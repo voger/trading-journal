@@ -51,8 +51,7 @@ REM -- Clean --
 echo [1/5] Cleaning previous builds...
 if exist build rmdir /s /q build
 if exist dist  rmdir /s /q dist
-REM Only delete auto-generated spec files, not the committed TradingJournal.spec
-if exist %APP_NAME%_build.spec del %APP_NAME%_build.spec
+if exist %APP_NAME%.spec del %APP_NAME%.spec
 
 REM -- Generate icon.ico from PNG sources --
 echo [2/5] Generating icon.ico...

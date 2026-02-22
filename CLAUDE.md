@@ -86,7 +86,7 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - Both scripts include `--hidden-import` entries for all dynamically loaded modules (plugins, asset modules, chart providers, `executions_dialog`).
 - `build_app.sh` (Linux) generates `dist/TradingJournal/install.sh` for desktop integration (`.desktop` file + hicolor icon). Run with `uninstall` argument to reverse.
 - `build_app.bat` (Windows) generates `icons/icon.ico` and copies `install.ps1` to the dist folder. Run with `-Uninstall` to reverse.
-- `TradingJournal.spec` is checked in and kept in sync with the build scripts. It is the PyInstaller source of truth for CI or manual builds (`pyinstaller TradingJournal.spec`).
+- The `.spec` file is auto-generated on each build and gitignored; the build scripts are the source of truth.
 
 ### Testing
 

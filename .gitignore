@@ -34,6 +34,7 @@ Thumbs.db
 # PyInstaller
 *.manifest
 *.log
+*.spec
 
 # Generated during Windows build
 icons/icon.ico
