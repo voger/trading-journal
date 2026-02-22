@@ -97,8 +97,6 @@ python -m PyInstaller ^
     --collect-submodules "matplotlib" ^
     --collect-submodules "PyQt6" ^
     --exclude-module "tkinter" ^
-    --exclude-module "test" ^
-    --exclude-module "unittest" ^
     --exclude-module "pytest" ^
     main.py
 
