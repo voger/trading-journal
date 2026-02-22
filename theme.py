@@ -152,6 +152,10 @@ def get_stylesheet():
     QTableWidget::item, QTableView::item {{
         padding: 3px 6px;
     }}
+    QTableWidget::item:hover, QTableView::item:hover {{
+        background-color: {BG_HOVER};
+        color: {TEXT_BRIGHT};
+    }}
     QHeaderView::section {{
         background-color: {BG_DARK};
         color: {TEXT_DIM};
