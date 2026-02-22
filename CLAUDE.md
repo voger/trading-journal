@@ -69,6 +69,10 @@ New plugins go in `plugins/` and are auto-discovered by `import_manager.py` — 
 
 Each tab is a `QWidget` subclass with a `refresh()` method and receives `(conn, get_account_id_fn, status_fn)` at construction. Tabs communicate via signals on `MainWindow` (`data_changed` → `_on_trades_changed`, `_on_setups_changed`). There is no shared state between tabs other than the SQLite connection.
 
+### Intentional design decisions (do not suggest changing these)
+
+- **Equity Curve requires a specific account to be selected.** Showing "Please select an account" when "All Accounts" is active is by design — a combined multi-account equity curve is not a goal. Do not recommend adding one.
+
 ### Chart providers (`chart_providers/`)
 
 `ChartProvider` subclasses registered in `chart_providers/__init__.py`. Each exposes `fetch_ohlc()`, `display_timeframes()`, `normalize_symbol()`, and `requires_api_key`. API keys are stored in the `app_settings` DB table, not in files.
