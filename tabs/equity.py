@@ -10,7 +10,6 @@ from PyQt6.QtGui import QFont, QColor
 
 from tabs import BaseTab
 from database import get_account, get_equity_curve_data, get_equity_events
-from theme import BG_DARK, BG_MID, BG_LIGHT, TEXT, TEXT_DIM, BORDER, ACCENT
 
 
 class EquityTab(BaseTab):
@@ -26,14 +25,13 @@ class EquityTab(BaseTab):
         try:
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
             from matplotlib.figure import Figure
-            self.fig = Figure(figsize=(10,4), dpi=100, facecolor=BG_MID)
+            self.fig = Figure(figsize=(10,4), dpi=100)
             self.canvas = FigureCanvasQTAgg(self.fig)
-            self.canvas.setStyleSheet(f"background-color: {BG_MID};")
             layout.addWidget(self.canvas)
         except ImportError:
             layout.addWidget(QLabel("matplotlib not installed. Run: pip install matplotlib"))
             self.canvas = None
-        self.info_label = QLabel(""); self.info_label.setStyleSheet(f"padding:4px; color:{TEXT_DIM};")
+        self.info_label = QLabel(""); self.info_label.setStyleSheet("padding:4px;")
         layout.addWidget(self.info_label)
         layout.addWidget(QLabel("Deposits / Withdrawals:"))
         self.deposits_table = QTableWidget(); self.deposits_table.setAlternatingRowColors(True)
@@ -69,8 +67,7 @@ class EquityTab(BaseTab):
 
         if aid is None:
             ax = self.fig.add_subplot(111)
-            ax.set_facecolor(BG_DARK)
-            ax.text(0.5, 0.5, 'Please select an account', ha='center', va='center', fontsize=14, color=TEXT_DIM)
+            ax.text(0.5, 0.5, 'Please select an account', ha='center', va='center', fontsize=14, color='gray')
             ax.set_axis_off(); self.canvas.draw()
             self.deposits_table.setRowCount(0)
             self.account_label.setText(""); self.info_label.setText(""); return
@@ -82,8 +79,7 @@ class EquityTab(BaseTab):
         data = get_equity_curve_data(self.conn, aid)
         if not data:
             ax = self.fig.add_subplot(111)
-            ax.set_facecolor(BG_DARK)
-            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center', fontsize=14, color=TEXT_DIM)
+            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center', fontsize=14, color='gray')
             ax.set_axis_off(); self.canvas.draw()
             self.deposits_table.setRowCount(0); self.info_label.setText(""); return
 
@@ -100,33 +96,27 @@ class EquityTab(BaseTab):
         dates.insert(0, dates[0])
 
         ax = self.fig.add_subplot(111)
-        ax.set_facecolor(BG_DARK)
-        for spine in ax.spines.values():
-            spine.set_edgecolor(BORDER)
-        ax.tick_params(colors=TEXT_DIM, labelsize=9)
-        ax.xaxis.label.set_color(TEXT_DIM)
-        ax.yaxis.label.set_color(TEXT_DIM)
 
-        profit_color = '#26a69a'  # green
-        loss_color = '#ef5350'    # red
-        line_color = ACCENT
+        profit_color = '#2e7d32'  # dark green — readable on white
+        loss_color   = '#c62828'  # dark red — readable on white
+        line_color   = '#1565c0'  # dark blue
 
-        # Colour the area above/below the baseline differently
+        # Colour the fill above/below the starting balance differently
         ax.fill_between(dates, balances, initial,
                         where=[b >= initial for b in balances],
-                        alpha=0.15, color=profit_color, interpolate=True)
+                        alpha=0.18, color=profit_color, interpolate=True)
         ax.fill_between(dates, balances, initial,
                         where=[b < initial for b in balances],
-                        alpha=0.15, color=loss_color, interpolate=True)
+                        alpha=0.18, color=loss_color, interpolate=True)
         ax.plot(dates, balances, color=line_color, linewidth=1.5)
-        ax.axhline(y=initial, color=BORDER, linestyle='--', linewidth=0.8, alpha=0.7)
+        ax.axhline(y=initial, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
 
         events = get_equity_events(self.conn, aid)
         for ev in events:
             try:
                 d = datetime.strptime(ev['event_date'][:10], '%Y-%m-%d')
                 amt = ev['amount']
-                color = '#26a69a' if amt > 0 else '#ef5350'
+                color = profit_color if amt > 0 else loss_color
                 label = f"+{amt:.0f}" if amt > 0 else f"{amt:.0f}"
                 ax.axvline(x=d, color=color, linestyle=':', linewidth=1.2, alpha=0.7)
                 ylim = ax.get_ylim()
@@ -134,9 +124,9 @@ class EquityTab(BaseTab):
                            fontsize=8, color=color, ha='center', fontweight='bold')
             except: pass
 
-        ax.set_title(f'Equity Curve ({currency})', fontsize=13, fontweight='bold', color=TEXT)
-        ax.set_ylabel(f'Balance ({currency})', color=TEXT_DIM)
-        ax.grid(True, color=BORDER, alpha=0.4, linewidth=0.5)
+        ax.set_title(f'Equity Curve ({currency})', fontsize=13, fontweight='bold')
+        ax.set_ylabel(f'Balance ({currency})')
+        ax.grid(True, alpha=0.3)
         self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
 
         self.deposits_table.setRowCount(len(events))
