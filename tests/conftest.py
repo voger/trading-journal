@@ -132,10 +132,27 @@ def bogus_csv(tmp_path):
     return str(csv_path)
 
 
+def pytest_addoption(parser):
+    parser.addoption("--real-csv", default=None,
+                     help="Path to a real Trading212 CSV export for integration tests")
+    parser.addoption("--real-mt4", default=None,
+                     help="Path to a real MT4 Detailed Statement HTML file for integration tests")
+
+
 @pytest.fixture
-def real_csv():
+def real_csv(request):
     """Path to the real Trading212 CSV if available (for integration tests)."""
-    path = '/mnt/user-data/uploads/from_2025-05-22_to_2026-02-15_MTc3MTE1NTA4MjgyNg.csv'
-    if os.path.exists(path):
-        return path
-    pytest.skip("Real Trading212 CSV not available")
+    path = request.config.getoption("--real-csv") or \
+           '/mnt/user-data/uploads/from_2025-05-22_to_2026-02-15_MTc3MTE1NTA4MjgyNg.csv'
+    if not os.path.exists(path):
+        pytest.skip("Real Trading212 CSV not available")
+    return path
+
+
+@pytest.fixture
+def real_mt4(request):
+    """Path to the real MT4 Detailed Statement HTML if available (for integration tests)."""
+    path = request.config.getoption("--real-mt4")
+    if not path or not os.path.exists(path):
+        pytest.skip("Real MT4 Detailed Statement not available — pass --real-mt4=/path/to/statement.htm")
+    return path

@@ -62,18 +62,19 @@ python -m PyInstaller ^
     --noconfirm ^
     --clean ^
     --paths "." ^
-    --add-data "icon.png;." ^
-    --add-data "icon.svg;." ^
-    --add-data "requirements.txt;." ^
+    --add-data "icon.png:." ^
+    --add-data "icon.svg:." ^
+    --add-data "requirements.txt:." ^
     --hidden-import "plugins" ^
     --hidden-import "plugins.trading212_plugin" ^
+    --hidden-import "plugins.mt4_plugin" ^
     --hidden-import "asset_modules" ^
     --hidden-import "asset_modules.forex" ^
     --hidden-import "asset_modules.stocks" ^
     --hidden-import "chart_providers" ^
     --hidden-import "chart_providers.base" ^
     --hidden-import "chart_providers.twelvedata_provider" ^
-    --hidden-import "chart_providers.yahoo_provider" ^
+    --hidden-import "chart_providers.yfinance_provider" ^
     --hidden-import "tabs" ^
     --hidden-import "tabs.trades" ^
     --hidden-import "tabs.journal" ^
@@ -84,6 +85,7 @@ python -m PyInstaller ^
     --hidden-import "tabs.watchlist" ^
     --hidden-import "database" ^
     --hidden-import "dialogs" ^
+    --hidden-import "executions_dialog" ^
     --hidden-import "chart_widget" ^
     --hidden-import "fifo_engine" ^
     --hidden-import "import_manager" ^
