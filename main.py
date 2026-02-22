@@ -1,5 +1,5 @@
 """
-Trading Journal v1.3.0 — Main Application
+Trading Journal v2.3.0 — Main Application
 """
 import sys, os, shutil
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
@@ -27,7 +27,7 @@ from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.3.0"
 ICON_PATH = os.path.join(_resource_dir, 'icon.png')
 
 
