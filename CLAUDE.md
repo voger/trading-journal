@@ -97,3 +97,47 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - `tests/conftest.py` provides `db_path`, `conn`, `stock_account`, `forex_account`, `sample_t212_csv` fixtures plus the optional `real_csv` / `real_mt4` fixtures (skipped if paths not provided).
 - Integration tests in `test_integration_real_csv.py` and `test_integration_real_mt4.py` pin exact counts from real broker exports and are the main regression guard for the import pipeline.
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
+- Current baseline: **349 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`.
+
+## Recent changes (last two sessions)
+
+### Equity tab
+- Click-to-highlight on the deposits table — clicking a row highlights its axvline marker on the chart (changes linewidth/linestyle, calls `canvas.draw()` without full re-render).
+- Equity balance calculation now merges account events (deposits/withdrawals/interest) into the chronological trade timeline, matching MT4's DetailedStatement behaviour. Starting point is `accounts.initial_balance`.
+
+### Stats tab
+- Period filter combo added ("All Time", "This Month", "Last Month", "This Year", "Last 30/90 Days"). Passes `date_from`/`date_to` to `get_trade_stats`, `get_trade_breakdowns`, `get_advanced_stats`. Open trade count is never date-filtered.
+
+### Import tab (`tabs/imports.py`)
+- Added hidden ID column (col 0) and a **Delete Log** toolbar button. Deleting a log removes all linked trades/executions. For executions-mode imports (Trading212), FIFO is automatically re-run for affected instruments after deletion. `imports_tab.data_changed` is wired to `_on_trades_changed` in `main.py`.
+- Error count in the table now uses `json.loads()` instead of `.split('\n')` — previously always showed 1 regardless of actual error count.
+
+### Import pipeline (`import_manager.py`)
+- `_import_trades` restructured to create the import log **before** importing balance events (matches `_import_executions` pattern).
+- `_import_balance_events` now accepts and stores `import_log_id` on every `account_events` row, enabling `delete_import_log` to cleanly remove them.
+
+### `database.py`
+- `delete_import_log(conn, log_id)` — new function. Trades-mode: deletes trades (cascades). Executions-mode: deletes raw executions + all FIFO-built trades for affected instruments; caller re-runs FIFO. Also deletes linked `account_events`. Returns `(plugin_name, account_id, affected_instrument_ids)`.
+- `get_import_logs` default limit raised 50 → 500.
+- Added composite index `idx_trades_account_entry_date ON trades(account_id, entry_date)` to both `SCHEMA_SQL` and `_migrate()`.
+
+### `fifo_engine.py`
+- Guarded `wavg_entry` and `wavg_exit` weighted-average divisions against zero denominator.
+
+### Account guards
+- `tabs/journal.py`, `tabs/watchlist.py`, `tabs/imports.py` — `refresh()` returns early (clears content) when no account is selected (`self.aid() is None`). `journal._on_save()` and `watchlist._on_add()` also guard.
+
+### MT4 plugin fix
+- `detect_instrument_type` logic corrected — removed redundant loop and fixed fallthrough for symbols that are >6 chars but not in CRYPTO_SYMBOLS.
+
+### `tabs/trades.py`
+- Named column index constants (`_N_PREFIX`, `pnl_idx`, etc.) replace magic arithmetic.
+- Import progress dialog (`QProgressDialog`) shown during file import.
+- `ev['event_type']` null-guarded before `.upper()` call.
+
+### Bare except fixes
+- All `except:` clauses replaced with specific types (`OSError`, `AttributeError`, `ValueError`, `TypeError`) across `tabs/`, `chart_widget.py`, `database.py`.
+
+### Known intentional design decisions
+- `dates.insert(0, dates[0])` in `equity.py._render()` is intentional — creates the starting anchor point so `balances[0]` (initial balance) aligns correctly for matplotlib step plots.
+- `_saving` flag in `watchlist.py._on_save()` uses `try/finally` — correctly resets even on exception.
