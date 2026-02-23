@@ -482,7 +482,7 @@ def audit_trade_integrity(conn: sqlite3.Connection, trade_id: int):
     details['expected_status'] = expected_status
 
     # ── Invariant 7: Weighted avg entry price ──
-    if buys:
+    if buys and total_bought:
         expected_entry = sum(b['shares'] * b['price'] for b in buys) / total_bought
         if abs(trade['entry_price'] - round(expected_entry, 6)) > 1e-4:
             errors.append(
@@ -492,7 +492,7 @@ def audit_trade_integrity(conn: sqlite3.Connection, trade_id: int):
         details['expected_entry_price'] = expected_entry
 
     # ── Invariant 8: Weighted avg exit price (closed only) ──
-    if expected_closed and sells:
+    if expected_closed and sells and total_sold:
         expected_exit = sum(s['shares'] * s['price'] for s in sells) / total_sold
         if trade['exit_price'] is not None:
             if abs(trade['exit_price'] - round(expected_exit, 6)) > 1e-4:

@@ -344,6 +344,7 @@ CREATE INDEX IF NOT EXISTS idx_lot_consumptions_trade ON lot_consumptions(trade_
 CREATE INDEX IF NOT EXISTS idx_lot_consumptions_buy ON lot_consumptions(buy_execution_id);
 CREATE INDEX IF NOT EXISTS idx_lot_consumptions_sell ON lot_consumptions(sell_execution_id);
 CREATE INDEX IF NOT EXISTS idx_trades_account_entry_date ON trades(account_id, entry_date);
+CREATE INDEX IF NOT EXISTS idx_trades_account_exit_date ON trades(account_id, exit_date);
 """
 
 SEED_SQL = """
@@ -491,6 +492,10 @@ def _migrate(conn):
     # Composite index for queries that filter+sort by account+entry_date
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_trades_account_entry_date ON trades(account_id, entry_date)"
+    )
+    # Composite index for stats queries that filter by account+exit_date
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trades_account_exit_date ON trades(account_id, exit_date)"
     )
 
 
