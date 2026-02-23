@@ -8,7 +8,7 @@ from datetime import datetime
 
 import database as db
 from database import (
-    get_trade_stats, get_trade_breakdowns, _compute_stats, _effective_pnl,
+    get_trade_stats, get_trade_breakdowns, _compute_stats, effective_pnl,
     get_advanced_stats,
     _get_session, _DOW_NAMES, TRADING_SESSIONS,
 )
@@ -17,14 +17,16 @@ from database import (
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _make_trade(conn, aid, symbol, pnl, direction='long', status='closed',
-                entry_date='2025-01-15 10:00:00', exit_reason=None,
-                setup_id=None):
+                entry_date='2025-01-15 10:00:00', exit_date=None,
+                exit_reason=None, setup_id=None):
     """Create a closed trade with a given instrument and P&L."""
     iid = db.get_or_create_instrument(conn, symbol)
+    if exit_date is None and status == 'closed':
+        exit_date = '2025-02-01 10:00:00'
     return db.create_trade(conn,
         account_id=aid, instrument_id=iid, direction=direction,
         entry_date=entry_date, entry_price=100, position_size=1,
-        exit_date='2025-02-01 10:00:00' if status == 'closed' else None,
+        exit_date=exit_date,
         exit_price=100 + pnl if status == 'closed' else None,
         status=status, pnl_account_currency=pnl,
         exit_reason=exit_reason, setup_type_id=setup_id)
@@ -270,19 +272,32 @@ class TestBreakdownByDirection:
 class TestBreakdownByMonth:
 
     def test_month_grouping_chronological(self, conn, forex_account):
+        # Grouping must use exit_date (when P&L is realized), not entry_date
         _make_trade(conn, forex_account, 'EURUSD', 50,
-                    entry_date='2025-03-15 10:00:00')
+                    entry_date='2025-03-15 10:00:00',
+                    exit_date='2025-03-28 10:00:00')
         _make_trade(conn, forex_account, 'GBPUSD', -20,
-                    entry_date='2025-01-10 10:00:00')
+                    entry_date='2025-01-10 10:00:00',
+                    exit_date='2025-01-25 10:00:00')
         _make_trade(conn, forex_account, 'AUDUSD', 30,
-                    entry_date='2025-03-20 10:00:00')
+                    entry_date='2025-03-20 10:00:00',
+                    exit_date='2025-03-30 10:00:00')
         result = get_trade_breakdowns(conn, forex_account, 'month')
         assert len(result) == 2
-        # Sorted chronologically
+        # Sorted chronologically by exit month
         assert result[0]['group_name'] == '2025-01'
         assert result[1]['group_name'] == '2025-03'
         assert result[1]['total_trades'] == 2
         assert result[1]['net_pnl'] == 80
+
+    def test_month_grouping_uses_exit_date_not_entry_date(self, conn, forex_account):
+        """A trade entered in December but exited in January belongs in January."""
+        _make_trade(conn, forex_account, 'EURUSD', 100,
+                    entry_date='2024-12-28 10:00:00',
+                    exit_date='2025-01-05 10:00:00')
+        result = get_trade_breakdowns(conn, forex_account, 'month')
+        assert len(result) == 1
+        assert result[0]['group_name'] == '2025-01'  # exit month, not entry month
 
 
 # ── Cross-account isolation ──────────────────────────────────────────────
@@ -329,19 +344,19 @@ class TestGetTradeStatsRefactored:
 # ── Effective P&L (swap + commission included) ────────────────────────────
 
 class TestEffectivePnl:
-    """_effective_pnl should include pnl + swap + commission."""
+    """effective_pnl should include pnl + swap + commission."""
 
     def test_pnl_only(self, conn, forex_account):
         tid = _make_trade(conn, forex_account, 'EURUSD', 10)
         t = conn.execute("SELECT * FROM trades WHERE id=?", (tid,)).fetchone()
-        assert _effective_pnl(t) == 10
+        assert effective_pnl(t) == 10
 
     def test_pnl_plus_swap(self, conn, forex_account):
         tid = _make_trade(conn, forex_account, 'EURUSD', 10)
         conn.execute("UPDATE trades SET swap=-3 WHERE id=?", (tid,))
         conn.commit()
         t = conn.execute("SELECT * FROM trades WHERE id=?", (tid,)).fetchone()
-        assert _effective_pnl(t) == 7
+        assert effective_pnl(t) == 7
 
     def test_swap_flips_winner_to_loser(self, conn, forex_account):
         """A trade with pnl=+2 but swap=-5 is a loser in effective terms."""

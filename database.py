@@ -956,7 +956,7 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
             key = (t['direction'] or 'long').capitalize()
         elif group_by == 'month':
             try:
-                key = t['entry_date'][:7]  # YYYY-MM
+                key = t['exit_date'][:7]  # YYYY-MM — group by when P&L was realized
             except (TypeError, IndexError):
                 key = '?'
         else:

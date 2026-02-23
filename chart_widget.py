@@ -55,7 +55,18 @@ class TradeChartWidget(QWidget):
         self._cached_data = None
         self._last_symbol = None
         self._last_tf = None
+        self._tmp_files = []   # temp PNGs created by _on_popout; cleaned up on close
         self._build()
+
+    def closeEvent(self, event):
+        """Clean up any temporary PNG files created by _on_popout."""
+        for path in self._tmp_files:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        self._tmp_files.clear()
+        super().closeEvent(event)
 
     # ── UI ──────────────────────────────────────────────────────────────
 
@@ -284,7 +295,7 @@ class TradeChartWidget(QWidget):
 
         try:
             norm_sym = provider.normalize_symbol(symbol, self.asset_type)
-            bars = provider.fetch_ohlc(symbol, start, end, tf)
+            bars = provider.fetch_ohlc(norm_sym, start, end, tf)
             if not bars: raise ValueError("No data returned")
             self._cached_data = bars
             self._last_symbol = symbol; self._last_tf = tf
@@ -345,6 +356,7 @@ class TradeChartWidget(QWidget):
             tmp.close()
             import matplotlib.pyplot as plt
             plt.close(fig)
+            self._tmp_files.append(tmp.name)
             QDesktopServices.openUrl(QUrl.fromLocalFile(
                 os.path.abspath(tmp.name)))
         except Exception as e:
