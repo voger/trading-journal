@@ -456,7 +456,7 @@ class TradesTab(BaseTab):
 
     def _update_kpi(self, filtered_trades):
         """Update KPI cards from the already-filtered trade list."""
-        closed = [t for t in filtered_trades if (t.get('status') or '') == 'closed']
+        closed = [t for t in filtered_trades if (t['status'] or '') == 'closed']
         _blank = [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
                   self.kpi_expectancy, self.kpi_pf]
         if not closed:
