@@ -152,7 +152,7 @@ class SetupsTab(BaseTab):
                     fp = delete_setup_chart(self.conn, cid)
                     if fp and os.path.exists(fp):
                         try: os.remove(fp)
-                        except: pass
+                        except OSError: pass
                 self._save_charts(sid, dlg)
                 self.data_changed.emit()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))

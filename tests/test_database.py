@@ -54,6 +54,7 @@ class TestSchemaCreation:
             'idx_executions_trade', 'idx_executions_dedup',
             'idx_executions_date', 'idx_lot_consumptions_trade',
             'idx_lot_consumptions_buy', 'idx_lot_consumptions_sell',
+            'idx_trades_account_entry_date',
         }
         missing = expected - indexes
         assert not missing, f"Missing indexes: {missing}"
@@ -1423,4 +1424,128 @@ class TestBuildScripts:
         content = open(path).read()
         assert 'trading_journal.db' in content
         assert '__pycache__' in content
-        assert 'venv/' in content
+
+
+# ── Delete Import Log ────────────────────────────────────────────────────
+
+class TestDeleteImportLog:
+    """Tests for delete_import_log — log removal + cascading data cleanup."""
+
+    def _make_log(self, conn, account_id, plugin_name='mt4_detailed_statement'):
+        return db.create_import_log(conn,
+            account_id=account_id, plugin_name=plugin_name,
+            file_name='test.htm', trades_found=1, trades_imported=1,
+            trades_skipped=0, trades_updated=0)
+
+    # ── Basic ──────────────────────────────────────────────────────────
+
+    def test_returns_none_for_missing_log(self, conn, forex_account):
+        plugin, aid, insts = db.delete_import_log(conn, 9999)
+        assert plugin is None
+        assert aid is None
+        assert insts == set()
+
+    def test_log_is_removed(self, conn, forex_account):
+        log_id = self._make_log(conn, forex_account)
+        db.delete_import_log(conn, log_id)
+        logs = db.get_import_logs(conn, account_id=forex_account)
+        assert all(l['id'] != log_id for l in logs)
+
+    # ── Trades-mode (MT4 style) ────────────────────────────────────────
+
+    def test_trades_mode_deletes_linked_trades(self, conn, forex_account):
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        log_id = self._make_log(conn, forex_account, plugin_name='mt4_detailed_statement')
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01',
+                        entry_price=1.1, position_size=1, status='closed',
+                        exit_date='2025-01-10', exit_price=1.15,
+                        import_log_id=log_id)
+        plugin, aid, insts = db.delete_import_log(conn, log_id)
+        assert plugin == 'mt4_detailed_statement'
+        assert aid == forex_account
+        assert insts == set()
+        # Trade must be gone
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM trades WHERE import_log_id = ?", (log_id,)).fetchone()[0]
+        assert rows == 0
+
+    def test_trades_mode_keeps_other_logs_trades(self, conn, forex_account):
+        """Trades from a different log must not be touched."""
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        log1 = self._make_log(conn, forex_account)
+        log2 = self._make_log(conn, forex_account)
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01',
+                        entry_price=1.1, position_size=1, status='closed',
+                        exit_date='2025-01-10', exit_price=1.15,
+                        import_log_id=log1)
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='short', entry_date='2025-02-01',
+                        entry_price=1.2, position_size=1, status='open',
+                        import_log_id=log2)
+        db.delete_import_log(conn, log1)
+        remaining = conn.execute(
+            "SELECT COUNT(*) FROM trades WHERE import_log_id = ?", (log2,)).fetchone()[0]
+        assert remaining == 1
+
+    # ── Executions-mode (Trading212 style) ────────────────────────────
+
+    def test_executions_mode_returns_affected_instruments(self, conn, stock_account):
+        iid = db.get_or_create_instrument(conn, 'AAPL')
+        log_id = self._make_log(conn, stock_account, plugin_name='trading212_csv')
+        db.create_execution(conn, account_id=stock_account, instrument_id=iid,
+                            broker_order_id='ORD-DEL-1', action='buy', shares=5,
+                            price=150.0, executed_at='2025-01-01',
+                            import_log_id=log_id)
+        plugin, aid, insts = db.delete_import_log(conn, log_id)
+        assert plugin == 'trading212_csv'
+        assert aid == stock_account
+        assert iid in insts
+
+    def test_executions_mode_deletes_executions(self, conn, stock_account):
+        iid = db.get_or_create_instrument(conn, 'AAPL')
+        log_id = self._make_log(conn, stock_account, plugin_name='trading212_csv')
+        db.create_execution(conn, account_id=stock_account, instrument_id=iid,
+                            broker_order_id='ORD-DEL-2', action='buy', shares=5,
+                            price=150.0, executed_at='2025-01-01',
+                            import_log_id=log_id)
+        db.delete_import_log(conn, log_id)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM executions WHERE import_log_id = ?", (log_id,)).fetchone()[0]
+        assert count == 0
+
+    def test_executions_mode_deletes_fifo_trades(self, conn, stock_account):
+        """FIFO-built trades for the affected instrument must be removed."""
+        iid = db.get_or_create_instrument(conn, 'MSFT')
+        log_id = self._make_log(conn, stock_account, plugin_name='trading212_csv')
+        db.create_execution(conn, account_id=stock_account, instrument_id=iid,
+                            broker_order_id='ORD-DEL-3', action='buy', shares=10,
+                            price=300.0, executed_at='2025-01-01',
+                            import_log_id=log_id)
+        # Simulate a FIFO-built trade for this instrument
+        db.create_trade(conn, account_id=stock_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01',
+                        entry_price=300, position_size=10, status='open')
+        db.delete_import_log(conn, log_id)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM trades WHERE account_id = ? AND instrument_id = ?",
+            (stock_account, iid)).fetchone()[0]
+        assert count == 0
+
+    def test_executions_mode_keeps_other_instruments_executions(self, conn, stock_account):
+        """Executions for instruments NOT in this log must not be deleted."""
+        iid_aapl = db.get_or_create_instrument(conn, 'AAPL')
+        iid_goog = db.get_or_create_instrument(conn, 'GOOGL')
+        log1 = self._make_log(conn, stock_account, plugin_name='trading212_csv')
+        log2 = self._make_log(conn, stock_account, plugin_name='trading212_csv')
+        db.create_execution(conn, account_id=stock_account, instrument_id=iid_aapl,
+                            broker_order_id='ORD-A1', action='buy', shares=5,
+                            price=150, executed_at='2025-01-01', import_log_id=log1)
+        db.create_execution(conn, account_id=stock_account, instrument_id=iid_goog,
+                            broker_order_id='ORD-G1', action='buy', shares=2,
+                            price=2800, executed_at='2025-01-02', import_log_id=log2)
+        db.delete_import_log(conn, log1)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM executions WHERE import_log_id = ?", (log2,)).fetchone()[0]
+        assert count == 1

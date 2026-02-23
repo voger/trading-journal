@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
         # Wire data_changed signals for cross-tab coordination
         self.trades_tab.data_changed.connect(self._on_trades_changed)
         self.setups_tab.data_changed.connect(self._on_setups_changed)
+        self.imports_tab.data_changed.connect(self._on_trades_changed)
 
     # ── Helpers ──
 

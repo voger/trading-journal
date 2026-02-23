@@ -343,6 +343,7 @@ CREATE INDEX IF NOT EXISTS idx_executions_date ON executions(executed_at);
 CREATE INDEX IF NOT EXISTS idx_lot_consumptions_trade ON lot_consumptions(trade_id);
 CREATE INDEX IF NOT EXISTS idx_lot_consumptions_buy ON lot_consumptions(buy_execution_id);
 CREATE INDEX IF NOT EXISTS idx_lot_consumptions_sell ON lot_consumptions(sell_execution_id);
+CREATE INDEX IF NOT EXISTS idx_trades_account_entry_date ON trades(account_id, entry_date);
 """
 
 SEED_SQL = """
@@ -486,6 +487,10 @@ def _migrate(conn):
     # Composite index for the most common stats filter (account + status)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_trades_account_status ON trades(account_id, status)"
+    )
+    # Composite index for queries that filter+sort by account+entry_date
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_trades_account_entry_date ON trades(account_id, entry_date)"
     )
 
 
@@ -693,6 +698,59 @@ def get_import_logs(conn: sqlite3.Connection, account_id=None, limit=50):
     sql += " ORDER BY il.imported_at DESC LIMIT ?"
     params.append(limit)
     return conn.execute(sql, params).fetchall()
+
+
+_EXECUTIONS_MODE_PLUGINS = {'trading212_csv'}
+
+
+def delete_import_log(conn: sqlite3.Connection, log_id: int):
+    """Delete an import log and all data imported with it.
+
+    For executions-mode imports: deletes the raw executions linked to this log,
+    then deletes all FIFO-built trades for the affected instruments so the caller
+    can re-run FIFO on the remaining executions.
+
+    For trades-mode imports: deletes trades linked to this log (cascades to
+    lot_consumptions, trade_tags, trade_charts, trade_rule_checks).
+
+    Returns (plugin_name, account_id, affected_instrument_ids) so the caller can
+    trigger FIFO re-matching for executions-mode logs.  Returns (None, None, set())
+    if the log does not exist.
+    """
+    log = conn.execute("SELECT * FROM import_logs WHERE id = ?", (log_id,)).fetchone()
+    if not log:
+        return None, None, set()
+
+    plugin_name = log['plugin_name']
+    account_id = log['account_id']
+    affected_instruments = set()
+
+    if plugin_name in _EXECUTIONS_MODE_PLUGINS:
+        rows = conn.execute(
+            "SELECT DISTINCT instrument_id FROM executions WHERE import_log_id = ?",
+            (log_id,)
+        ).fetchall()
+        affected_instruments = {r['instrument_id'] for r in rows}
+
+        # Delete FIFO-generated trades for affected instruments; the caller will
+        # re-run FIFO on the remaining executions to rebuild correct trades.
+        # Cascades: lot_consumptions, trade_tags, trade_charts, trade_rule_checks.
+        for inst_id in affected_instruments:
+            conn.execute(
+                "DELETE FROM trades WHERE account_id = ? AND instrument_id = ?",
+                (account_id, inst_id)
+            )
+
+        # Delete the raw executions for this log
+        conn.execute("DELETE FROM executions WHERE import_log_id = ?", (log_id,))
+    else:
+        # Trades mode — delete trades directly (cascades to related rows)
+        conn.execute("DELETE FROM trades WHERE import_log_id = ?", (log_id,))
+
+    conn.execute("DELETE FROM import_logs WHERE id = ?", (log_id,))
+    conn.commit()
+
+    return plugin_name, account_id, affected_instruments
 
 
 # Daily journal

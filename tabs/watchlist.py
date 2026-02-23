@@ -132,6 +132,10 @@ class WatchlistTab(BaseTab):
     def refresh(self):
         if self._saving:
             return
+        if self.aid() is None:
+            self.table.setRowCount(0)
+            self._clear_detail()
+            return
         items = get_watchlist(self.conn, self.aid())
         self.table.setUpdatesEnabled(False)
         self.table.setSortingEnabled(False)
@@ -259,6 +263,9 @@ class WatchlistTab(BaseTab):
         self.refresh()
 
     def _on_add(self):
+        if self.aid() is None:
+            QMessageBox.information(self, "No Account", "Select an account before adding watchlist items.")
+            return
         # Show dialog: type a symbol or pick from existing instruments
         instruments = get_instruments(self.conn)
         existing_symbols = [i['symbol'] for i in instruments]

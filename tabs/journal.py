@@ -39,6 +39,10 @@ class JournalTab(BaseTab):
         layout.addLayout(form)
 
     def refresh(self):
+        if self.aid() is None:
+            self.j_cond.setCurrentIndex(0); self.j_emot.setCurrentIndex(0); self.j_plan_f.setCurrentIndex(0)
+            self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
+            return
         ds = self.journal_date.date().toString("yyyy-MM-dd")
         entry = get_journal_entry(self.conn, ds, self.aid())
         if entry:
@@ -54,6 +58,9 @@ class JournalTab(BaseTab):
             self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
 
     def _on_save(self):
+        if self.aid() is None:
+            self._status("Select an account before saving a journal entry.")
+            return
         ds = self.journal_date.date().toString("yyyy-MM-dd")
         fp_map = {'N/A': None, 'Yes': 1, 'No': 0}
         save_journal_entry(self.conn, ds, self.aid(),
