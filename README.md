@@ -2,20 +2,20 @@
 
 A desktop trading journal application for stock and forex traders. Track your trades, analyze performance with FIFO lot matching, and review your strategy with detailed statistics.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-425-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-464-brightgreen) ![Version](https://img.shields.io/badge/Version-2.4.0-blue)
 
 ## Features
 
 - **FIFO Lot Matching Engine** — Automatically matches sells to buys using FIFO ordering, supports fractional shares, multiple round trips, and computes per-lot P&L
-- **Multi-Account** — Manage separate accounts (stocks, forex) with different brokers and currencies
-- **CSV Import** — Import trades from broker statements (Trading212 supported, extensible plugin system)
+- **Multi-Account Sidebar** — Left-panel account switcher; manage separate accounts (stocks, forex) across different brokers and currencies
+- **CSV Import** — Import trades from broker statements (Trading212, MT4 supported, extensible plugin system)
 - **Analytics Dashboard** — Win rate, profit factor, expectancy, Sharpe ratio, max drawdown, consecutive win/loss streaks, and breakdowns by instrument, setup, day of week, session, exit reason, direction, and month
-- **Chart Integration** — Fetch candlestick charts from TwelveData or Yahoo Finance with trade entry/exit markers
+- **Accurate Metrics** — All calculations include swap and commission (not just raw profit), matching broker statement totals. Drawdown % anchored to account initial balance.
+- **Chart Integration** — Fetch candlestick charts from TwelveData or Yahoo Finance with trade entry/exit markers; supports broker symbol suffixes (`.raw`, `.ecn`, `mini`, etc.)
 - **Trade Journal** — Daily journal entries with linked trades
 - **Setup Management** — Define and track your trading setups with example charts
 - **Watchlist** — Monitor instruments with weekly/daily bias notes
-- **Equity Curve** — Visual equity progression over time
-- **Editable Formulas** — Customize how performance metrics are calculated
+- **Equity Curve** — Visual equity progression over time with deposit/withdrawal markers
 - **Backup/Restore** — Full database backup to ZIP with one-click restore
 
 ## Screenshots
@@ -57,7 +57,10 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Your database (`trading_journal.db`) is created automatically in the project folder.
+Your database is created automatically in the platform data directory:
+- **Linux**: `~/.local/share/TradingJournal/`
+- **macOS**: `~/Library/Application Support/TradingJournal/`
+- **Windows**: `%APPDATA%\TradingJournal\`
 
 ---
 
@@ -128,7 +131,7 @@ source venv/bin/activate
 python -m pytest tests/ -q
 ```
 
-Current: **425 test functions** (401 pass, 24 skipped for integration tests requiring real CSV data).
+Current: **464 passed, 42 skipped** (integration tests require real broker CSV/HTM files and are skipped by default).
 
 ---
 
@@ -159,9 +162,9 @@ trading_journal/
 
 ## Configuration
 
-- **Database**: `trading_journal.db` is created in the application folder
-- **Chart API Keys**: Set via the chart widget dropdown in the trade edit dialog
-- **Backups**: Stored in `~/.trading_journal/backups/` (or platform equivalent)
+- **Database**: Created automatically in the platform data directory (see Quick Start above)
+- **Chart API Keys**: Set via the key (🔑) button in the chart widget — stored in the database, not in files
+- **Backups**: File → Backup Database; restores from the same menu
 
 ---
 
