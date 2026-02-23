@@ -49,7 +49,8 @@ def detect_plugin(file_path: str):
     return None
 
 
-def run_import(conn, account_id: int, file_path: str, plugin_name: str = None) -> dict:
+def run_import(conn, account_id: int, file_path: str, plugin_name: str = None,
+               progress_cb=None) -> dict:
     """
     Import trades from a file into the database.
 
@@ -105,14 +106,14 @@ def run_import(conn, account_id: int, file_path: str, plugin_name: str = None) -
     import_mode = getattr(plugin, 'IMPORT_MODE', 'trades')
 
     if import_mode == 'executions':
-        return _import_executions(conn, account_id, file_path, plugin, raw_data, balance_events, result)
+        return _import_executions(conn, account_id, file_path, plugin, raw_data, balance_events, result, progress_cb)
     else:
-        return _import_trades(conn, account_id, file_path, plugin, raw_data, balance_events, result)
+        return _import_trades(conn, account_id, file_path, plugin, raw_data, balance_events, result, progress_cb)
 
 
 # ── Legacy trade-based import (MT4 etc.) ─────────────────────────────────
 
-def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_events, result):
+def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_events, result, progress_cb=None):
     """Import pre-matched trade records (one row per trade)."""
     result['trades_found'] = len(raw_trades)
 
@@ -126,7 +127,10 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
     imported = 0
     skipped = 0
 
+    total = len(raw_trades)
     for i, trade_data in enumerate(raw_trades):
+        if progress_cb:
+            progress_cb(i, total)
         try:
             ticket = trade_data.get('broker_ticket_id')
             if not ticket:
@@ -204,7 +208,7 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
 
 # ── Execution-based import (Trading212 etc.) ─────────────────────────────
 
-def _import_executions(conn, account_id, file_path, plugin, raw_executions, balance_events, result):
+def _import_executions(conn, account_id, file_path, plugin, raw_executions, balance_events, result, progress_cb=None):
     """
     Import raw executions, then run FIFO engine to build/update trades.
     Each execution (buy/sell) is stored individually.
@@ -241,7 +245,10 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
     affected_instruments = set()
 
     # Insert raw executions
+    total_ex = len(raw_executions)
     for i, ex in enumerate(raw_executions):
+        if progress_cb:
+            progress_cb(i, total_ex)
         try:
             order_id = ex.get('broker_order_id')
             if not order_id:

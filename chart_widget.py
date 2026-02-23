@@ -258,13 +258,13 @@ class TradeChartWidget(QWidget):
             QMessageBox.warning(self, "Missing", "Trade needs symbol and entry date."); return
 
         try: entry_dt = datetime.strptime(entry_str[:10], '%Y-%m-%d')
-        except: QMessageBox.warning(self, "Bad Date", f"Cannot parse: {entry_str}"); return
+        except ValueError: QMessageBox.warning(self, "Bad Date", f"Cannot parse: {entry_str}"); return
 
         exit_dt = None
         exit_str = self.trade.get('exit_date', '')
         if exit_str:
             try: exit_dt = datetime.strptime(exit_str[:10], '%Y-%m-%d')
-            except: pass
+            except ValueError: pass
 
         tf = self.tf_combo.currentData() or '1d'
         start = entry_dt - timedelta(days=_cal_days_for_bars(tf, self.bars_before.value()))
@@ -355,10 +355,10 @@ class TradeChartWidget(QWidget):
             xs = self.trade.get('exit_date', '')
             if es:
                 try: entry_dt = datetime.strptime(es[:10], '%Y-%m-%d')
-                except: pass
+                except ValueError: pass
             if xs:
                 try: exit_dt = datetime.strptime(xs[:10], '%Y-%m-%d')
-                except: pass
+                except ValueError: pass
         return entry_dt, exit_dt
 
     @staticmethod

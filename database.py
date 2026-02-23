@@ -620,7 +620,7 @@ def delete_trade(conn: sqlite3.Connection, trade_id: int):
         fpath = c['file_path'] if isinstance(c, sqlite3.Row) else c[0]
         if fpath and os.path.exists(fpath):
             try: os.remove(fpath)
-            except: pass
+            except OSError: pass
     # Unlink executions (don't delete — they're raw data)
     conn.execute("UPDATE executions SET trade_id = NULL WHERE trade_id = ?", (trade_id,))
     # Clean up lot consumptions (CASCADE handles this, but be explicit)
@@ -724,17 +724,26 @@ def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=N
 
 
 # Stats helpers
-def get_trade_stats(conn: sqlite3.Connection, account_id=None):
+def get_trade_stats(conn: sqlite3.Connection, account_id=None,
+                    date_from=None, date_to=None):
     """Get summary statistics for closed trades, plus open trade count."""
     sql = "SELECT * FROM trades WHERE status = 'closed' AND is_excluded = 0"
     open_sql = "SELECT COUNT(*) AS cnt FROM trades WHERE status = 'open' AND is_excluded = 0"
     params = []
+    open_params = []
     if account_id is not None:
         sql += " AND account_id = ?"
         open_sql += " AND account_id = ?"
         params.append(account_id)
+        open_params.append(account_id)
+    if date_from is not None:
+        sql += " AND exit_date >= ?"
+        params.append(str(date_from))
+    if date_to is not None:
+        sql += " AND exit_date <= ?"
+        params.append(str(date_to))
     trades = conn.execute(sql, params).fetchall()
-    open_count = conn.execute(open_sql, params).fetchone()['cnt']
+    open_count = conn.execute(open_sql, open_params).fetchone()['cnt']
 
     if not trades:
         return None
@@ -804,7 +813,8 @@ def _get_session(hour):
 _DOW_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
-def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: str):
+def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: str,
+                         date_from=None, date_to=None):
     """Get per-group performance stats for closed trades.
 
     group_by: 'instrument', 'setup', 'day_of_week', 'session', 'exit_reason',
@@ -819,7 +829,14 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
              JOIN instruments i ON t.instrument_id = i.id
              LEFT JOIN setup_types st ON t.setup_type_id = st.id
              WHERE t.status = 'closed' AND t.is_excluded = 0 AND t.account_id = ?"""
-    trades = conn.execute(sql, (account_id,)).fetchall()
+    params = [account_id]
+    if date_from is not None:
+        sql += " AND t.exit_date >= ?"
+        params.append(str(date_from))
+    if date_to is not None:
+        sql += " AND t.exit_date <= ?"
+        params.append(str(date_to))
+    trades = conn.execute(sql, params).fetchall()
 
     if not trades:
         return []
@@ -881,7 +898,8 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
 
 # ── Advanced Performance Metrics ─────────────────────────────────────────
 
-def get_advanced_stats(conn: sqlite3.Connection, account_id=None):
+def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
+                       date_from=None, date_to=None):
     """
     Compute advanced trading metrics from closed, non-excluded trades.
 
@@ -905,6 +923,12 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None):
     if account_id is not None:
         sql += " AND account_id = ?"
         params.append(account_id)
+    if date_from is not None:
+        sql += " AND exit_date >= ?"
+        params.append(str(date_from))
+    if date_to is not None:
+        sql += " AND exit_date <= ?"
+        params.append(str(date_to))
     sql += " ORDER BY exit_date, entry_date"
 
     trades = conn.execute(sql, params).fetchall()

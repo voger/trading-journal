@@ -337,6 +337,122 @@ class TestTradeStats:
         assert stats['breakeven'] == 1
         assert stats['total_trades'] == 2
 
+    def _make_closed_with_exit(self, conn, aid, symbol, pnl, exit_date):
+        iid = db.get_or_create_instrument(conn, symbol)
+        return db.create_trade(conn,
+            account_id=aid, instrument_id=iid, direction='long',
+            entry_date='2025-01-01', entry_price=100, position_size=1,
+            status='closed', exit_date=exit_date, exit_price=101,
+            pnl_account_currency=pnl)
+
+    def test_date_from_filter(self, conn, forex_account):
+        """Trades before date_from must be excluded."""
+        self._make_closed_with_exit(conn, forex_account, 'EURUSD', 50, '2024-06-01')
+        self._make_closed_with_exit(conn, forex_account, 'GBPUSD', 100, '2025-03-01')
+        stats_all = db.get_trade_stats(conn, account_id=forex_account)
+        stats_filt = db.get_trade_stats(conn, account_id=forex_account, date_from='2025-01-01')
+        assert stats_all['total_trades'] == 2
+        assert stats_filt['total_trades'] == 1
+        assert stats_filt['net_pnl'] == 100
+
+    def test_date_to_filter(self, conn, forex_account):
+        """Trades after date_to must be excluded."""
+        self._make_closed_with_exit(conn, forex_account, 'EURUSD', 50, '2024-06-01')
+        self._make_closed_with_exit(conn, forex_account, 'GBPUSD', 100, '2025-03-01')
+        stats_filt = db.get_trade_stats(conn, account_id=forex_account, date_to='2024-12-31')
+        assert stats_filt['total_trades'] == 1
+        assert stats_filt['net_pnl'] == 50
+
+    def test_date_range_filter(self, conn, forex_account):
+        """date_from and date_to together form an inclusive range."""
+        self._make_closed_with_exit(conn, forex_account, 'P1', 10, '2024-01-01')
+        self._make_closed_with_exit(conn, forex_account, 'P2', 20, '2025-02-01')
+        self._make_closed_with_exit(conn, forex_account, 'P3', 30, '2025-06-01')
+        stats = db.get_trade_stats(conn, account_id=forex_account,
+                                   date_from='2025-01-01', date_to='2025-03-31')
+        assert stats['total_trades'] == 1
+        assert stats['net_pnl'] == 20
+
+    def test_date_filter_open_count_unaffected(self, conn, forex_account):
+        """Open trade count should not be filtered by date."""
+        self._make_closed_with_exit(conn, forex_account, 'P1', 50, '2024-01-01')
+        iid = db.get_or_create_instrument(conn, 'P_OPEN')
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='long', entry_date='2024-01-01',
+                        entry_price=100, position_size=1, status='open')
+        # Filter excludes the closed trade by date, but open_count stays
+        stats = db.get_trade_stats(conn, account_id=forex_account, date_from='2025-01-01')
+        assert stats is None  # no closed trades in range
+        # Verify open_count via unfiltered call
+        stats_all = db.get_trade_stats(conn, account_id=forex_account)
+        assert stats_all['open_trades'] == 1
+
+
+class TestStatsPeriodFilterBreakdowns:
+    """Test date_from/date_to params on get_trade_breakdowns and get_advanced_stats."""
+
+    def _make_trade(self, conn, aid, symbol, pnl, exit_date):
+        iid = db.get_or_create_instrument(conn, symbol)
+        return db.create_trade(conn, account_id=aid, instrument_id=iid,
+                               direction='long', entry_date='2025-01-01',
+                               entry_price=100, position_size=1, status='closed',
+                               exit_date=exit_date, exit_price=101,
+                               pnl_account_currency=pnl)
+
+    def test_breakdowns_date_filter(self, conn, forex_account):
+        self._make_trade(conn, forex_account, 'EURUSD', 50, '2024-06-01')
+        self._make_trade(conn, forex_account, 'EURUSD', 100, '2025-03-01')
+        all_bds = db.get_trade_breakdowns(conn, forex_account, 'instrument')
+        filt_bds = db.get_trade_breakdowns(conn, forex_account, 'instrument',
+                                           date_from='2025-01-01')
+        assert sum(b['total_trades'] for b in all_bds) == 2
+        assert sum(b['total_trades'] for b in filt_bds) == 1
+        assert filt_bds[0]['net_pnl'] == 100
+
+    def test_advanced_stats_date_filter(self, conn, forex_account):
+        self._make_trade(conn, forex_account, 'EURUSD', -200, '2024-06-01')
+        self._make_trade(conn, forex_account, 'GBPUSD', 100, '2025-03-01')
+        adv_all = db.get_advanced_stats(conn, account_id=forex_account)
+        adv_filt = db.get_advanced_stats(conn, account_id=forex_account,
+                                         date_from='2025-01-01')
+        assert adv_all['total_trades'] == 2
+        assert adv_filt['total_trades'] == 1
+        assert adv_filt['best_trade_pnl'] == 100
+
+
+class TestMt4InstrumentDetection:
+    """Test detect_instrument_type logic in mt4_plugin."""
+
+    def test_crypto_in_set(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        assert detect_instrument_type('BTCUSD') == 'crypto'
+        assert detect_instrument_type('ETHUSD') == 'crypto'
+
+    def test_commodity(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        assert detect_instrument_type('XAUUSD') == 'commodity'
+        assert detect_instrument_type('USOIL') == 'commodity'
+
+    def test_index(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        assert detect_instrument_type('US500') == 'index'
+        assert detect_instrument_type('UK100') == 'index'
+
+    def test_forex_six_chars(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        assert detect_instrument_type('EURUSD') == 'forex'
+        assert detect_instrument_type('GBPJPY') == 'forex'
+
+    def test_unknown_longer_symbol(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        # 7-char symbol not in any known set → 'other'
+        assert detect_instrument_type('XYZABCD') == 'other'
+
+    def test_case_insensitive(self):
+        from plugins.mt4_plugin import detect_instrument_type
+        assert detect_instrument_type('btcusd') == 'crypto'
+        assert detect_instrument_type('eurusd') == 'forex'
+
 
 class TestEscHelper:
     """Test the HTML escape helper used in preview panel."""

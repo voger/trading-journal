@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QMessageBox, QApplication, QDialog,
     QDialogButtonBox, QFileDialog, QFrame, QSplitter,
     QScrollArea, QGridLayout, QSizePolicy, QGroupBox,
-    QPlainTextEdit,
+    QPlainTextEdit, QProgressDialog,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence
@@ -550,9 +550,13 @@ class TradesTab(BaseTab):
             h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
             h.setStretchLastSection(False)
 
-        pnl_idx = 4 + len(mod_cols)
-        instr_idx = 2
-        status_idx = pnl_idx + 3  # Status is 3 after P&L
+        # Column layout: ID(hidden) | Date | Instrument | Dir | <mod_cols> | P&L | Setup | Pics | Status
+        _N_PREFIX = 4   # fixed columns before mod_cols
+        instr_idx  = 2
+        pnl_idx    = _N_PREFIX + len(mod_cols)
+        setup_idx  = pnl_idx + 1  # noqa: F841
+        pics_idx   = pnl_idx + 2  # noqa: F841
+        status_idx = pnl_idx + 3
 
         rows_data = []
         for t in trades: rows_data.append((t['entry_date'] or '', 'trade', t))
@@ -726,7 +730,7 @@ class TradesTab(BaseTab):
                     fpath = delete_trade_chart(self.conn, cid)
                     if fpath and os.path.exists(fpath):
                         try: os.remove(fpath)
-                        except: pass
+                        except OSError: pass
                 self._save_screenshots(tid, dlg)
                 checks = dlg.get_rule_checks()
                 if checks: save_trade_rule_checks(self.conn, tid, checks)
@@ -882,8 +886,20 @@ class TradesTab(BaseTab):
 
         if aid is None:
             QMessageBox.warning(self, "No Account", "No account selected."); return
+
+        prog = QProgressDialog("Importing…", None, 0, 100, self)
+        prog.setWindowTitle("Import")
+        prog.setMinimumDuration(400)
+        prog.setWindowModality(Qt.WindowModality.WindowModal)
+
+        def _progress(current, total):
+            if total > 0:
+                prog.setValue(int(current / total * 95))
+            QApplication.processEvents()
+
         self._status("Importing..."); QApplication.processEvents()
-        result = run_import(self.conn, aid, fp)
+        result = run_import(self.conn, aid, fp, progress_cb=_progress)
+        prog.setValue(100)
         msg = result['message']
         if result['errors']: msg += "\n\nErrors:\n" + "\n".join(result['errors'][:10])
         if result['success']: QMessageBox.information(self, "Import Complete", msg)

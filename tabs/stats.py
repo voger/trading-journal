@@ -1,4 +1,6 @@
 """Summary Stats tab — overview + analytics breakdowns + formula editor."""
+from datetime import timedelta, date as _date
+
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QWidget, QLabel,
@@ -298,6 +300,19 @@ class StatsTab(BaseTab):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
+        # Period filter row
+        period_row = QHBoxLayout()
+        period_row.addWidget(QLabel("Period:"))
+        self.flt_period = QComboBox()
+        self.flt_period.addItems([
+            "All Time", "This Month", "Last Month",
+            "This Year", "Last 30 Days", "Last 90 Days",
+        ])
+        self.flt_period.currentIndexChanged.connect(self.refresh)
+        period_row.addWidget(self.flt_period)
+        period_row.addStretch()
+        layout.addLayout(period_row)
+
         # Inner tab widget for sub-tabs
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
@@ -338,6 +353,23 @@ class StatsTab(BaseTab):
         b = QPushButton("Refresh Stats"); b.clicked.connect(self.refresh)
         layout.addWidget(b)
 
+    def _get_date_range(self):
+        """Return (date_from, date_to) based on the period filter, or (None, None)."""
+        today = _date.today()
+        flt = self.flt_period.currentText()
+        if flt == "This Month":
+            return today.replace(day=1), None
+        elif flt == "Last Month":
+            first_this = today.replace(day=1)
+            return (first_this - timedelta(days=1)).replace(day=1), first_this - timedelta(days=1)
+        elif flt == "This Year":
+            return today.replace(month=1, day=1), None
+        elif flt == "Last 30 Days":
+            return today - timedelta(days=30), None
+        elif flt == "Last 90 Days":
+            return today - timedelta(days=90), None
+        return None, None
+
     def refresh(self):
         aid = self.aid()
         if aid is None:
@@ -346,11 +378,16 @@ class StatsTab(BaseTab):
                 bt.populate([])
             return
 
+        date_from, date_to = self._get_date_range()
+
         # Overview
-        stats = get_trade_stats(self.conn, account_id=aid)
+        stats = get_trade_stats(self.conn, account_id=aid,
+                                date_from=date_from, date_to=date_to)
         self._formulas = {f['metric_key']: f for f in get_all_formulas(self.conn)}
         if not stats:
-            self.stats_text.setHtml("<h3>No closed trades to analyze.</h3>")
+            period_note = f" for {self.flt_period.currentText().lower()}" \
+                          if date_from else ""
+            self.stats_text.setHtml(f"<h3>No closed trades to analyze{period_note}.</h3>")
             for bt in self.bd_tables.values():
                 bt.populate([])
             return
@@ -385,7 +422,8 @@ class StatsTab(BaseTab):
         <tr><td><b>Avg Win:</b></td><td>{stats['avg_win']:.2f}</td><td><b>Avg Loss:</b></td><td>{stats['avg_loss']:.2f}</td></tr></table>"""
 
         # Advanced stats section
-        adv = get_advanced_stats(self.conn, account_id=aid)
+        adv = get_advanced_stats(self.conn, account_id=aid,
+                                 date_from=date_from, date_to=date_to)
         if adv:
             streak_val = adv['current_streak']
             if streak_val > 0:
@@ -431,7 +469,8 @@ class StatsTab(BaseTab):
         # Breakdown sub-tabs
         currency = acct['currency'] if acct else ''
         for group_by, bt in self.bd_tables.items():
-            data = get_trade_breakdowns(self.conn, aid, group_by)
+            data = get_trade_breakdowns(self.conn, aid, group_by,
+                                        date_from=date_from, date_to=date_to)
             bt.populate(data, currency=currency)
 
     def _on_info_clicked(self, url):

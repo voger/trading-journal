@@ -99,15 +99,30 @@ class EquityTab(BaseTab):
             try:
                 d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
                 timeline.append((d, pnl, None))
-            except: continue
+            except (ValueError, TypeError): continue
         for ev in events:
             try:
                 d = datetime.strptime(ev['event_date'][:10], '%Y-%m-%d')
                 timeline.append((d, ev['amount'], ev))
-            except: continue
+            except (ValueError, TypeError): continue
         timeline.sort(key=lambda x: x[0])
 
-        if not timeline: return
+        if not timeline:
+            ax = self.fig.add_subplot(111)
+            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
+                    fontsize=14, color='gray')
+            ax.set_axis_off(); self.canvas.draw()
+            self.deposits_table.setRowCount(len(events))
+            for row, ev in enumerate(events):
+                color = QColor(0,130,0) if ev['amount'] > 0 else QColor(200,0,0)
+                items = [ev['event_date'][:16], ev['event_type'].title(),
+                         f"{ev['amount']:+.2f} {currency}", ev['description'] or '']
+                for col, val in enumerate(items):
+                    item = QTableWidgetItem(val)
+                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                    if col == 2: item.setForeground(color)
+                    self.deposits_table.setItem(row, col, item)
+            self.info_label.setText(""); return
         balance = initial; dates = []; balances = [initial]
         for d, amount, _ in timeline:
             balance += amount
@@ -147,7 +162,7 @@ class EquityTab(BaseTab):
                 ylim = ax.get_ylim()
                 ax.annotate(label, xy=(d, ylim[1] - (ylim[1]-ylim[0])*0.05),
                            fontsize=8, color=color, ha='center', fontweight='bold')
-            except:
+            except (ValueError, TypeError):
                 self._event_lines.append(None)
 
         ax.set_title(f'Equity Curve ({currency})', fontsize=13, fontweight='bold')

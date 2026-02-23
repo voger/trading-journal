@@ -25,11 +25,8 @@ JPY_PATTERN = re.compile(r'JPY', re.IGNORECASE)
 
 def detect_instrument_type(symbol: str) -> str:
     sym = symbol.upper()
-    if sym in CRYPTO_SYMBOLS or sym.endswith('USD') and len(sym) > 6:
-        # Heuristic: crypto tickers like ADAUSD
-        for c in CRYPTO_SYMBOLS:
-            if sym == c:
-                return 'crypto'
+    if sym in CRYPTO_SYMBOLS:
+        return 'crypto'
     if sym in COMMODITY_SYMBOLS:
         return 'commodity'
     if sym in INDEX_SYMBOLS:
