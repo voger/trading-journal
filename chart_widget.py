@@ -56,27 +56,6 @@ def _fmt_price(price):
     return f'{price:.0f}'
 
 
-def _smart_vert_offset(bar_highs, bar_lows, idx, price, window=5):
-    """
-    Return (dy_pts, va) for a vertical annotation offset, choosing the side
-    with the least candle-body mass near the annotation bar.
-
-    Logic: compare how much price action sits *above* vs *below* the annotation
-    price within a local window.  The label goes where the candles are thinnest:
-      - price near the TOP of the local range  → more room above → label above
-      - price near the BOTTOM of the local range → more room below → label below
-    """
-    lo = max(0, idx - window)
-    hi = min(len(bar_highs), idx + window + 1)
-    local_max = max(bar_highs[lo:hi])
-    local_min = min(bar_lows[lo:hi])
-    candles_above = local_max - price  # how much candle mass is above our price
-    candles_below = price - local_min  # how much candle mass is below our price
-    if candles_above <= candles_below:
-        return 20, 'bottom'   # label above (less candle action above)
-    else:
-        return -20, 'top'     # label below (less candle action below)
-
 
 class TradeChartWidget(QWidget):
 
@@ -517,69 +496,43 @@ class TradeChartWidget(QWidget):
                     color='#ff9800', linestyle='--', linewidth=1.5,
                     alpha=0.9, zorder=5)
 
-        # ── Smart vertical placement for entry / exit labels ──
-        # Pick above vs below based on local candle density, then clamp to
-        # the visible y-range so labels never escape the plot area.
-        def _clamped_offset(bar_hs, bar_ls, idx, price):
-            dy, va = _smart_vert_offset(bar_hs, bar_ls, idx, price)
-            head_room = (y_hi - price) / y_range
-            foot_room = (price - y_lo) / y_range
-            if dy > 0 and head_room < 0.10:   # wants above but near top → flip
-                dy, va = -abs(dy), 'top'
-            elif dy < 0 and foot_room < 0.10: # wants below but near bottom → flip
-                dy, va = abs(dy), 'bottom'
-            return dy, va
+        pad = y_range * 0.015
 
-        entry_dy, entry_va = 30, 'bottom'
-        exit_dy,  exit_va  = 30, 'bottom'
+        # ── Entry: ► for buy (long), ◄ for sell (short) — at price level ──
         if entry_price is not None and xi is not None:
-            entry_dy, entry_va = _clamped_offset(bar_highs, bar_lows, xi, entry_price)
+            e_col = '#1565c0'
+            e_marker = '>' if is_long else '<'
+            ax.plot(xi, entry_price, marker=e_marker, markersize=6, color=e_col,
+                    zorder=6, linestyle='none',
+                    markeredgecolor='#333', markeredgewidth=0.8)
+            ax.hlines(entry_price, xi, n - 1, colors=e_col,
+                      linewidths=0.6, linestyles=':', alpha=0.5, zorder=3)
+            ax.annotate(_fmt_price(entry_price),
+                        xy=(1.0, entry_price),
+                        xycoords=('axes fraction', 'data'),
+                        xytext=(4, 0), textcoords='offset points',
+                        fontsize=6.5, color=e_col, fontweight='bold',
+                        va='center', ha='left', annotation_clip=False,
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                                  edgecolor=e_col, linewidth=0.8, alpha=0.9))
+
+        # ── Exit: ◄ for sell-to-close (long), ► for buy-to-cover (short) ──
         if exit_price is not None and xo is not None:
-            exit_dy,  exit_va  = _clamped_offset(bar_highs, bar_lows, xo, exit_price)
-
-        # Collision guard: if both want the same side and are ≤5 bars apart, flip exit.
-        if (xi is not None and xo is not None
-                and entry_dy * exit_dy > 0 and abs(xi - xo) <= 5):
-            exit_dy = -entry_dy
-            exit_va = 'top' if exit_dy < 0 else 'bottom'
-
-        # ── Entry annotation — vertical arrow ──
-        # Colors: Long=blue, Short=purple — contrast with teal/red candles.
-        if entry_price is not None and xi is not None:
-            entry_color = '#1565c0' if is_long else '#6a1b9a'
-            sym_arrow   = '\u25B2'  if is_long else '\u25BC'
-            entry_label = f'{sym_arrow} {_fmt_price(entry_price)}'
-            ann = ax.annotate(
-                entry_label,
-                xy=(xi, entry_price),
-                xytext=(0, entry_dy), textcoords='offset points',
-                fontsize=7.5, color=entry_color, fontweight='bold',
-                va=entry_va, ha='center',
-                annotation_clip=False,
-                bbox=dict(boxstyle='round,pad=0.25', facecolor='white',
-                          edgecolor=entry_color, alpha=0.85, linewidth=0.8),
-                arrowprops=dict(arrowstyle='->', color=entry_color,
-                                lw=1.2, shrinkB=2))
-            ann.set_clip_on(False)
-
-        # ── Exit annotation — vertical arrow ──
-        # Win=dark cyan, Loss=amber — contrast with teal/red candles.
-        if exit_price is not None and xo is not None:
-            ec    = '#00695c' if is_win else '#e65100'
-            pnl_s = f'+{pnl:.2f}' if pnl >= 0 else f'{pnl:.2f}'
-            exit_label = f'{_fmt_price(exit_price)}\n{pnl_s}'
-            ann = ax.annotate(
-                exit_label,
-                xy=(xo, exit_price),
-                xytext=(0, exit_dy), textcoords='offset points',
-                fontsize=7.5, color=ec, fontweight='bold',
-                va=exit_va, ha='center',
-                annotation_clip=False,
-                bbox=dict(boxstyle='round,pad=0.25', facecolor='white',
-                          edgecolor=ec, alpha=0.85, linewidth=0.8),
-                arrowprops=dict(arrowstyle='->', color=ec,
-                                lw=1.2, shrinkB=2))
-            ann.set_clip_on(False)
+            x_col = '#f57c00'
+            x_marker = '<' if is_long else '>'
+            ax.plot(xo, exit_price, marker=x_marker, markersize=6, color=x_col,
+                    zorder=6, linestyle='none',
+                    markeredgecolor='#333', markeredgewidth=0.8)
+            ax.hlines(exit_price, xo, n - 1, colors=x_col,
+                      linewidths=0.6, linestyles=':', alpha=0.5, zorder=3)
+            ax.annotate(_fmt_price(exit_price),
+                        xy=(1.0, exit_price),
+                        xycoords=('axes fraction', 'data'),
+                        xytext=(4, 0), textcoords='offset points',
+                        fontsize=6.5, color=x_col, fontweight='bold',
+                        va='center', ha='left', annotation_clip=False,
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                                  edgecolor=x_col, linewidth=0.8, alpha=0.9))
 
         # ── SL / TP labels (subtle, right-edge reference) ──
         if sl:
