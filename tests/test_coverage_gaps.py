@@ -761,3 +761,75 @@ class TestMigration:
         path = db.get_db_path()
         assert isinstance(path, str)
         assert 'trading_journal.db' in path
+
+
+# ── Import Manager — balance events get log_id + error count ─────────────
+
+class TestImportManagerBalanceEvents:
+    """Tests for import_manager._import_balance_events log_id linkage."""
+
+    def _make_log(self, conn, account_id, plugin='mt4_detailed_statement'):
+        return db.create_import_log(conn,
+            account_id=account_id, plugin_name=plugin,
+            file_name='test.htm', trades_found=0, trades_imported=0,
+            trades_skipped=0, trades_updated=0)
+
+    def test_balance_events_linked_to_log(self, conn, forex_account):
+        """Events imported via _import_balance_events carry the log's import_log_id."""
+        import import_manager as im
+        log_id = self._make_log(conn, forex_account)
+        events = [{'event_type': 'deposit', 'amount': 500.0,
+                   'event_date': '2025-01-01', 'broker_ticket_id': 'DEP-T1'}]
+        im._import_balance_events(conn, forex_account, events, [], log_id)
+        row = conn.execute(
+            "SELECT import_log_id FROM account_events WHERE broker_ticket_id = 'DEP-T1'"
+        ).fetchone()
+        assert row is not None
+        assert row['import_log_id'] == log_id
+
+    def test_balance_events_no_log_id_stores_null(self, conn, forex_account):
+        """Without a log_id the column should be NULL (backward-compatible)."""
+        import import_manager as im
+        events = [{'event_type': 'withdrawal', 'amount': -200.0,
+                   'event_date': '2025-02-01', 'broker_ticket_id': 'WD-T1'}]
+        im._import_balance_events(conn, forex_account, events, [])
+        row = conn.execute(
+            "SELECT import_log_id FROM account_events WHERE broker_ticket_id = 'WD-T1'"
+        ).fetchone()
+        assert row is not None
+        assert row['import_log_id'] is None
+
+    def test_delete_log_removes_linked_events(self, conn, forex_account):
+        """Deleting an import log must cascade to its balance events."""
+        import import_manager as im
+        log_id = self._make_log(conn, forex_account)
+        events = [{'event_type': 'deposit', 'amount': 1000.0,
+                   'event_date': '2025-03-01', 'broker_ticket_id': 'DEP-T2'}]
+        im._import_balance_events(conn, forex_account, events, [], log_id)
+        db.delete_import_log(conn, log_id)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM account_events WHERE broker_ticket_id = 'DEP-T2'"
+        ).fetchone()[0]
+        assert count == 0
+
+    def test_import_log_limit_raised(self, conn, forex_account):
+        """Default limit is 500 — more than the old 50."""
+        for i in range(60):
+            self._make_log(conn, forex_account)
+        logs = db.get_import_logs(conn, account_id=forex_account)
+        assert len(logs) == 60  # all visible under new limit
+
+    def test_error_count_uses_json(self, conn, forex_account):
+        """Errors are JSON arrays; counting entries gives the real error count."""
+        import json as _json
+        errors = ["Trade 1 failed: bad date", "Trade 2 failed: missing ticket",
+                  "Trade 3 failed: duplicate"]
+        log_id = db.create_import_log(conn,
+            account_id=forex_account, plugin_name='mt4_detailed_statement',
+            file_name='err.htm', trades_found=3, trades_imported=0,
+            trades_skipped=0, trades_updated=0,
+            errors=_json.dumps(errors))
+        log = db.get_import_logs(conn, account_id=forex_account)[0]
+        # Verify the JSON round-trip
+        parsed = _json.loads(log['errors'])
+        assert len(parsed) == 3  # not 1 (old split-on-newline bug)

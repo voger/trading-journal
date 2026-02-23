@@ -631,7 +631,7 @@ class TradesTab(BaseTab):
             else:
                 ev = data; amt = ev['amount']
                 bg = dep_bg if amt > 0 else wd_bg
-                etype = ev['event_type'].upper()
+                etype = (ev['event_type'] or 'UNKNOWN').upper()
                 cells = ['', (ev['event_date'] or '')[:16], f"\U0001f4b0 {etype}", '']
                 cells += [''] * len(mod_cols)
                 cells += [f"{amt:+.2f}", ev['description'] or '', '', '']

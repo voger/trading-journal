@@ -688,7 +688,7 @@ def create_import_log(conn: sqlite3.Connection, **kwargs):
     return cur.lastrowid
 
 
-def get_import_logs(conn: sqlite3.Connection, account_id=None, limit=50):
+def get_import_logs(conn: sqlite3.Connection, account_id=None, limit=500):
     sql = """SELECT il.*, a.name as account_name
              FROM import_logs il JOIN accounts a ON il.account_id = a.id"""
     params = []
@@ -747,6 +747,8 @@ def delete_import_log(conn: sqlite3.Connection, log_id: int):
         # Trades mode — delete trades directly (cascades to related rows)
         conn.execute("DELETE FROM trades WHERE import_log_id = ?", (log_id,))
 
+    # Remove any balance events (deposits/withdrawals) tagged with this log
+    conn.execute("DELETE FROM account_events WHERE import_log_id = ?", (log_id,))
     conn.execute("DELETE FROM import_logs WHERE id = ?", (log_id,))
     conn.commit()
 

@@ -280,6 +280,33 @@ class TestBalanceEvents:
         assert len(events) == 1
         assert events[0]['amount'] == 1000.0  # first one kept
 
+    def test_import_log_id_stored(self, conn, forex_account):
+        """import_log_id is persisted on account_events."""
+        log_id = db.create_import_log(conn,
+            account_id=forex_account, plugin_name='mt4_detailed_statement',
+            file_name='test.htm', trades_found=0, trades_imported=0,
+            trades_skipped=0, trades_updated=0)
+        db.add_account_event(conn, forex_account, 'deposit', 500, '2025-01-01',
+                             broker_ticket_id='EV1', import_log_id=log_id)
+        row = conn.execute(
+            "SELECT import_log_id FROM account_events WHERE broker_ticket_id = 'EV1'"
+        ).fetchone()
+        assert row['import_log_id'] == log_id
+
+    def test_delete_import_log_removes_account_events(self, conn, forex_account):
+        """Deleting a log must also remove its linked account events."""
+        log_id = db.create_import_log(conn,
+            account_id=forex_account, plugin_name='mt4_detailed_statement',
+            file_name='test.htm', trades_found=0, trades_imported=0,
+            trades_skipped=0, trades_updated=0)
+        db.add_account_event(conn, forex_account, 'deposit', 500, '2025-01-01',
+                             broker_ticket_id='EV2', import_log_id=log_id)
+        db.delete_import_log(conn, log_id)
+        count = conn.execute(
+            "SELECT COUNT(*) FROM account_events WHERE import_log_id = ?", (log_id,)
+        ).fetchone()[0]
+        assert count == 0
+
 
 class TestTradeStats:
     """Test get_trade_stats — data source for KPI cards."""

@@ -176,21 +176,29 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
         except Exception as e:
             errors.append(f"Trade {i+1} (ticket {trade_data.get('broker_ticket_id', '?')}): {e}")
 
-    # Import balance events
-    events_imported = _import_balance_events(conn, account_id, balance_events, errors)
-
-    # Create import log
+    # Create import log first so balance events can be linked to it
     log_id = db.create_import_log(conn,
         account_id=account_id,
         plugin_name=plugin.PLUGIN_NAME,
         file_name=os.path.basename(file_path),
         file_hash=fhash,
         trades_found=len(raw_trades),
-        trades_imported=imported,
-        trades_skipped=skipped,
+        trades_imported=0,
+        trades_skipped=0,
         trades_updated=0,
-        errors=json.dumps(errors) if errors else None,
+        errors=None,
     )
+
+    # Import balance events (linked to this log so delete_import_log can clean them up)
+    events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
+
+    # Update log with final counts
+    conn.execute(
+        """UPDATE import_logs SET trades_imported = ?, trades_skipped = ?, errors = ?
+           WHERE id = ?""",
+        (imported, skipped, json.dumps(errors) if errors else None, log_id)
+    )
+    conn.commit()
 
     result['success'] = True
     result['trades_imported'] = imported
@@ -301,8 +309,8 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
         except Exception as e:
             errors.append(f"FIFO matching error for instrument {instrument_id}: {e}")
 
-    # Import balance events
-    events_imported = _import_balance_events(conn, account_id, balance_events, errors)
+    # Import balance events (linked to this log so delete_import_log can clean them up)
+    events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
 
     # Update import log with final counts
     conn.execute(
@@ -332,7 +340,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
 
 # ── Shared helpers ───────────────────────────────────────────────────────
 
-def _import_balance_events(conn, account_id, balance_events, errors):
+def _import_balance_events(conn, account_id, balance_events, errors, log_id=None):
     """Import deposit/withdrawal/interest/dividend events. Returns count imported."""
     count = 0
     for evt in balance_events:
@@ -347,6 +355,7 @@ def _import_balance_events(conn, account_id, balance_events, errors):
                 event_date=evt['event_date'],
                 description=evt.get('description'),
                 broker_ticket_id=str(ticket) if ticket else None,
+                import_log_id=log_id,
             )
             count += 1
         except Exception as e:

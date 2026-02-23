@@ -248,7 +248,8 @@ def _update_trade_summary(conn, trade_id, buys, sells, remaining_lots,
     remaining_shares = sum(lot['remaining'] for lot in remaining_lots)
 
     # Weighted average entry price across ALL buy executions
-    wavg_entry = sum(b['shares'] * b['price'] for b in buys) / total_bought
+    wavg_entry = (sum(b['shares'] * b['price'] for b in buys) / total_bought
+                  if total_bought else 0.0)
 
     # Total commission across all executions
     total_commission = sum((b['commission'] or 0) for b in buys) + \
@@ -276,7 +277,8 @@ def _update_trade_summary(conn, trade_id, buys, sells, remaining_lots,
 
     if is_closed and last_sell_date:
         # Exit price = weighted avg of all sell executions
-        wavg_exit = sum(s['shares'] * s['price'] for s in sells) / total_sold
+        wavg_exit = (sum(s['shares'] * s['price'] for s in sells) / total_sold
+                     if total_sold else 0.0)
         update['exit_date'] = last_sell_date
         update['exit_price'] = round(wavg_exit, 6)
     else:

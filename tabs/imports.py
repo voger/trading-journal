@@ -1,4 +1,5 @@
 """Import History tab."""
+import json
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox,
@@ -50,9 +51,9 @@ class ImportsTab(BaseTab):
             err_count = 0
             if log['errors']:
                 try:
-                    err_count = len(log['errors'].split('\n'))
-                except AttributeError:
-                    pass
+                    err_count = len(json.loads(log['errors']))
+                except (ValueError, TypeError):
+                    err_count = 1  # unparseable but non-empty → at least 1 error
             items = [
                 str(log['id']),
                 (log['imported_at'] or '')[:16], log['account_name'] or '',

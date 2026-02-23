@@ -1889,3 +1889,31 @@ class TestFIFOAuditAfterComplex:
         result = audit_trade_integrity(conn, tid)
         assert result['ok'], f"Audit failed: {result['errors']}"
         assert abs(result['details']['expected_commission'] - 20.0) < 0.01
+
+
+class TestFIFODivisionGuards:
+    """Guards against division-by-zero in weighted average calculations."""
+
+    def test_zero_shares_buy_does_not_crash(self, conn, stock_account):
+        """A buy execution with 0 shares is pathological but must not crash."""
+        iid = db.get_or_create_instrument(conn, 'AAPL')
+        # 0-share buy — total_bought = 0
+        _add_exec(conn, stock_account, iid, 'B-ZERO', 'buy', 0, 150, dt='2025-01-01')
+        # FIFO should handle this without ZeroDivisionError
+        try:
+            run_fifo_matching(conn, stock_account, iid)
+        except ZeroDivisionError:
+            pytest.fail("run_fifo_matching raised ZeroDivisionError on 0-share buy")
+
+    def test_normal_buy_sell_wavg_correct(self, conn, stock_account):
+        """Weighted average entry/exit prices are correct after the guard."""
+        iid = db.get_or_create_instrument(conn, 'AAPL')
+        _add_exec(conn, stock_account, iid, 'B1', 'buy', 5, 100, dt='2025-01-01')
+        _add_exec(conn, stock_account, iid, 'B2', 'buy', 5, 110, dt='2025-01-15')
+        _add_exec(conn, stock_account, iid, 'S1', 'sell', 10, 120, dt='2025-02-01',
+                  broker_result=100)
+        tid = _fifo_one(conn, stock_account, iid)
+        trade = db.get_trade(conn, tid)
+        # Weighted avg = (5*100 + 5*110) / 10 = 105
+        assert abs(trade['entry_price'] - 105.0) < 1e-6
+        assert abs(trade['exit_price'] - 120.0) < 1e-6
