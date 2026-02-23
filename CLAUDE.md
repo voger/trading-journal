@@ -99,6 +99,43 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
 - Current baseline: **464 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
 
+## Recent changes (v2.5.0)
+
+### Equity curve mode toggle (`tabs/equity.py`)
+- Added "Balance" / "Cumulative P&L" toggle buttons at the top of the Equity Curve tab.
+- **Balance mode**: unchanged — shows account balance including deposits/withdrawals.
+- **Cumulative P&L mode**: starts at 0, plots trade P&L only (no deposit jumps), matching Trademetria-style curves.
+- `_populate_deposits_table()` extracted as a shared helper called by both modes.
+- `_set_mode()` updates button checked state and re-renders.
+
+### New statistics (`database.py`, `tabs/stats.py`)
+- **Sortino Ratio**: downside deviation with MAR=0; displayed after Sharpe Ratio.
+- **Calmar Ratio**: net P&L / max absolute drawdown; displayed after Sortino.
+- **Avg Duration split**: single "Avg Duration" row expanded to three rows — overall, Winners (green), Losers (red).
+- `get_advanced_stats()` duration loop now uses `zip(trades, pnls)` to track winner/loser durations separately.
+
+### Bug fix — month breakdown discarding open trades (`database.py`)
+- `get_trade_breakdowns()` month branch: `exit_date` is NULL for open trades; `None[:7]` raised TypeError and silently grouped them under key `'?'`. Fixed to fall back to `entry_date`: `key = (t['exit_date'] or t['entry_date'] or '')[:7]`.
+
+### Chart widget overhaul (`chart_widget.py`)
+- Price axis moved to the right side (`y_on_right=True`); "Price" ylabel removed.
+- Chart fills the full panel — `tight_layout=False` + `ax.set_position([0.005, 0.09, 0.935, 0.895])` bypasses mplfinance's internal GridSpec (which overrides `subplots_adjust`).
+- In-axes compact title (symbol, timeframe, direction) replaces the large figure title.
+- Denser y-axis scale: `MaxNLocator(nbins=10)`.
+- Smaller axis tick labels (6px).
+- Entry/exit annotations: vertical arrows, `annotation_clip=False`; entry in blue/purple, exit in dark-cyan/amber depending on win/loss.
+- Connecting line between entry and exit in amber (`#ff9800`) to stand out from candle colours.
+- `_smart_vert_offset()`: places labels on the side with less candle mass in a ±5-bar window.
+- `_clamped_offset()`: flips placement if within 10% of y-axis edge.
+- `_fmt_price()`: formats prices with appropriate decimal places.
+- Canvas `setSizePolicy(Expanding, Expanding)` so it fills the Qt widget.
+
+### App startup (`main.py`)
+- `w.showMaximized()` — app now starts maximized.
+
+### Trades tab splitter initial sizing (`tabs/trades.py`)
+- `resizeEvent` with a `_splitter_sized` once-flag: sets 58%/42% split on the first resize (when real dimensions are available). With both stretch factors at Qt default (0), proportions are preserved on subsequent resizes. Manual dragging still works freely.
+
 ## Recent changes (v2.4.0)
 
 ### UI — sidebar account switcher (`main.py`)

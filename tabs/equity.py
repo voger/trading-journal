@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from PyQt6.QtWidgets import (
-    QVBoxLayout, QPushButton, QLabel, QTableWidget,
+    QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QTableWidget,
     QTableWidgetItem, QHeaderView,
 )
 from PyQt6.QtCore import Qt
@@ -16,12 +16,29 @@ class EquityTab(BaseTab):
     def __init__(self, conn, get_aid_fn):
         super().__init__(conn, get_aid_fn)
         self._dirty = True
+        self._mode = 'balance'
         self._build()
 
     def _build(self):
         layout = QVBoxLayout(self)
         self.account_label = QLabel(""); self.account_label.setFont(QFont("", 11, QFont.Weight.Bold))
         layout.addWidget(self.account_label)
+
+        # Mode toggle
+        mode_row = QHBoxLayout()
+        self._btn_balance = QPushButton("Balance")
+        self._btn_pnl     = QPushButton("Cumulative P&L")
+        for btn in (self._btn_balance, self._btn_pnl):
+            btn.setCheckable(True)
+            btn.setFixedHeight(26)
+        self._btn_balance.setChecked(True)
+        mode_row.addWidget(self._btn_balance)
+        mode_row.addWidget(self._btn_pnl)
+        mode_row.addStretch()
+        layout.addLayout(mode_row)
+        self._btn_balance.clicked.connect(lambda: self._set_mode('balance'))
+        self._btn_pnl.clicked.connect(lambda: self._set_mode('pnl'))
+
         try:
             from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
             from matplotlib.figure import Figure
@@ -43,6 +60,25 @@ class EquityTab(BaseTab):
         b = QPushButton("Refresh"); b.clicked.connect(self.force_refresh); layout.addWidget(b)
         self._event_lines = []  # parallel to events list; None for events with no chart marker
         self.deposits_table.itemSelectionChanged.connect(self._on_event_selected)
+
+    def _set_mode(self, mode):
+        self._mode = mode
+        self._btn_balance.setChecked(mode == 'balance')
+        self._btn_pnl.setChecked(mode == 'pnl')
+        self._dirty = False
+        self._render()
+
+    def _populate_deposits_table(self, events, currency):
+        self.deposits_table.setRowCount(len(events))
+        for row, ev in enumerate(events):
+            color = QColor(0, 130, 0) if ev['amount'] > 0 else QColor(200, 0, 0)
+            items = [ev['event_date'][:16], ev['event_type'].title(),
+                     f"{ev['amount']:+.2f} {currency}", ev['description'] or '']
+            for col, val in enumerate(items):
+                item = QTableWidgetItem(val)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if col == 2: item.setForeground(color)
+                self.deposits_table.setItem(row, col, item)
 
     def mark_dirty(self):
         self._dirty = True
@@ -89,6 +125,61 @@ class EquityTab(BaseTab):
 
         initial = acct['initial_balance'] if acct else 0
 
+        profit_color = '#2e7d32'  # dark green — readable on white
+        loss_color   = '#c62828'  # dark red — readable on white
+        line_color   = '#1565c0'  # dark blue
+
+        # ── Cumulative P&L mode ──
+        if self._mode == 'pnl':
+            self._event_lines = []
+            pnl_running = 0.0
+            dates = []
+            balances = [0.0]
+            for t in data:
+                pnl = (t['pnl_account_currency'] or 0) + (t['swap'] or 0) + (t['commission'] or 0)
+                try:
+                    d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
+                    pnl_running += pnl
+                    dates.append(d)
+                    balances.append(pnl_running)
+                except (ValueError, TypeError):
+                    continue
+
+            if not dates:
+                ax = self.fig.add_subplot(111)
+                ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
+                        fontsize=14, color='gray')
+                ax.set_axis_off(); self.canvas.draw()
+                self._populate_deposits_table(events, currency)
+                self.info_label.setText(""); return
+
+            dates.insert(0, dates[0])
+            ax = self.fig.add_subplot(111)
+            ax.fill_between(dates, balances, 0,
+                            where=[b >= 0 for b in balances],
+                            alpha=0.18, color=profit_color, interpolate=True)
+            ax.fill_between(dates, balances, 0,
+                            where=[b < 0 for b in balances],
+                            alpha=0.18, color=loss_color, interpolate=True)
+            ax.plot(dates, balances, color=line_color, linewidth=1.5)
+            ax.axhline(y=0, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+            ax.set_title(f'Cumulative P&L ({currency})', fontsize=13, fontweight='bold')
+            ax.set_ylabel(f'P&L ({currency})')
+            ax.grid(True, alpha=0.3)
+            self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
+
+            net_pnl = balances[-1]
+            pnl_color = '#008200' if net_pnl >= 0 else '#c80000'
+            sign = '+' if net_pnl >= 0 else ''
+            self.info_label.setTextFormat(Qt.TextFormat.RichText)
+            self.info_label.setText(
+                f"<b>Net P&L:</b> <span style='color:{pnl_color}'>{sign}{net_pnl:,.2f} {currency}</span>"
+                f" &nbsp;|&nbsp; <b>Trades:</b> {len(data)}"
+            )
+            self._populate_deposits_table(events, currency)
+            return
+
+        # ── Balance mode (default) ──
         # Build a merged chronological timeline of trades and account events so
         # that deposits/withdrawals shift the running balance at the right point,
         # matching the way MT4's detailed statement renders the equity curve.
@@ -112,17 +203,9 @@ class EquityTab(BaseTab):
             ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
                     fontsize=14, color='gray')
             ax.set_axis_off(); self.canvas.draw()
-            self.deposits_table.setRowCount(len(events))
-            for row, ev in enumerate(events):
-                color = QColor(0,130,0) if ev['amount'] > 0 else QColor(200,0,0)
-                items = [ev['event_date'][:16], ev['event_type'].title(),
-                         f"{ev['amount']:+.2f} {currency}", ev['description'] or '']
-                for col, val in enumerate(items):
-                    item = QTableWidgetItem(val)
-                    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                    if col == 2: item.setForeground(color)
-                    self.deposits_table.setItem(row, col, item)
+            self._populate_deposits_table(events, currency)
             self.info_label.setText(""); return
+
         balance = initial; dates = []; balances = [initial]
         for d, amount, _ in timeline:
             balance += amount
@@ -130,10 +213,6 @@ class EquityTab(BaseTab):
         dates.insert(0, dates[0])
 
         ax = self.fig.add_subplot(111)
-
-        profit_color = '#2e7d32'  # dark green — readable on white
-        loss_color   = '#c62828'  # dark red — readable on white
-        line_color   = '#1565c0'  # dark blue
 
         # Colour the fill above/below the starting balance differently
         ax.fill_between(dates, balances, initial,
@@ -170,15 +249,7 @@ class EquityTab(BaseTab):
         ax.grid(True, alpha=0.3)
         self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
 
-        self.deposits_table.setRowCount(len(events))
-        for row, ev in enumerate(events):
-            color = QColor(0,130,0) if ev['amount'] > 0 else QColor(200,0,0)
-            items = [ev['event_date'][:16], ev['event_type'].title(),
-                     f"{ev['amount']:+.2f} {currency}", ev['description'] or '']
-            for col, val in enumerate(items):
-                item = QTableWidgetItem(val); item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                if col == 2: item.setForeground(color)
-                self.deposits_table.setItem(row, col, item)
+        self._populate_deposits_table(events, currency)
 
         # Summary metrics
         current_balance = balances[-1]

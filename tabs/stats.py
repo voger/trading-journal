@@ -432,6 +432,10 @@ class StatsTab(BaseTab):
 
             sharpe_c = '#008200' if adv['sharpe_ratio'] > 1 else '#c80000' if adv['sharpe_ratio'] < 0 else '#666'
             sharpe_s = f"{adv['sharpe_ratio']:.2f}" if adv['sharpe_ratio'] != float('inf') else "∞"
+            sortino_c = '#008200' if adv['sortino_ratio'] > 1 else '#c80000' if adv['sortino_ratio'] < 0 else '#666'
+            sortino_s = f"{adv['sortino_ratio']:.2f}" if adv['sortino_ratio'] != float('inf') else "∞"
+            calmar_c  = '#008200' if adv['calmar_ratio'] > 0 else '#c80000'
+            calmar_s  = f"{adv['calmar_ratio']:.2f}"
 
             html += f"""
             <hr>
@@ -442,8 +446,16 @@ class StatsTab(BaseTab):
                 <td>({adv['max_drawdown_abs']:.2f} {acct['currency'] if acct else ''} peak-to-trough)</td></tr>
             <tr><td><b>Sharpe Ratio{info_icon('sharpe_ratio')}:</b></td>
                 <td style="color:{sharpe_c}">{sharpe_s}</td></tr>
+            <tr><td><b>Sortino Ratio:</b></td>
+                <td style="color:{sortino_c}">{sortino_s}</td></tr>
+            <tr><td><b>Calmar Ratio:</b></td>
+                <td style="color:{calmar_c}">{calmar_s}</td></tr>
             <tr><td><b>Avg Duration:</b></td>
                 <td>{adv['avg_trade_duration_days']:.0f} days</td></tr>
+            <tr><td><b>&nbsp;&nbsp;Winners:</b></td>
+                <td style="color:#008200">{adv['avg_winner_duration']:.0f} days</td></tr>
+            <tr><td><b>&nbsp;&nbsp;Losers:</b></td>
+                <td style="color:#c80000">{adv['avg_loser_duration']:.0f} days</td></tr>
             </table>
             <h3>Streaks</h3>
             <table cellpadding="4" style="font-size:11pt;">

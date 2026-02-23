@@ -302,7 +302,7 @@ def main():
     app.setStyle(QStyleFactory.create('Fusion'))  # Fusion respects QSS fully on all platforms
     if os.path.exists(ICON_PATH):
         app.setWindowIcon(QIcon(ICON_PATH))
-    w = MainWindow(); w.show(); sys.exit(app.exec())
+    w = MainWindow(); w.showMaximized(); sys.exit(app.exec())
 
 if __name__ == '__main__':
     main()

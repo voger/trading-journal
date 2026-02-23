@@ -961,7 +961,7 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
             key = (t['direction'] or 'long').capitalize()
         elif group_by == 'month':
             try:
-                key = t['exit_date'][:7]  # YYYY-MM — group by when P&L was realized
+                key = (t['exit_date'] or t['entry_date'] or '')[:7]
             except (TypeError, IndexError):
                 key = '?'
         else:
@@ -1100,7 +1100,9 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
 
     # ── Average trade duration ──
     durations = []
-    for t in trades:
+    winner_durations = []
+    loser_durations  = []
+    for t, p in zip(trades, pnls):
         if t['entry_date'] and t['exit_date']:
             try:
                 # Handle both datetime and date-only formats
@@ -1112,9 +1114,15 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
                 days = (exit_d - entry_d).days
                 if days >= 0:
                     durations.append(days)
+                    if p > 0:
+                        winner_durations.append(days)
+                    elif p < 0:
+                        loser_durations.append(days)
             except (ValueError, TypeError):
                 pass
     avg_duration = sum(durations) / len(durations) if durations else 0.0
+    avg_winner_duration = sum(winner_durations) / len(winner_durations) if winner_durations else 0.0
+    avg_loser_duration  = sum(loser_durations)  / len(loser_durations)  if loser_durations  else 0.0
 
     # ── Sharpe ratio (simplified: mean / stdev) ──
     mean_pnl = sum(pnls) / n
@@ -1124,6 +1132,17 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
         sharpe = mean_pnl / stdev if stdev > 0 else float('inf')
     else:
         sharpe = 0.0
+
+    # ── Sortino ratio (downside deviation, MAR = 0) ──
+    downside = [p for p in pnls if p < 0]
+    if downside and n > 0:
+        downside_var = sum(p ** 2 for p in downside) / n
+        sortino = mean_pnl / (downside_var ** 0.5) if downside_var > 0 else float('inf')
+    else:
+        sortino = float('inf') if mean_pnl > 0 else 0.0
+
+    # ── Calmar ratio (net P&L / max absolute drawdown) ──
+    calmar = sum(pnls) / max_dd_abs if max_dd_abs > 0 else 0.0
 
     return {
         'max_drawdown_pct': round(max_dd_pct, 2),
@@ -1135,6 +1154,10 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
         'worst_trade_pnl': round(worst_pnl, 2),
         'avg_trade_duration_days': round(avg_duration, 1),
         'sharpe_ratio': round(sharpe, 3),
+        'sortino_ratio': round(sortino, 3),
+        'calmar_ratio': round(calmar, 3),
+        'avg_winner_duration': round(avg_winner_duration, 1),
+        'avg_loser_duration': round(avg_loser_duration, 1),
         'total_trades': n,
     }
 

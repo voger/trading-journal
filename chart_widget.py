@@ -42,7 +42,40 @@ def _make_style():
         wick={'up': '#1b7a6e', 'down': '#c62828'})
     return mpf.make_mpf_style(marketcolors=mc, facecolor='#fafafa',
                               gridstyle='-', gridcolor='#e8e8e8',
-                              y_on_right=False)
+                              y_on_right=True)
+
+
+def _fmt_price(price):
+    """Format price with appropriate decimal places for chart labels."""
+    if price is None:
+        return ''
+    if price < 10:
+        return f'{price:.4f}'
+    elif price < 10000:
+        return f'{price:.2f}'
+    return f'{price:.0f}'
+
+
+def _smart_vert_offset(bar_highs, bar_lows, idx, price, window=5):
+    """
+    Return (dy_pts, va) for a vertical annotation offset, choosing the side
+    with the least candle-body mass near the annotation bar.
+
+    Logic: compare how much price action sits *above* vs *below* the annotation
+    price within a local window.  The label goes where the candles are thinnest:
+      - price near the TOP of the local range  → more room above → label above
+      - price near the BOTTOM of the local range → more room below → label below
+    """
+    lo = max(0, idx - window)
+    hi = min(len(bar_highs), idx + window + 1)
+    local_max = max(bar_highs[lo:hi])
+    local_min = min(bar_lows[lo:hi])
+    candles_above = local_max - price  # how much candle mass is above our price
+    candles_below = price - local_min  # how much candle mass is below our price
+    if candles_above <= candles_below:
+        return 20, 'bottom'   # label above (less candle action above)
+    else:
+        return -20, 'top'     # label below (less candle action below)
 
 
 class TradeChartWidget(QWidget):
@@ -154,7 +187,10 @@ class TradeChartWidget(QWidget):
             self._canvas.setParent(None)
             self._canvas.deleteLater()
         self._canvas = canvas
-        self._canvas.setMinimumHeight(300)
+        self._canvas.setMinimumHeight(250)
+        from PyQt6.QtWidgets import QSizePolicy
+        self._canvas.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                   QSizePolicy.Policy.Expanding)
         self._chart_box.addWidget(self._canvas)
 
     def set_trade(self, trade):
@@ -399,9 +435,12 @@ class TradeChartWidget(QWidget):
             'Volume': [b.volume for b in bars],
         }, index=pd.DatetimeIndex([b.timestamp for b in bars], name='Date'))
 
+        bar_highs = [b.high for b in bars]
+        bar_lows  = [b.low  for b in bars]
+
         trade = self.trade or {}
         entry_price = trade.get('entry_price')
-        exit_price = trade.get('exit_price')
+        exit_price  = trade.get('exit_price')
         sl = trade.get('stop_loss')
         tp = trade.get('take_profit')
         direction = (trade.get('direction') or '').lower()
@@ -430,14 +469,13 @@ class TradeChartWidget(QWidget):
         # ── mplfinance kwargs ──
         style = _make_style()
         tf_labels = {'1h': '1H', '4h': '4H', '1d': 'Daily', '1wk': 'Weekly'}
-        title = f'{symbol}  \u2022  {tf_labels.get(tf, tf)}'
-        if direction:
-            title += f'  \u2022  {"LONG" if is_long else "SHORT"}'
 
+        # ylabel='' suppresses mplfinance's default 'Price' axis label.
+        # No title passed — we add a compact in-axes label instead.
         kw = dict(type='candle', style=style, volume=False,
                   show_nontrading=False, returnfig=True,
-                  figsize=figsize, tight_layout=True,
-                  title=title, ylabel='Price',
+                  figsize=figsize, tight_layout=False,
+                  ylabel='',
                   xrotation=0,
                   datetime_format=tf_datefmt.get(tf, '%d %b %Y'))
         if hl:
@@ -446,64 +484,112 @@ class TradeChartWidget(QWidget):
         fig, axes = mpf.plot(df, **kw)
         ax = axes[0]
 
-        # Smaller date labels, horizontal
-        ax.tick_params(axis='x', labelsize=7)
-        ax.tick_params(axis='y', labelsize=8)
+        # Nuke the "Price" ylabel every way possible
+        ax.set_ylabel('', labelpad=0)
+        ax.yaxis.label.set_visible(False)
+        ax.yaxis.label.set_text('')
+        # Compact tick labels
+        ax.tick_params(axis='x', labelsize=6)
+        ax.tick_params(axis='y', which='both', labelsize=6, pad=2)
+        # Denser y-scale
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=10, prune=None))
 
-        # ── Connecting dashed line: entry → exit (MetaTrader style) ──
+        # y-axis limits — used to clamp label placement below
+        y_lo, y_hi = ax.get_ylim()
+        y_range = y_hi - y_lo if y_hi != y_lo else 1.0
+
+        # ── Discrete in-axes title (upper-left corner) ──
+        dir_char = '  Long' if is_long else ('  Short' if direction else '')
+        chart_label = f'{symbol}  {tf_labels.get(tf, tf)}{dir_char}'
+        ax.text(0.01, 0.98, chart_label,
+                transform=ax.transAxes,
+                fontsize=6, fontweight='bold', va='top', ha='left',
+                color='#333',
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
+                          edgecolor='none', alpha=0.72),
+                zorder=10)
+
+        # ── Connecting dashed line: entry → exit ──
+        # Use a neutral blue-grey so it never blends with teal/red candles.
         if entry_price is not None and exit_price is not None \
                 and xi is not None and xo is not None:
-            trade_color = '#2e7d32' if is_win else '#c62828'
             ax.plot([xi, xo], [entry_price, exit_price],
-                    color=trade_color, linestyle='--', linewidth=1.5,
-                    alpha=0.7, zorder=5)
+                    color='#ff9800', linestyle='--', linewidth=1.5,
+                    alpha=0.9, zorder=5)
 
-        # ── Entry annotation ──
-        # Long = blue + ▲   Short = orange + ▼
+        # ── Smart vertical placement for entry / exit labels ──
+        # Pick above vs below based on local candle density, then clamp to
+        # the visible y-range so labels never escape the plot area.
+        def _clamped_offset(bar_hs, bar_ls, idx, price):
+            dy, va = _smart_vert_offset(bar_hs, bar_ls, idx, price)
+            head_room = (y_hi - price) / y_range
+            foot_room = (price - y_lo) / y_range
+            if dy > 0 and head_room < 0.10:   # wants above but near top → flip
+                dy, va = -abs(dy), 'top'
+            elif dy < 0 and foot_room < 0.10: # wants below but near bottom → flip
+                dy, va = abs(dy), 'bottom'
+            return dy, va
+
+        entry_dy, entry_va = 30, 'bottom'
+        exit_dy,  exit_va  = 30, 'bottom'
         if entry_price is not None and xi is not None:
-            if is_long:
-                entry_color = '#1565c0'     # blue
-                entry_label = f'\u25B2 Long {entry_price}'
-            else:
-                entry_color = '#e65100'     # orange
-                entry_label = f'\u25BC Short {entry_price}'
+            entry_dy, entry_va = _clamped_offset(bar_highs, bar_lows, xi, entry_price)
+        if exit_price is not None and xo is not None:
+            exit_dy,  exit_va  = _clamped_offset(bar_highs, bar_lows, xo, exit_price)
 
-            ax.annotate(
+        # Collision guard: if both want the same side and are ≤5 bars apart, flip exit.
+        if (xi is not None and xo is not None
+                and entry_dy * exit_dy > 0 and abs(xi - xo) <= 5):
+            exit_dy = -entry_dy
+            exit_va = 'top' if exit_dy < 0 else 'bottom'
+
+        # ── Entry annotation — vertical arrow ──
+        # Colors: Long=blue, Short=purple — contrast with teal/red candles.
+        if entry_price is not None and xi is not None:
+            entry_color = '#1565c0' if is_long else '#6a1b9a'
+            sym_arrow   = '\u25B2'  if is_long else '\u25BC'
+            entry_label = f'{sym_arrow} {_fmt_price(entry_price)}'
+            ann = ax.annotate(
                 entry_label,
                 xy=(xi, entry_price),
-                xytext=(-65, 0), textcoords='offset points',
+                xytext=(0, entry_dy), textcoords='offset points',
                 fontsize=7.5, color=entry_color, fontweight='bold',
-                va='center', ha='right',
+                va=entry_va, ha='center',
+                annotation_clip=False,
                 bbox=dict(boxstyle='round,pad=0.25', facecolor='white',
                           edgecolor=entry_color, alpha=0.85, linewidth=0.8),
                 arrowprops=dict(arrowstyle='->', color=entry_color,
                                 lw=1.2, shrinkB=2))
+            ann.set_clip_on(False)
 
-        # ── Exit annotation ──
+        # ── Exit annotation — vertical arrow ──
+        # Win=dark cyan, Loss=amber — contrast with teal/red candles.
         if exit_price is not None and xo is not None:
-            ec = '#2e7d32' if is_win else '#c62828'
-            pnl_s = f"+{pnl:.2f}" if pnl >= 0 else f"{pnl:.2f}"
-
-            ax.annotate(
-                f'Exit {exit_price} ({pnl_s})',
+            ec    = '#00695c' if is_win else '#e65100'
+            pnl_s = f'+{pnl:.2f}' if pnl >= 0 else f'{pnl:.2f}'
+            exit_label = f'{_fmt_price(exit_price)}\n{pnl_s}'
+            ann = ax.annotate(
+                exit_label,
                 xy=(xo, exit_price),
-                xytext=(60, 0), textcoords='offset points',
+                xytext=(0, exit_dy), textcoords='offset points',
                 fontsize=7.5, color=ec, fontweight='bold',
-                va='center', ha='left',
+                va=exit_va, ha='center',
+                annotation_clip=False,
                 bbox=dict(boxstyle='round,pad=0.25', facecolor='white',
                           edgecolor=ec, alpha=0.85, linewidth=0.8),
                 arrowprops=dict(arrowstyle='->', color=ec,
                                 lw=1.2, shrinkB=2))
+            ann.set_clip_on(False)
 
-        # ── SL / TP labels (subtle) ──
+        # ── SL / TP labels (subtle, right-edge reference) ──
         if sl:
-            ax.annotate(f'SL {sl}', xy=(n - 1, sl), xytext=(-8, 0),
+            ax.annotate(f'SL {_fmt_price(sl)}', xy=(n - 1, sl), xytext=(-8, 0),
                        textcoords='offset points', fontsize=7, color='#d32f2f',
                        ha='right', va='center',
                        bbox=dict(boxstyle='round,pad=0.2', facecolor='#ffebee',
                                  edgecolor='#d32f2f', linewidth=0.5, alpha=0.75))
         if tp:
-            ax.annotate(f'TP {tp}', xy=(n - 1, tp), xytext=(-8, 0),
+            ax.annotate(f'TP {_fmt_price(tp)}', xy=(n - 1, tp), xytext=(-8, 0),
                        textcoords='offset points', fontsize=7, color='#388e3c',
                        ha='right', va='center',
                        bbox=dict(boxstyle='round,pad=0.2', facecolor='#e8f5e9',
@@ -514,6 +600,11 @@ class TradeChartWidget(QWidget):
             ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.4f'))
         elif entry_price and entry_price < 200:
             ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.2f'))
+
+        # ── Final layout: ax.set_position() bypasses mplfinance's GridSpec.
+        #    y-axis is on the RIGHT, so left margin is near-zero and right
+        #    margin provides space for the tick labels. ──
+        ax.set_position([0.005, 0.09, 0.935, 0.895])
 
         return FigureCanvasQTAgg(fig), fig
 

@@ -172,9 +172,15 @@ class TradesTab(BaseTab):
         # Right: preview panel
         self._build_preview_panel()
 
-        self.splitter.setSizes([650, 350])
-        self.splitter.setStretchFactor(0, 2)
-        self.splitter.setStretchFactor(1, 1)
+        self._splitter_sized = False
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if not self._splitter_sized:
+            total = sum(self.splitter.sizes())
+            if total > 0:
+                self._splitter_sized = True
+                self.splitter.setSizes([int(total * 0.58), int(total * 0.42)])
 
     def _build_preview_panel(self):
         """Build the persistent read-only trade preview panel."""
