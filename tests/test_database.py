@@ -391,6 +391,22 @@ class TestTradeStats:
         assert stats_filt['total_trades'] == 1
         assert stats_filt['net_pnl'] == 50
 
+    def test_date_to_includes_same_day_with_timestamp(self, conn, forex_account):
+        """A trade whose exit_date has a time component on date_to must be included.
+
+        Previously exit_date <= 'YYYY-MM-DD' excluded trades with timestamps on
+        that same date because 'YYYY-MM-DDTHH:MM:SS' > 'YYYY-MM-DD' in SQLite
+        text comparison (the fix appends 'T23:59:59' to the upper bound).
+        """
+        # Trade exits at 14:30 on the last day of the range
+        self._make_closed_with_exit(conn, forex_account, 'USDCHF', 75,
+                                    '2024-12-31T14:30:00')
+        stats = db.get_trade_stats(conn, account_id=forex_account,
+                                   date_to='2024-12-31')
+        assert stats is not None, "Trade exiting on date_to with timestamp was excluded"
+        assert stats['total_trades'] == 1
+        assert stats['net_pnl'] == 75
+
     def test_date_range_filter(self, conn, forex_account):
         """date_from and date_to together form an inclusive range."""
         self._make_closed_with_exit(conn, forex_account, 'P1', 10, '2024-01-01')

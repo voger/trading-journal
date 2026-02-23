@@ -188,6 +188,7 @@ class MainWindow(QMainWindow):
         self.imports_tab.refresh()
         self.equity_tab.refresh()
         self.watchlist_tab.refresh()
+        self.journal_tab.refresh()
 
     def _on_tab_changed(self, index):
         if self.tabs.widget(index) == self.equity_tab:
