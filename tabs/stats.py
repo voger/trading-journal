@@ -439,7 +439,7 @@ class StatsTab(BaseTab):
             <table cellpadding="4" style="font-size:11pt;">
             <tr><td><b>Max Drawdown{info_icon('max_drawdown')}:</b></td>
                 <td style="color:#c80000">{adv['max_drawdown_pct']:.1f}%</td>
-                <td>({adv['max_drawdown_abs']:+.2f})</td></tr>
+                <td>({adv['max_drawdown_abs']:.2f} {acct['currency'] if acct else ''} peak-to-trough)</td></tr>
             <tr><td><b>Sharpe Ratio{info_icon('sharpe_ratio')}:</b></td>
                 <td style="color:{sharpe_c}">{sharpe_s}</td></tr>
             <tr><td><b>Avg Duration:</b></td>

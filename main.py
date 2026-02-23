@@ -11,10 +11,11 @@ sys.path.insert(0, _install_dir)
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTabWidget, QComboBox, QLabel, QPushButton, QMessageBox,
-    QFileDialog, QStyleFactory,
+    QTabWidget, QLabel, QPushButton, QMessageBox,
+    QFileDialog, QStyleFactory, QListWidget, QListWidgetItem, QSplitter,
 )
-from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QIcon, QFont
 
 
 from database import (
@@ -25,7 +26,7 @@ from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
-APP_VERSION = "2.3.1"
+APP_VERSION = "2.4.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
@@ -72,17 +73,57 @@ class MainWindow(QMainWindow):
                            ("&Delete Account", self._on_delete_account)]:
             a = QAction(text, self); a.triggered.connect(slot); am.addAction(a)
 
-        cw = QWidget(); self.setCentralWidget(cw); ml = QVBoxLayout(cw)
+        cw = QWidget(); self.setCentralWidget(cw)
+        ml = QVBoxLayout(cw)
+        ml.setContentsMargins(0, 0, 0, 0)
+        ml.setSpacing(0)
 
-        # Account filter bar
-        af = QHBoxLayout(); af.addWidget(QLabel("Account:"))
-        self.account_filter = QComboBox(); self.account_filter.setMinimumWidth(250)
-        self.account_filter.currentIndexChanged.connect(self._on_account_changed)
-        af.addWidget(self.account_filter); af.addStretch()
-        ml.addLayout(af)
+        # Main horizontal splitter: sidebar | content
+        main_split = QSplitter(Qt.Orientation.Horizontal)
+        ml.addWidget(main_split)
 
-        self.tabs = QTabWidget(); ml.addWidget(self.tabs)
+        # Sidebar: account list
+        sidebar = QWidget()
+        sb_lay = QVBoxLayout(sidebar)
+        sb_lay.setContentsMargins(0, 8, 0, 8)
+        sb_lay.setSpacing(4)
+
+        hdr = QLabel("ACCOUNTS")
+        hdr.setStyleSheet("color: #888; font-size: 10px; font-weight: bold; padding: 0 12px;")
+        sb_lay.addWidget(hdr)
+
+        self.account_list = QListWidget()
+        self.account_list.setStyleSheet("""
+            QListWidget { background: #f5f5f5; border: none; outline: none; }
+            QListWidget::item { padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }
+            QListWidget::item:selected { background: #1565c0; color: white; }
+            QListWidget::item:hover:!selected { background: #dce8f5; }
+        """)
+        self.account_list.currentRowChanged.connect(lambda _: self._on_account_changed())
+        sb_lay.addWidget(self.account_list)
+
+        btn_new_acct = QPushButton("+ New Account")
+        btn_new_acct.setFlat(True)
+        btn_new_acct.setStyleSheet("font-size: 11px; padding: 6px; text-align: left;")
+        btn_new_acct.clicked.connect(self._on_new_account)
+        sb_lay.addWidget(btn_new_acct)
+
+        main_split.addWidget(sidebar)
+
+        # Right side with tabs
+        right = QWidget()
+        right_lay = QVBoxLayout(right)
+        right_lay.setContentsMargins(0, 0, 0, 0)
+        right_lay.setSpacing(0)
+        self.tabs = QTabWidget()
+        right_lay.addWidget(self.tabs)
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        main_split.addWidget(right)
+
+        main_split.setSizes([190, 1100])
+        main_split.setStretchFactor(0, 0)
+        main_split.setStretchFactor(1, 1)
+        main_split.setHandleWidth(1)
 
         # Create tab widgets
         from tabs.trades import TradesTab
@@ -117,7 +158,10 @@ class MainWindow(QMainWindow):
     # ── Helpers ──
 
     def _aid(self):
-        return self.account_filter.currentData()
+        item = self.account_list.currentItem()
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)  # None = All Accounts, int = account id
 
     def _status(self, msg):
         self.statusBar().showMessage(msg)
@@ -130,7 +174,7 @@ class MainWindow(QMainWindow):
         self.stats_tab.refresh()
         self.equity_tab.refresh()
         self.imports_tab.refresh()
-        self._refresh_account_filter()
+        self._refresh_account_list()
 
     def _on_setups_changed(self):
         """Setups were added/edited/deleted."""
@@ -152,7 +196,7 @@ class MainWindow(QMainWindow):
     # ── Refresh ──
 
     def _refresh_all(self):
-        self._refresh_account_filter()
+        self._refresh_account_list()
         self.trades_tab.refresh()
         self.stats_tab.refresh()
         self.journal_tab.refresh()
@@ -162,25 +206,43 @@ class MainWindow(QMainWindow):
         self.imports_tab.refresh()
         self.trades_tab.refresh_setup_filter()
 
-    def _refresh_account_filter(self):
-        self.account_filter.blockSignals(True)
-        cd = self.account_filter.currentData()
-        self.account_filter.clear(); self.account_filter.addItem("All Accounts", None)
+    def _refresh_account_list(self):
+        self.account_list.blockSignals(True)
+        cur_id = self._aid()
+        self.account_list.clear()
+
+        all_item = QListWidgetItem("All Accounts")
+        all_item.setData(Qt.ItemDataRole.UserRole, None)
+        f = all_item.font(); f.setBold(True); all_item.setFont(f)
+        self.account_list.addItem(all_item)
+
         for a in get_accounts(self.conn):
             mod = get_module(a['asset_type'])
-            mod_label = f" [{mod.DISPLAY_NAME}]" if mod else ""
-            self.account_filter.addItem(f"{a['name']} ({a['currency']}){mod_label}", a['id'])
-        if cd is not None:
-            idx = self.account_filter.findData(cd)
-            if idx >= 0: self.account_filter.setCurrentIndex(idx)
-        self.account_filter.blockSignals(False)
+            label = f"{a['name']} ({a['currency']})"
+            if mod: label += f"\n{mod.DISPLAY_NAME}"
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, a['id'])
+            self.account_list.addItem(item)
+
+        # Restore prior selection
+        restored = False
+        if cur_id is not None:
+            for i in range(self.account_list.count()):
+                if self.account_list.item(i).data(Qt.ItemDataRole.UserRole) == cur_id:
+                    self.account_list.setCurrentRow(i)
+                    restored = True
+                    break
+        if not restored:
+            self.account_list.setCurrentRow(0)  # default: All Accounts
+
+        self.account_list.blockSignals(False)
 
     # ── Account CRUD ──
 
     def _on_new_account(self):
         dlg = AccountDialog(self)
         if dlg.exec():
-            try: create_account(self.conn, **dlg.get_values()); self._refresh_account_filter()
+            try: create_account(self.conn, **dlg.get_values()); self._refresh_account_list()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_edit_account(self):
@@ -190,7 +252,7 @@ class MainWindow(QMainWindow):
         if not acct: return
         dlg = AccountDialog(self, account=acct)
         if dlg.exec():
-            try: update_account(self.conn, aid, **dlg.get_values()); self._refresh_account_filter()
+            try: update_account(self.conn, aid, **dlg.get_values()); self._refresh_account_list()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_delete_account(self):
@@ -201,7 +263,7 @@ class MainWindow(QMainWindow):
         if QMessageBox.warning(self, "Delete Account",
             f"Delete '{acct['name']}' and ALL its trades, journals, and history?\n\nThis cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-            delete_account(self.conn, aid); self.account_filter.setCurrentIndex(0); self._refresh_all()
+            delete_account(self.conn, aid); self.account_list.setCurrentRow(0); self._refresh_all()
 
     # ── Backup / Restore ──
 

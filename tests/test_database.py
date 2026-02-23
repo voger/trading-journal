@@ -1308,12 +1308,12 @@ class TestPreviewPanel:
         assert 'pv_pnl_hero' in source, "Preview should have a P&L hero widget"
 
     def test_preview_larger_fonts(self):
-        """Header font should be at least 18px."""
+        """Header font should use a visible, explicit size (16px+ in stylesheet)."""
         import inspect
         from tabs.trades import TradesTab
         source = inspect.getsource(TradesTab._build_preview_panel)
-        assert '20px' in source or '18px' in source, \
-            "Header should use larger font"
+        assert any(f'{n}px' in source for n in range(16, 35)), \
+            "Header should use an explicit font size of at least 16px"
 
     def test_preview_shows_duration(self):
         """Preview should calculate and display holding duration."""

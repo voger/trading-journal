@@ -813,26 +813,38 @@ def get_trade_stats(conn: sqlite3.Connection, account_id=None,
     return result
 
 
+def _effective_pnl(t):
+    """Return the true P/L for a trade: pnl + swap + commission.
+
+    swap and commission are broker-reported costs/credits stored separately
+    from the raw trade profit (e.g. MT4 plugin stores them apart). Including
+    them here ensures win/loss classification and totals match broker statements.
+    """
+    return ((t['pnl_account_currency'] or 0)
+            + (t['swap'] or 0)
+            + (t['commission'] or 0))
+
+
 def _compute_stats(trades):
     """Compute stats dict from a list of trade rows. Shared by summary and breakdowns."""
     total = len(trades)
     if total == 0:
         return None
 
-    winners = [t for t in trades if (t['pnl_account_currency'] or 0) > 0]
-    losers = [t for t in trades if (t['pnl_account_currency'] or 0) < 0]
-    breakeven = [t for t in trades if (t['pnl_account_currency'] or 0) == 0]
+    winners = [t for t in trades if _effective_pnl(t) > 0]
+    losers = [t for t in trades if _effective_pnl(t) < 0]
+    breakeven = [t for t in trades if _effective_pnl(t) == 0]
 
-    gross_profit = sum(t['pnl_account_currency'] for t in winners)
-    gross_loss = abs(sum(t['pnl_account_currency'] for t in losers))
-    net_pnl = sum(t['pnl_account_currency'] or 0 for t in trades)
+    gross_profit = sum(_effective_pnl(t) for t in winners)
+    gross_loss = abs(sum(_effective_pnl(t) for t in losers))
+    net_pnl = sum(_effective_pnl(t) for t in trades)
 
     avg_win = gross_profit / len(winners) if winners else 0
     avg_loss = gross_loss / len(losers) if losers else 0
     win_rate = len(winners) / total * 100 if total else 0
 
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
-    expectancy = (win_rate / 100 * avg_win) - ((100 - win_rate) / 100 * avg_loss)
+    expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
 
     return {
         'total_trades': total,
@@ -995,8 +1007,20 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
     if not trades:
         return None
 
-    pnls = [(t['pnl_account_currency'] or 0) for t in trades]
+    pnls = [_effective_pnl(t) for t in trades]
     n = len(pnls)
+
+    # Use the account's initial balance as the equity starting point so that
+    # drawdown percentages are relative to real capital, not just cumulative P/L.
+    # Without this, a tiny early profit (e.g. +9.69) becomes the peak denominator
+    # and produces absurd percentages like 4500%.
+    initial_balance = 0.0
+    if account_id is not None:
+        acct_row = conn.execute(
+            "SELECT initial_balance FROM accounts WHERE id = ?",
+            (account_id,)).fetchone()
+        if acct_row:
+            initial_balance = float(acct_row['initial_balance'] or 0)
 
     # ── Streaks ──
     max_wins = 0
@@ -1031,8 +1055,11 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
             break
 
     # ── Drawdown ──
-    equity = 0.0
-    peak = 0.0
+    # Start from initial_balance so percentages are relative to real capital.
+    # If initial_balance is 0 (not set), the peak will still be updated
+    # correctly once equity goes positive.
+    equity = initial_balance
+    peak = initial_balance
     max_dd_abs = 0.0
     max_dd_pct = 0.0
     for p in pnls:

@@ -8,7 +8,8 @@ from datetime import datetime
 
 import database as db
 from database import (
-    get_trade_stats, get_trade_breakdowns, _compute_stats,
+    get_trade_stats, get_trade_breakdowns, _compute_stats, _effective_pnl,
+    get_advanced_stats,
     _get_session, _DOW_NAMES, TRADING_SESSIONS,
 )
 
@@ -323,3 +324,96 @@ class TestGetTradeStatsRefactored:
         stats = get_trade_stats(conn, account_id=forex_account)
         assert stats['total_trades'] == 1
         assert stats['net_pnl'] == -10
+
+
+# ── Effective P&L (swap + commission included) ────────────────────────────
+
+class TestEffectivePnl:
+    """_effective_pnl should include pnl + swap + commission."""
+
+    def test_pnl_only(self, conn, forex_account):
+        tid = _make_trade(conn, forex_account, 'EURUSD', 10)
+        t = conn.execute("SELECT * FROM trades WHERE id=?", (tid,)).fetchone()
+        assert _effective_pnl(t) == 10
+
+    def test_pnl_plus_swap(self, conn, forex_account):
+        tid = _make_trade(conn, forex_account, 'EURUSD', 10)
+        conn.execute("UPDATE trades SET swap=-3 WHERE id=?", (tid,))
+        conn.commit()
+        t = conn.execute("SELECT * FROM trades WHERE id=?", (tid,)).fetchone()
+        assert _effective_pnl(t) == 7
+
+    def test_swap_flips_winner_to_loser(self, conn, forex_account):
+        """A trade with pnl=+2 but swap=-5 is a loser in effective terms."""
+        tid = _make_trade(conn, forex_account, 'EURUSD', 2)
+        conn.execute("UPDATE trades SET swap=-5 WHERE id=?", (tid,))
+        conn.commit()
+        trades = conn.execute(
+            "SELECT * FROM trades WHERE account_id=? AND status='closed'",
+            (forex_account,)).fetchall()
+        stats = _compute_stats(trades)
+        assert stats['winners'] == 0
+        assert stats['losers'] == 1
+        assert abs(stats['net_pnl'] - (-3)) < 0.001
+
+    def test_net_pnl_includes_swap_and_commission(self, conn, forex_account):
+        tid1 = _make_trade(conn, forex_account, 'EURUSD', 100)
+        _make_trade(conn, forex_account, 'GBPUSD', -40)
+        # Add swap and commission to first trade
+        conn.execute(
+            "UPDATE trades SET swap=-5, commission=-2 WHERE id=?", (tid1,))
+        conn.commit()
+        trades = conn.execute(
+            "SELECT * FROM trades WHERE account_id=? AND status='closed'",
+            (forex_account,)).fetchall()
+        stats = _compute_stats(trades)
+        # net = (100 - 5 - 2) + (-40) = 53
+        assert abs(stats['net_pnl'] - 53) < 0.001
+
+
+# ── Drawdown with initial_balance ─────────────────────────────────────────
+
+class TestDrawdownWithInitialBalance:
+    """Drawdown percentage must be relative to account initial capital, not
+    cumulative P/L peak, to avoid nonsensical values > 1000%."""
+
+    def test_drawdown_pct_bounded_by_initial_balance(self, conn):
+        """With initial_balance=1000, a 100-unit drawdown = 10%, not thousands %."""
+        aid = db.create_account(conn, name='DD Test', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        # One small winner (+5) then a big loser (-100)
+        db.create_trade(conn, account_id=aid, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01 10:00:00',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-02 10:00:00', exit_price=1.05,
+                        status='closed', pnl_account_currency=5)
+        db.create_trade(conn, account_id=aid, instrument_id=iid,
+                        direction='long', entry_date='2025-01-03 10:00:00',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-04 10:00:00', exit_price=0.9,
+                        status='closed', pnl_account_currency=-100)
+        adv = get_advanced_stats(conn, account_id=aid)
+        # Peak equity = 1000 + 5 = 1005; trough = 1005 - 100 = 905
+        # dd_abs = 100, dd_pct = 100/1005 * 100 ≈ 9.95%
+        assert adv['max_drawdown_abs'] == pytest.approx(100, abs=0.01)
+        assert adv['max_drawdown_pct'] == pytest.approx(9.95, abs=0.1)
+
+    def test_drawdown_pct_without_initial_balance_still_works(self, conn, forex_account):
+        """With initial_balance=0, drawdown still computed once equity goes positive."""
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01 10:00:00',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-02 10:00:00', exit_price=1.1,
+                        status='closed', pnl_account_currency=100)
+        db.create_trade(conn, account_id=forex_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-03 10:00:00',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-04 10:00:00', exit_price=0.5,
+                        status='closed', pnl_account_currency=-60)
+        adv = get_advanced_stats(conn, account_id=forex_account)
+        # Peak=100, trough=40, dd_abs=60, dd_pct=60%
+        assert adv['max_drawdown_abs'] == pytest.approx(60, abs=0.01)
+        assert adv['max_drawdown_pct'] == pytest.approx(60.0, abs=0.1)

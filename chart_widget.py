@@ -95,12 +95,16 @@ class TradeChartWidget(QWidget):
         self.bars_after = QSpinBox(); self.bars_after.setRange(0, 200); self.bars_after.setValue(30)
         ctrl.addWidget(self.bars_after)
 
-        self.fetch_btn = QPushButton("Fetch Chart"); self.fetch_btn.clicked.connect(self._on_fetch)
-        ctrl.addWidget(self.fetch_btn)
-        self.popout_btn = QPushButton("\u2922 Open Image"); self.popout_btn.clicked.connect(self._on_popout)
-        self.popout_btn.setEnabled(False); ctrl.addWidget(self.popout_btn)
         ctrl.addStretch()
         lay.addLayout(ctrl)
+
+        ctrl2 = QHBoxLayout()
+        self.fetch_btn = QPushButton("Fetch Chart"); self.fetch_btn.clicked.connect(self._on_fetch)
+        ctrl2.addWidget(self.fetch_btn)
+        self.popout_btn = QPushButton("\u2922 Open Image"); self.popout_btn.clicked.connect(self._on_popout)
+        self.popout_btn.setEnabled(False); ctrl2.addWidget(self.popout_btn)
+        ctrl2.addStretch()
+        lay.addLayout(ctrl2)
 
         self._chart_box = QVBoxLayout()
         lay.addLayout(self._chart_box, stretch=1)

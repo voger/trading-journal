@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QMessageBox, QApplication, QDialog,
     QDialogButtonBox, QFileDialog, QFrame, QSplitter,
-    QScrollArea, QGridLayout, QSizePolicy, QGroupBox,
+    QLineEdit, QGridLayout, QSizePolicy, QGroupBox,
     QPlainTextEdit, QProgressDialog,
 )
 from PyQt6.QtCore import Qt
@@ -129,6 +129,12 @@ class TradesTab(BaseTab):
             "This Year", "Last 30 Days", "Last 90 Days",
         ])
         filt.addWidget(self.flt_period)
+        self.flt_search = QLineEdit()
+        self.flt_search.setPlaceholderText("Search symbol…")
+        self.flt_search.setMaximumWidth(160)
+        self.flt_search.setClearButtonEnabled(True)
+        self.flt_search.textChanged.connect(self.refresh)
+        filt.addWidget(self.flt_search)
         self.flt_exit = QComboBox()
         for label, val in [("All Exits", None), ("Target Hit", "target_hit"),
                            ("Trailing Stop", "trailing_stop"), ("Manual", "manual"),
@@ -168,83 +174,86 @@ class TradesTab(BaseTab):
 
     def _build_preview_panel(self):
         """Build the persistent read-only trade preview panel."""
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setMinimumWidth(320)
+        outer = QWidget()
+        outer.setMinimumWidth(320)
+        outer_lay = QVBoxLayout(outer)
+        outer_lay.setContentsMargins(0, 0, 0, 0)
+        outer_lay.setSpacing(0)
 
-        self.preview_container = QWidget()
-        self.preview_layout = QVBoxLayout(self.preview_container)
-        self.preview_layout.setContentsMargins(12, 12, 12, 12)
-        self.preview_layout.setSpacing(10)
-        scroll.setWidget(self.preview_container)
-        self.splitter.addWidget(scroll)
+        vsplit = QSplitter(Qt.Orientation.Vertical)
+        outer_lay.addWidget(vsplit)
+
+        # Top pane: metrics and info
+        metrics_widget = QWidget()
+        metrics_lay = QVBoxLayout(metrics_widget)
+        metrics_lay.setContentsMargins(12, 8, 12, 4)
+        metrics_lay.setSpacing(4)
 
         # Header
         self.pv_header = QLabel("Select a trade")
-        self.pv_header.setStyleSheet("font-size: 20px; font-weight: bold;")
+        self.pv_header.setStyleSheet("font-size: 16px; font-weight: bold;")
         self.pv_header.setWordWrap(True)
-        self.preview_layout.addWidget(self.pv_header)
+        metrics_lay.addWidget(self.pv_header)
 
         # Status/direction badges
         self.pv_badges = QLabel("")
         self.pv_badges.setStyleSheet("font-size: 14px;")
-        self.preview_layout.addWidget(self.pv_badges)
+        metrics_lay.addWidget(self.pv_badges)
 
         # Separator
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setFrameShadow(QFrame.Shadow.Sunken)
-        self.preview_layout.addWidget(sep)
+        metrics_lay.addWidget(sep)
 
         # P&L hero — large, prominent P&L display
         self.pv_pnl_hero = QLabel("")
         self.pv_pnl_hero.setTextFormat(Qt.TextFormat.RichText)
         self.pv_pnl_hero.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.pv_pnl_hero.setStyleSheet(
-            "font-size: 28px; font-weight: bold; padding: 12px 0;")
-        self.preview_layout.addWidget(self.pv_pnl_hero)
+        self.pv_pnl_hero.setStyleSheet("font-size: 22px; font-weight: bold; padding: 6px 0;")
+        metrics_lay.addWidget(self.pv_pnl_hero)
 
         # Metrics grid
         self.pv_metrics = QLabel("")
         self.pv_metrics.setTextFormat(Qt.TextFormat.RichText)
         self.pv_metrics.setWordWrap(True)
-        self.pv_metrics.setStyleSheet("font-size: 13px; line-height: 1.6;")
-        self.preview_layout.addWidget(self.pv_metrics)
-
-        # Separator 2
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setFrameShadow(QFrame.Shadow.Sunken)
-        self.preview_layout.addWidget(sep2)
+        self.pv_metrics.setStyleSheet("font-size: 12px; line-height: 1.6;")
+        metrics_lay.addWidget(self.pv_metrics)
 
         # Notes
         self.pv_notes_label = QLabel("")
         self.pv_notes_label.setTextFormat(Qt.TextFormat.RichText)
         self.pv_notes_label.setWordWrap(True)
-        self.pv_notes_label.setStyleSheet("font-size: 12px;")
-        self.preview_layout.addWidget(self.pv_notes_label)
+        self.pv_notes_label.setStyleSheet("font-size: 11px;")
+        metrics_lay.addWidget(self.pv_notes_label)
 
         # Rule checks
         self.pv_rules_label = QLabel("")
         self.pv_rules_label.setTextFormat(Qt.TextFormat.RichText)
         self.pv_rules_label.setWordWrap(True)
-        self.pv_rules_label.setStyleSheet("font-size: 12px;")
-        self.preview_layout.addWidget(self.pv_rules_label)
+        self.pv_rules_label.setStyleSheet("font-size: 11px;")
+        metrics_lay.addWidget(self.pv_rules_label)
 
-        # Chart widget (renders cached OHLC data)
-        from chart_widget import TradeChartWidget
-        self.pv_chart = TradeChartWidget(parent=self.preview_container,
-                                          conn=self.conn)
-        self.pv_chart.setMinimumHeight(300)
-        self.preview_layout.addWidget(self.pv_chart)
-
-        # Edit button at bottom
+        # Edit button
         self.pv_edit_btn = QPushButton("Edit Trade...")
         self.pv_edit_btn.setStyleSheet("font-size: 13px; padding: 8px;")
         self.pv_edit_btn.clicked.connect(self._on_edit)
         self.pv_edit_btn.setVisible(False)
-        self.preview_layout.addWidget(self.pv_edit_btn)
+        metrics_lay.addWidget(self.pv_edit_btn)
 
-        self.preview_layout.addStretch()
+        metrics_lay.addStretch()
+        vsplit.addWidget(metrics_widget)
+
+        # Bottom pane: chart widget (renders cached OHLC data)
+        from chart_widget import TradeChartWidget
+        self.pv_chart = TradeChartWidget(parent=outer, conn=self.conn)
+        self.pv_chart.setMinimumHeight(150)
+        vsplit.addWidget(self.pv_chart)
+
+        vsplit.setSizes([260, 320])
+        vsplit.setStretchFactor(0, 0)
+        vsplit.setStretchFactor(1, 1)
+
+        self.splitter.addWidget(outer)
 
     # ── Preview panel update ──
 
@@ -433,6 +442,9 @@ class TradesTab(BaseTab):
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
                   self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period]:
             w.blockSignals(True); w.setCurrentIndex(0); w.blockSignals(False)
+        self.flt_search.blockSignals(True)
+        self.flt_search.clear()
+        self.flt_search.blockSignals(False)
         self.refresh()
 
     def refresh_setup_filter(self):
@@ -509,6 +521,7 @@ class TradesTab(BaseTab):
         flt_exit = self.flt_exit.currentData()   # None means "All Exits"
         flt_outcome = self.flt_outcome.currentText()
         flt_period = self.flt_period.currentText()
+        flt_search = self.flt_search.text().strip().upper()
 
         # Compute date range for the period filter
         today = datetime.now().date()
@@ -543,12 +556,14 @@ class TradesTab(BaseTab):
                 entry = (t['entry_date'] or '')[:10]
                 if entry < str(period_from): continue
                 if flt_period == "Last Month" and entry > str(period_to): continue
+            if flt_search and flt_search not in (t['symbol'] or '').upper(): continue
             filtered.append(t)
         trades = filtered
 
         # Build columns dynamically
         mod_cols = mod.trade_columns() if mod else []
         mod_type = mod.ASSET_TYPE if mod else None
+        _N_PREFIX = 4   # fixed columns before mod_cols
         _columns_changed = not hasattr(self, '_mod_type') or self._mod_type != mod_type
         if _columns_changed:
             self._mod_type = mod_type
@@ -559,12 +574,11 @@ class TradesTab(BaseTab):
             self.table.setHorizontalHeaderLabels(headers)
             self.table.setColumnHidden(0, True)
             h = self.table.horizontalHeader()
+            self._setup_col_idx = _N_PREFIX + len(mod_cols) + 1
             h.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-            h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
             h.setStretchLastSection(False)
 
         # Column layout: ID(hidden) | Date | Instrument | Dir | <mod_cols> | P&L | Setup | Pics | Status
-        _N_PREFIX = 4   # fixed columns before mod_cols
         instr_idx  = 2
         pnl_idx    = _N_PREFIX + len(mod_cols)
         setup_idx  = pnl_idx + 1  # noqa: F841
@@ -664,7 +678,8 @@ class TradesTab(BaseTab):
         self.table.setUpdatesEnabled(True)
         if _columns_changed:
             self.table.resizeColumnsToContents()
-            self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            w = self.table.columnWidth(self._setup_col_idx)
+            self.table.setColumnWidth(self._setup_col_idx, max(60, min(w, 130)))
         self.table.setSortingEnabled(True)
 
         trade_count = sum(1 for _, rt, _ in rows_data if rt == 'trade')
