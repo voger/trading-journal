@@ -1,9 +1,9 @@
 """Daily Journal tab."""
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QFormLayout, QDateTimeEdit, QPlainTextEdit,
+    QComboBox, QFormLayout, QDateTimeEdit, QPlainTextEdit, QMessageBox,
 )
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 from tabs import BaseTab
 from database import get_journal_entry, save_journal_entry
 
@@ -12,6 +12,8 @@ class JournalTab(BaseTab):
     def __init__(self, conn, get_aid_fn, status_bar_fn):
         super().__init__(conn, get_aid_fn)
         self._status = status_bar_fn
+        self._dirty = False
+        self._loading = False  # suppress dirty-flag during programmatic loads
         self._build()
 
     def _build(self):
@@ -19,12 +21,18 @@ class JournalTab(BaseTab):
         db_ = QHBoxLayout(); db_.addWidget(QLabel("Date:"))
         self.journal_date = QDateTimeEdit(); self.journal_date.setCalendarPopup(True)
         self.journal_date.setDisplayFormat("yyyy-MM-dd"); self.journal_date.setDate(QDate.currentDate())
-        self.journal_date.dateChanged.connect(self.refresh)
+        self.journal_date.dateChanged.connect(self._on_date_changed)
         db_.addWidget(self.journal_date)
         b = QPushButton("Today"); b.clicked.connect(lambda: self.journal_date.setDate(QDate.currentDate())); db_.addWidget(b)
         db_.addStretch()
         b = QPushButton("Save Entry"); b.clicked.connect(self._on_save); db_.addWidget(b)
         layout.addLayout(db_)
+
+        # Entry existence indicator
+        self.status_label = QLabel("")
+        self.status_label.setStyleSheet("font-size: 11px; padding: 2px 0;")
+        layout.addWidget(self.status_label)
+
         form = QFormLayout()
         self.j_cond = QComboBox(); self.j_cond.addItems(['','trending','ranging','volatile','low_volume','mixed'])
         self.j_emot = QComboBox(); self.j_emot.addItems(['','calm','focused','anxious','distracted','overconfident','tired'])
@@ -38,13 +46,49 @@ class JournalTab(BaseTab):
         form.addRow("Tomorrow:", self.j_tomorrow)
         layout.addLayout(form)
 
+        # Wire dirty flag
+        self.j_obs.textChanged.connect(self._mark_dirty)
+        self.j_lessons.textChanged.connect(self._mark_dirty)
+        self.j_tomorrow.textChanged.connect(self._mark_dirty)
+        self.j_cond.currentIndexChanged.connect(self._mark_dirty)
+        self.j_emot.currentIndexChanged.connect(self._mark_dirty)
+        self.j_plan_f.currentIndexChanged.connect(self._mark_dirty)
+
+    def _mark_dirty(self):
+        if not self._loading:
+            self._dirty = True
+
+    def _on_date_changed(self):
+        if self._dirty:
+            reply = QMessageBox.question(
+                self, "Unsaved Changes",
+                "You have unsaved changes to this journal entry.\nSave before switching dates?",
+                QMessageBox.StandardButton.Save |
+                QMessageBox.StandardButton.Discard |
+                QMessageBox.StandardButton.Cancel,
+            )
+            if reply == QMessageBox.StandardButton.Cancel:
+                # Block signals to avoid recursion, revert date
+                return
+            if reply == QMessageBox.StandardButton.Save:
+                self._on_save()
+        self.refresh()
+
+    def _clear_fields(self):
+        self._loading = True
+        self.j_cond.setCurrentIndex(0); self.j_emot.setCurrentIndex(0); self.j_plan_f.setCurrentIndex(0)
+        self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
+        self._loading = False
+        self._dirty = False
+
     def refresh(self):
         if self.aid() is None:
-            self.j_cond.setCurrentIndex(0); self.j_emot.setCurrentIndex(0); self.j_plan_f.setCurrentIndex(0)
-            self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
+            self._clear_fields()
+            self.status_label.setText("")
             return
         ds = self.journal_date.date().toString("yyyy-MM-dd")
         entry = get_journal_entry(self.conn, ds, self.aid())
+        self._loading = True
         if entry:
             for combo, key in [(self.j_cond,'market_conditions'),(self.j_emot,'emotional_state')]:
                 i = combo.findText(entry[key] or ''); combo.setCurrentIndex(max(0,i))
@@ -53,9 +97,16 @@ class JournalTab(BaseTab):
             self.j_obs.setPlainText(entry['observations'] or '')
             self.j_lessons.setPlainText(entry['lessons_learned'] or '')
             self.j_tomorrow.setPlainText(entry['plan_for_tomorrow'] or '')
+            self.status_label.setText(
+                f"<span style='color:#008200'>&#10003; Entry saved for {ds}</span>")
         else:
             self.j_cond.setCurrentIndex(0); self.j_emot.setCurrentIndex(0); self.j_plan_f.setCurrentIndex(0)
             self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
+            self.status_label.setText(
+                f"<span style='color:#888'>No entry for {ds}</span>")
+        self.status_label.setTextFormat(Qt.TextFormat.RichText)
+        self._loading = False
+        self._dirty = False
 
     def _on_save(self):
         if self.aid() is None:
@@ -70,4 +121,8 @@ class JournalTab(BaseTab):
             observations=self.j_obs.toPlainText().strip() or None,
             lessons_learned=self.j_lessons.toPlainText().strip() or None,
             plan_for_tomorrow=self.j_tomorrow.toPlainText().strip() or None)
+        self._dirty = False
+        self.status_label.setTextFormat(Qt.TextFormat.RichText)
+        self.status_label.setText(
+            f"<span style='color:#008200'>&#10003; Entry saved for {ds}</span>")
         self._status(f"Journal saved for {ds}.")

@@ -349,9 +349,6 @@ class StatsTab(BaseTab):
         self.formula_editor = FormulaEditorWidget(self.conn)
         self.tabs.addTab(self.formula_editor, "Formulas")
 
-        # Refresh button
-        b = QPushButton("Refresh Stats"); b.clicked.connect(self.refresh)
-        layout.addWidget(b)
 
     def _get_date_range(self):
         """Return (date_from, date_to) based on the period filter, or (None, None)."""

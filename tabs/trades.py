@@ -21,7 +21,7 @@ from database import (
     update_trade, delete_trade, get_trade_chart_counts,
     get_account_events, add_trade_chart, delete_trade_chart,
     get_setup_types, save_trade_rule_checks, create_account,
-    get_import_logs, get_trade_stats,
+    get_import_logs,
     get_trade_rule_checks, get_trades_for_export, EXPORT_COLUMNS,
     get_app_data_dir,
 )
@@ -130,8 +130,12 @@ class TradesTab(BaseTab):
         ])
         filt.addWidget(self.flt_period)
         self.flt_exit = QComboBox()
-        self.flt_exit.addItems(["All Exits", "target_hit", "trailing_stop", "manual",
-                                "stop_loss", "time_exit", "stop_out"]); filt.addWidget(self.flt_exit)
+        for label, val in [("All Exits", None), ("Target Hit", "target_hit"),
+                           ("Trailing Stop", "trailing_stop"), ("Manual", "manual"),
+                           ("Stop Loss", "stop_loss"), ("Time Exit", "time_exit"),
+                           ("Stop Out", "stop_out")]:
+            self.flt_exit.addItem(label, val)
+        filt.addWidget(self.flt_exit)
         self.flt_outcome = QComboBox()
         self.flt_outcome.addItems(["All P&L", "Winners", "Losers", "Breakeven"]); filt.addWidget(self.flt_outcome)
         btn_clear = QPushButton("Clear"); btn_clear.clicked.connect(self._clear_filters)
@@ -450,35 +454,43 @@ class TradesTab(BaseTab):
 
     # ── KPI update ──
 
-    def _update_kpi(self):
-        aid = self.aid()
-        stats = get_trade_stats(self.conn, account_id=aid)
-        if not stats:
-            for card in [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
-                         self.kpi_expectancy, self.kpi_pf]:
+    def _update_kpi(self, filtered_trades):
+        """Update KPI cards from the already-filtered trade list."""
+        closed = [t for t in filtered_trades if (t.get('status') or '') == 'closed']
+        _blank = [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
+                  self.kpi_expectancy, self.kpi_pf]
+        if not closed:
+            for card in _blank:
                 card.set_value("—", "#666")
             return
 
-        total = stats['total_trades']
+        winners = [t for t in closed if (t['pnl_account_currency'] or 0) > 0]
+        losers  = [t for t in closed if (t['pnl_account_currency'] or 0) < 0]
+        total = len(closed)
+        gross_profit = sum(t['pnl_account_currency'] for t in winners)
+        gross_loss   = abs(sum(t['pnl_account_currency'] for t in losers))
+        net_pnl = sum(t['pnl_account_currency'] or 0 for t in closed)
+        avg_win  = gross_profit / len(winners) if winners else 0
+        avg_loss = gross_loss  / len(losers)  if losers  else 0
+        win_rate = len(winners) / total * 100
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
+        expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
+
         self.kpi_trades.set_value(
-            f"{total}  ({stats['winners']}W / {stats['losers']}L)", "#333")
+            f"{total}  ({len(winners)}W / {len(losers)}L)", "#333")
 
-        wr = stats['win_rate']
         self.kpi_winrate.set_value(
-            f"{wr:.1f}%", "#008200" if wr >= 50 else "#c80000")
+            f"{win_rate:.1f}%", "#008200" if win_rate >= 50 else "#c80000")
 
-        pnl = stats['net_pnl']
         self.kpi_pnl.set_value(
-            f"{pnl:+.2f}", "#008200" if pnl > 0 else "#c80000" if pnl < 0 else "#666")
+            f"{net_pnl:+.2f}", "#008200" if net_pnl > 0 else "#c80000" if net_pnl < 0 else "#666")
 
-        exp = stats['expectancy']
         self.kpi_expectancy.set_value(
-            f"{exp:+.2f}", "#008200" if exp > 0 else "#c80000" if exp < 0 else "#666")
+            f"{expectancy:+.2f}", "#008200" if expectancy > 0 else "#c80000" if expectancy < 0 else "#666")
 
-        pf = stats['profit_factor']
-        pfs = f"{pf:.2f}" if pf != float('inf') else "∞"
+        pfs = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
         self.kpi_pf.set_value(
-            pfs, "#008200" if pf > 1 else "#c80000" if pf < 1 else "#666")
+            pfs, "#008200" if profit_factor > 1 else "#c80000" if profit_factor < 1 else "#666")
 
     # ── Table refresh ──
 
@@ -494,7 +506,7 @@ class TradesTab(BaseTab):
         flt_dir = self.flt_direction.currentText()
         flt_status = self.flt_status.currentText()
         flt_grade = self.flt_grade.currentText()
-        flt_exit = self.flt_exit.currentText()
+        flt_exit = self.flt_exit.currentData()   # None means "All Exits"
         flt_outcome = self.flt_outcome.currentText()
         flt_period = self.flt_period.currentText()
 
@@ -522,7 +534,7 @@ class TradesTab(BaseTab):
             if flt_status == "Open" and t['status'] != 'open': continue
             if flt_status == "Closed" and t['status'] != 'closed': continue
             if flt_grade not in ("All Grades",) and (t['execution_grade'] or '') != flt_grade: continue
-            if flt_exit not in ("All Exits",) and (t['exit_reason'] or '') != flt_exit: continue
+            if flt_exit is not None and (t['exit_reason'] or '') != flt_exit: continue
             pnl = t['pnl_account_currency'] or 0
             if flt_outcome == "Winners" and pnl <= 0: continue
             if flt_outcome == "Losers" and pnl >= 0: continue
@@ -537,7 +549,8 @@ class TradesTab(BaseTab):
         # Build columns dynamically
         mod_cols = mod.trade_columns() if mod else []
         mod_type = mod.ASSET_TYPE if mod else None
-        if not hasattr(self, '_mod_type') or self._mod_type != mod_type:
+        _columns_changed = not hasattr(self, '_mod_type') or self._mod_type != mod_type
+        if _columns_changed:
             self._mod_type = mod_type
             headers = ['ID', 'Date', 'Instrument', 'Dir']
             headers += [c['header'] for c in mod_cols]
@@ -606,8 +619,9 @@ class TradesTab(BaseTab):
                 else:
                     status_text, status_key = 'OPEN', 'open'
 
-                cells = [str(t['id']), (t['entry_date'] or '')[:16], t['symbol'] or '',
-                         t['direction'].upper()[:1] if t['direction'] else '']
+                dir_val = t['direction'] or ''
+                dir_text = 'Long' if dir_val == 'long' else 'Short' if dir_val == 'short' else dir_val.capitalize()
+                cells = [str(t['id']), (t['entry_date'] or '')[:16], t['symbol'] or '', dir_text]
                 for c in mod_cols:
                     cells.append(mod.format_trade_cell(t, c['key']) if mod else '')
                 cells += [f"{pnl:+.2f}", t['setup_name'] or '', str(cc) if cc else '',
@@ -620,7 +634,7 @@ class TradesTab(BaseTab):
                         item.setForeground(pc)
                         item.setFont(QFont("", -1, QFont.Weight.Bold))
                     if col == 3:  # Direction
-                        item.setForeground(long_fg if val == 'L' else short_fg)
+                        item.setForeground(long_fg if val == 'Long' else short_fg)
                     if col == status_idx:  # Status badge
                         fg_c, bg_c = status_colors.get(status_key, status_colors['open'])
                         item.setForeground(fg_c)
@@ -648,8 +662,9 @@ class TradesTab(BaseTab):
                     self.table.setItem(row, col, item)
 
         self.table.setUpdatesEnabled(True)
-        self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        if _columns_changed:
+            self.table.resizeColumnsToContents()
+            self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.table.setSortingEnabled(True)
 
         trade_count = sum(1 for _, rt, _ in rows_data if rt == 'trade')
@@ -658,8 +673,8 @@ class TradesTab(BaseTab):
         if event_count: msg += f", {event_count} deposits/withdrawals"
         self._status(msg)
 
-        # Update KPI cards
-        self._update_kpi()
+        # Update KPI cards from the filtered trade list (excludes event rows)
+        self._update_kpi([data for _, rt, data in rows_data if rt == 'trade'])
 
         # Re-select previously selected trade if still in table
         if self._selected_trade_id:

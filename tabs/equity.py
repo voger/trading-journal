@@ -179,7 +179,19 @@ class EquityTab(BaseTab):
                 item = QTableWidgetItem(val); item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 if col == 2: item.setForeground(color)
                 self.deposits_table.setItem(row, col, item)
-        self.info_label.setText("")
+
+        # Summary metrics
+        current_balance = balances[-1]
+        gain_abs = current_balance - initial
+        gain_pct = (gain_abs / initial * 100) if initial else 0
+        gain_color = '#008200' if gain_abs >= 0 else '#c80000'
+        sign = '+' if gain_abs >= 0 else ''
+        self.info_label.setTextFormat(Qt.TextFormat.RichText)
+        self.info_label.setText(
+            f"<b>Balance:</b> {current_balance:,.2f} {currency} &nbsp;|&nbsp; "
+            f"<b>Gain:</b> <span style='color:{gain_color}'>{sign}{gain_abs:,.2f} ({sign}{gain_pct:.1f}%)</span> &nbsp;|&nbsp; "
+            f"<b>Starting:</b> {initial:,.2f} {currency}"
+        )
 
     def _on_event_selected(self):
         if self.canvas is None:

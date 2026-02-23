@@ -41,10 +41,7 @@ class ImportsTab(BaseTab):
         layout.addWidget(self.table)
 
     def refresh(self):
-        if self.aid() is None:
-            self.table.setRowCount(0)
-            self.btn_delete.setEnabled(False)
-            return
+        self.btn_delete.setEnabled(False)
         logs = get_import_logs(self.conn, account_id=self.aid())
         self.table.setRowCount(len(logs))
         for row, log in enumerate(logs):
