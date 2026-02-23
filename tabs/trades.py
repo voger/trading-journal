@@ -23,7 +23,7 @@ from database import (
     get_setup_types, save_trade_rule_checks, create_account,
     get_import_logs,
     get_trade_rule_checks, get_trades_for_export, EXPORT_COLUMNS,
-    get_app_data_dir,
+    get_app_data_dir, effective_pnl,
 )
 from asset_modules import get_module
 
@@ -110,6 +110,10 @@ class TradesTab(BaseTab):
         for card in [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
                      self.kpi_expectancy, self.kpi_pf]:
             kpi_row.addWidget(card)
+        self.lbl_truncated = QLabel("⚠ Showing first 2000 trades — use filters to narrow results")
+        self.lbl_truncated.setStyleSheet("color: #b45309; font-size: 11px; padding: 2px 8px;")
+        self.lbl_truncated.setVisible(False)
+        kpi_row.addWidget(self.lbl_truncated)
         layout.addLayout(kpi_row)
 
         # ── Filter bar ──
@@ -289,8 +293,8 @@ class TradesTab(BaseTab):
     def _show_event_preview(self, row):
         """Show preview for a deposit/withdrawal event."""
         instr_item = self.table.item(row, 2)
-        pnl_col = self.table.columnCount() - 4  # P&L is 4th from end
-        pnl_item = self.table.item(row, pnl_col) if pnl_col >= 0 else None
+        pnl_col = getattr(self, '_pnl_col_idx', None)
+        pnl_item = self.table.item(row, pnl_col) if pnl_col is not None else None
         self.pv_header.setText(instr_item.text() if instr_item else "Event")
         self.pv_badges.setText("")
         self.pv_pnl_hero.setText("")
@@ -476,12 +480,12 @@ class TradesTab(BaseTab):
                 card.set_value("—", "#666")
             return
 
-        winners = [t for t in closed if (t['pnl_account_currency'] or 0) > 0]
-        losers  = [t for t in closed if (t['pnl_account_currency'] or 0) < 0]
+        winners = [t for t in closed if effective_pnl(t) > 0]
+        losers  = [t for t in closed if effective_pnl(t) < 0]
         total = len(closed)
-        gross_profit = sum(t['pnl_account_currency'] for t in winners)
-        gross_loss   = abs(sum(t['pnl_account_currency'] for t in losers))
-        net_pnl = sum(t['pnl_account_currency'] or 0 for t in closed)
+        gross_profit = sum(effective_pnl(t) for t in winners)
+        gross_loss   = abs(sum(effective_pnl(t) for t in losers))
+        net_pnl = sum(effective_pnl(t) for t in closed)
         avg_win  = gross_profit / len(winners) if winners else 0
         avg_loss = gross_loss  / len(losers)  if losers  else 0
         win_rate = len(winners) / total * 100
@@ -509,7 +513,11 @@ class TradesTab(BaseTab):
     def refresh(self):
         aid = self.aid()
         mod = self._get_module()
-        trades = get_trades(self.conn, account_id=aid, limit=2000)
+        trades = get_trades(self.conn, account_id=aid, limit=2001)
+        _truncated = len(trades) > 2000
+        if _truncated:
+            trades = trades[:2000]
+        self.lbl_truncated.setVisible(_truncated)
         chart_counts = get_trade_chart_counts(self.conn, aid)
         events = get_account_events(self.conn, aid) if aid else []
 
@@ -548,10 +556,10 @@ class TradesTab(BaseTab):
             if flt_status == "Closed" and t['status'] != 'closed': continue
             if flt_grade not in ("All Grades",) and (t['execution_grade'] or '') != flt_grade: continue
             if flt_exit is not None and (t['exit_reason'] or '') != flt_exit: continue
-            pnl = t['pnl_account_currency'] or 0
-            if flt_outcome == "Winners" and pnl <= 0: continue
-            if flt_outcome == "Losers" and pnl >= 0: continue
-            if flt_outcome == "Breakeven" and pnl != 0: continue
+            epnl = effective_pnl(t)
+            if flt_outcome == "Winners" and epnl <= 0: continue
+            if flt_outcome == "Losers" and epnl >= 0: continue
+            if flt_outcome == "Breakeven" and epnl != 0: continue
             if period_from is not None:
                 entry = (t['entry_date'] or '')[:10]
                 if entry < str(period_from): continue
@@ -584,6 +592,7 @@ class TradesTab(BaseTab):
         setup_idx  = pnl_idx + 1  # noqa: F841
         pics_idx   = pnl_idx + 2  # noqa: F841
         status_idx = pnl_idx + 3
+        self._pnl_col_idx = pnl_idx  # stored for use in _show_event_preview
 
         rows_data = []
         for t in trades: rows_data.append((t['entry_date'] or '', 'trade', t))

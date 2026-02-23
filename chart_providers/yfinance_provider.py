@@ -55,6 +55,11 @@ class YFinanceProvider(ChartProvider):
         if timeframe == '4h' and yf_tf == '1h':
             df = self._resample_4h(df)
 
+        # Drop rows with NaN OHLC values (delisted stocks, trading halts, data gaps)
+        df = df.dropna(subset=['Open', 'High', 'Low', 'Close'])
+        if df.empty:
+            raise ValueError(f"No valid OHLC data for {yf_symbol} (all rows have NaN)")
+
         bars = []
         for ts, row in df.iterrows():
             # Handle timezone-aware timestamps
@@ -71,18 +76,24 @@ class YFinanceProvider(ChartProvider):
         return bars
 
     def normalize_symbol(self, symbol: str, asset_type: str = 'forex') -> str:
-        # Clean up symbol (remove dots, spaces, hashes)
-        clean = symbol.upper().replace('.', '').replace(' ', '').replace('#', '')
+        # Uppercase and remove spaces/hashes; keep dots until after suffix stripping
+        # so that suffixes like '.RAW' can be matched correctly.
+        s = symbol.upper().replace(' ', '').replace('#', '')
 
-        # Check forex map first
+        # Strip known broker suffixes before dot removal.
+        # Use [:-len(suffix)] (not rstrip) to remove exactly the suffix string.
+        # Check MINI before M so a symbol ending in 'MINI' isn't partially matched by 'M'.
+        for suffix in ['.RAW', '.ECN', '.PRO', '.STD', 'MINI', 'M']:
+            if s.endswith(suffix):
+                s = s[:-len(suffix)]
+                break  # only one suffix at a time
+
+        # Remove dots now (e.g. 'EUR.USD' → 'EURUSD')
+        clean = s.replace('.', '')
+
+        # Check forex map
         if clean in _FOREX_MAP:
             return _FOREX_MAP[clean]
-
-        # MT4 often uses suffixes like EURUSDm, EURUSD.raw — strip common suffixes
-        for suffix in ['M', '.RAW', '.ECN', '.PRO', '.STD', 'MINI']:
-            stripped = clean.rstrip(suffix) if clean.endswith(suffix) else clean
-            if stripped in _FOREX_MAP:
-                return _FOREX_MAP[stripped]
 
         # If it's a forex pair pattern (6 chars, all alpha), try adding =X
         if len(clean) == 6 and clean.isalpha() and asset_type == 'forex':

@@ -700,7 +700,22 @@ def get_import_logs(conn: sqlite3.Connection, account_id=None, limit=500):
     return conn.execute(sql, params).fetchall()
 
 
-_EXECUTIONS_MODE_PLUGINS = {'trading212_csv'}
+_EXECUTIONS_MODE_PLUGINS = {'trading212_csv'}  # fallback for environments where plugins can't be imported
+
+
+def _plugin_is_executions_mode(plugin_name: str) -> bool:
+    """Return True if the named plugin uses 'executions' import mode.
+
+    Checks the plugin's IMPORT_MODE attribute dynamically so new plugins
+    don't require a manual update here.  Falls back to the known set if the
+    plugin module can't be imported (e.g. test environments).
+    """
+    try:
+        from importlib import import_module
+        mod = import_module(f'plugins.{plugin_name}')
+        return getattr(mod, 'IMPORT_MODE', 'trades') == 'executions'
+    except Exception:
+        return plugin_name in _EXECUTIONS_MODE_PLUGINS
 
 
 def delete_import_log(conn: sqlite3.Connection, log_id: int):
@@ -725,7 +740,7 @@ def delete_import_log(conn: sqlite3.Connection, log_id: int):
     account_id = log['account_id']
     affected_instruments = set()
 
-    if plugin_name in _EXECUTIONS_MODE_PLUGINS:
+    if _plugin_is_executions_mode(plugin_name):
         rows = conn.execute(
             "SELECT DISTINCT instrument_id FROM executions WHERE import_log_id = ?",
             (log_id,)
@@ -813,7 +828,7 @@ def get_trade_stats(conn: sqlite3.Connection, account_id=None,
     return result
 
 
-def _effective_pnl(t):
+def effective_pnl(t):
     """Return the true P/L for a trade: pnl + swap + commission.
 
     swap and commission are broker-reported costs/credits stored separately
@@ -831,13 +846,13 @@ def _compute_stats(trades):
     if total == 0:
         return None
 
-    winners = [t for t in trades if _effective_pnl(t) > 0]
-    losers = [t for t in trades if _effective_pnl(t) < 0]
-    breakeven = [t for t in trades if _effective_pnl(t) == 0]
+    winners = [t for t in trades if effective_pnl(t) > 0]
+    losers = [t for t in trades if effective_pnl(t) < 0]
+    breakeven = [t for t in trades if effective_pnl(t) == 0]
 
-    gross_profit = sum(_effective_pnl(t) for t in winners)
-    gross_loss = abs(sum(_effective_pnl(t) for t in losers))
-    net_pnl = sum(_effective_pnl(t) for t in trades)
+    gross_profit = sum(effective_pnl(t) for t in winners)
+    gross_loss = abs(sum(effective_pnl(t) for t in losers))
+    net_pnl = sum(effective_pnl(t) for t in trades)
 
     avg_win = gross_profit / len(winners) if winners else 0
     avg_loss = gross_loss / len(losers) if losers else 0
@@ -1007,7 +1022,7 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
     if not trades:
         return None
 
-    pnls = [_effective_pnl(t) for t in trades]
+    pnls = [effective_pnl(t) for t in trades]
     n = len(pnls)
 
     # Use the account's initial balance as the equity starting point so that
