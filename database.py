@@ -988,6 +988,35 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
     return results
 
 
+def get_daily_pnl(conn: sqlite3.Connection, account_id: int,
+                  year: int, month: int) -> dict:
+    """Get daily P&L totals for a given month.
+
+    Returns: dict mapping day int → {'net_pnl': float, 'trade_count': int}
+    Only includes days with at least one closed, non-excluded trade.
+    Uses effective_pnl (pnl + swap + commission).
+    """
+    sql = """SELECT t.exit_date,
+                    t.pnl_account_currency, t.swap, t.commission
+             FROM trades t
+             WHERE t.account_id = ?
+               AND t.status = 'closed'
+               AND t.is_excluded = 0
+               AND t.exit_date IS NOT NULL
+               AND strftime('%Y', t.exit_date) = ?
+               AND strftime('%m', t.exit_date) = ?"""
+    rows = conn.execute(sql, [account_id, str(year), f'{month:02d}']).fetchall()
+    result = {}
+    for row in rows:
+        day = int(row['exit_date'][8:10])
+        epnl = effective_pnl(row)
+        if day not in result:
+            result[day] = {'net_pnl': 0.0, 'trade_count': 0}
+        result[day]['net_pnl'] += epnl
+        result[day]['trade_count'] += 1
+    return result
+
+
 # ── Advanced Performance Metrics ─────────────────────────────────────────
 
 def get_advanced_stats(conn: sqlite3.Connection, account_id=None,

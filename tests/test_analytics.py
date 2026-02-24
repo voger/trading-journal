@@ -9,7 +9,7 @@ from datetime import datetime
 import database as db
 from database import (
     get_trade_stats, get_trade_breakdowns, _compute_stats, effective_pnl,
-    get_advanced_stats,
+    get_advanced_stats, get_daily_pnl,
     _get_session, _DOW_NAMES, TRADING_SESSIONS,
 )
 
@@ -491,3 +491,98 @@ class TestCalmarRatio:
                         status='closed', pnl_account_currency=0)
         adv = get_advanced_stats(conn, account_id=aid)
         assert adv['calmar_ratio'] == pytest.approx(0.0, abs=0.001)
+
+
+# ── get_daily_pnl ─────────────────────────────────────────────────────────
+
+class TestGetDailyPnl:
+    """Tests for get_daily_pnl: calendar heatmap data source."""
+
+    def _make(self, conn, aid, symbol, pnl, exit_date,
+              swap=0.0, commission=0.0, status='closed'):
+        iid = db.get_or_create_instrument(conn, symbol)
+        return db.create_trade(
+            conn, account_id=aid, instrument_id=iid,
+            direction='long',
+            entry_date='2025-01-01 10:00:00',
+            entry_price=100, position_size=1,
+            exit_date=exit_date,
+            exit_price=100 + pnl if status == 'closed' else None,
+            status=status,
+            pnl_account_currency=pnl,
+            swap=swap, commission=commission,
+        )
+
+    def test_empty_month(self, conn, forex_account):
+        result = get_daily_pnl(conn, forex_account, 2025, 3)
+        assert result == {}
+
+    def test_single_trade(self, conn, forex_account):
+        self._make(conn, forex_account, 'EURUSD', 50.0, '2025-06-10 12:00:00')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert 10 in result
+        assert result[10]['net_pnl'] == pytest.approx(50.0)
+        assert result[10]['trade_count'] == 1
+
+    def test_multiple_trades_same_day(self, conn, forex_account):
+        self._make(conn, forex_account, 'EURUSD', 30.0, '2025-06-15 09:00:00')
+        self._make(conn, forex_account, 'GBPUSD', -10.0, '2025-06-15 14:00:00')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert result[15]['net_pnl'] == pytest.approx(20.0)
+        assert result[15]['trade_count'] == 2
+
+    def test_trades_on_different_days(self, conn, forex_account):
+        self._make(conn, forex_account, 'EURUSD', 100.0, '2025-06-05 10:00:00')
+        self._make(conn, forex_account, 'GBPUSD', -40.0, '2025-06-20 10:00:00')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert result[5]['net_pnl'] == pytest.approx(100.0)
+        assert result[20]['net_pnl'] == pytest.approx(-40.0)
+        assert 5 in result and 20 in result
+        assert len(result) == 2
+
+    def test_only_current_month_returned(self, conn, forex_account):
+        self._make(conn, forex_account, 'EURUSD', 50.0, '2025-05-31 10:00:00')
+        self._make(conn, forex_account, 'EURUSD', 60.0, '2025-06-01 10:00:00')
+        self._make(conn, forex_account, 'EURUSD', 70.0, '2025-07-01 10:00:00')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert len(result) == 1
+        assert result[1]['net_pnl'] == pytest.approx(60.0)
+
+    def test_open_trade_excluded(self, conn, forex_account):
+        self._make(conn, forex_account, 'EURUSD', 50.0, '2025-06-10 10:00:00',
+                   status='open')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert result == {}
+
+    def test_effective_pnl_includes_swap_and_commission(self, conn, forex_account):
+        # raw pnl=100, swap=-5, commission=-3 → effective = 92
+        self._make(conn, forex_account, 'EURUSD', 100.0, '2025-06-12 10:00:00',
+                   swap=-5.0, commission=-3.0)
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert result[12]['net_pnl'] == pytest.approx(92.0)
+
+    def test_different_accounts_isolated(self, conn, forex_account):
+        other = db.create_account(conn, name='OtherAcct', broker='B',
+                                  currency='USD', asset_type='forex',
+                                  initial_balance=1000)
+        self._make(conn, forex_account, 'EURUSD', 100.0, '2025-06-10 10:00:00')
+        self._make(conn, other, 'EURUSD', 999.0, '2025-06-10 10:00:00')
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert result[10]['net_pnl'] == pytest.approx(100.0)
+
+    def test_exit_date_date_only_format(self, conn, forex_account):
+        """Handles exit_date stored as 'YYYY-MM-DD' without time component."""
+        iid = db.get_or_create_instrument(conn, 'USDJPY')
+        db.create_trade(
+            conn, account_id=forex_account, instrument_id=iid,
+            direction='long',
+            entry_date='2025-06-01',
+            entry_price=100, position_size=1,
+            exit_date='2025-06-03',
+            exit_price=105,
+            status='closed',
+            pnl_account_currency=55.0,
+        )
+        result = get_daily_pnl(conn, forex_account, 2025, 6)
+        assert 3 in result
+        assert result[3]['net_pnl'] == pytest.approx(55.0)

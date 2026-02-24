@@ -1,4 +1,5 @@
 """Summary Stats tab — overview + analytics breakdowns + formula editor."""
+import calendar as _calendar
 from datetime import timedelta, date as _date
 
 from PyQt6.QtWidgets import (
@@ -6,7 +7,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QWidget, QLabel,
     QComboBox, QAbstractItemView, QMessageBox, QPlainTextEdit,
     QFormLayout, QGroupBox, QSizePolicy, QFrame, QDialog,
-    QDialogButtonBox, QLineEdit,
+    QDialogButtonBox, QLineEdit, QGridLayout, QScrollArea,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
@@ -15,7 +16,7 @@ from tabs import BaseTab
 from database import (
     get_account, get_trade_stats, get_all_formulas, get_trade_breakdowns,
     update_formula, reset_formulas_to_defaults, get_formula,
-    get_advanced_stats,
+    get_advanced_stats, get_daily_pnl,
 )
 
 
@@ -291,6 +292,242 @@ class FormulaEditorWidget(QWidget):
             self.populate()
 
 
+class CalendarHeatmapWidget(QWidget):
+    """Monthly P&L calendar heatmap.
+
+    Displays a grid of day cells coloured green/red by net P&L for the
+    selected month. Navigate with Prev/Next buttons. Requires a specific
+    account to be selected (not All Accounts).
+    """
+
+    def __init__(self, conn, get_aid_fn, parent=None):
+        super().__init__(parent)
+        self._conn = conn
+        self._get_aid = get_aid_fn
+        today = _date.today()
+        self._year = today.year
+        self._month = today.month
+        self._build_ui()
+
+    def _build_ui(self):
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 8, 12, 8)
+        outer.setSpacing(6)
+
+        # Navigation bar
+        nav = QHBoxLayout()
+        self._btn_prev = QPushButton("◀ Prev")
+        self._btn_next = QPushButton("Next ▶")
+        for btn in (self._btn_prev, self._btn_next):
+            btn.setFixedWidth(80)
+        self._lbl_month = QLabel()
+        self._lbl_month.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_month.setFont(QFont("", 13, QFont.Weight.Bold))
+        nav.addWidget(self._btn_prev)
+        nav.addStretch()
+        nav.addWidget(self._lbl_month)
+        nav.addStretch()
+        nav.addWidget(self._btn_next)
+        outer.addLayout(nav)
+
+        # Monthly summary label
+        self._lbl_summary = QLabel("")
+        self._lbl_summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_summary.setTextFormat(Qt.TextFormat.RichText)
+        self._lbl_summary.setStyleSheet("font-size: 12px; padding: 2px;")
+        outer.addWidget(self._lbl_summary)
+
+        # Scrollable calendar area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._cal_container = QWidget()
+        self._grid = QGridLayout(self._cal_container)
+        self._grid.setSpacing(3)
+        scroll.setWidget(self._cal_container)
+        outer.addWidget(scroll, stretch=1)
+
+        self._btn_prev.clicked.connect(self._prev_month)
+        self._btn_next.clicked.connect(self._next_month)
+
+    def _prev_month(self):
+        if self._month == 1:
+            self._month = 12
+            self._year -= 1
+        else:
+            self._month -= 1
+        self._rebuild()
+
+    def _next_month(self):
+        if self._month == 12:
+            self._month = 1
+            self._year += 1
+        else:
+            self._month += 1
+        self._rebuild()
+
+    def refresh(self, conn=None):
+        if conn is not None:
+            self._conn = conn
+        self._rebuild()
+
+    def _rebuild(self):
+        # Clear existing grid cells
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self._lbl_month.setText(
+            f"{_calendar.month_name[self._month]} {self._year}"
+        )
+
+        aid = self._get_aid()
+        if aid is None:
+            lbl = QLabel("Select an account to view the calendar.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setStyleSheet("color: #888; font-size: 12px;")
+            self._grid.addWidget(lbl, 0, 0)
+            self._lbl_summary.setText("")
+            return
+
+        daily = get_daily_pnl(self._conn, aid, self._year, self._month)
+
+        # Monthly totals
+        if daily:
+            total_pnl = sum(d['net_pnl'] for d in daily.values())
+            total_trades = sum(d['trade_count'] for d in daily.values())
+            color = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
+            trade_word = 'trade' if total_trades == 1 else 'trades'
+            self._lbl_summary.setText(
+                f"Month total: <b style='color:{color}'>{total_pnl:+.2f}</b>"
+                f"&nbsp;&nbsp;({total_trades} {trade_word})"
+            )
+        else:
+            self._lbl_summary.setText("No trades this month.")
+
+        # Day-of-week headers (Monday-first)
+        day_headers = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        for col, name in enumerate(day_headers):
+            lbl = QLabel(name)
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl.setFont(QFont("", -1, QFont.Weight.Bold))
+            lbl.setStyleSheet("color: #555; padding-bottom: 4px;")
+            self._grid.addWidget(lbl, 0, col)
+
+        # Color scale: intensity relative to the month's max |P&L|
+        pnl_values = [d['net_pnl'] for d in daily.values()]
+        max_abs = max((abs(v) for v in pnl_values), default=1) or 1
+
+        today = _date.today()
+        cal_weeks = _calendar.monthcalendar(self._year, self._month)
+
+        for row_idx, week in enumerate(cal_weeks):
+            for col_idx, day in enumerate(week):
+                if day == 0:
+                    # Empty slot before/after month
+                    placeholder = QFrame()
+                    placeholder.setStyleSheet(
+                        "QFrame { background: transparent; border: none; }"
+                    )
+                    placeholder.setMinimumSize(70, 60)
+                    self._grid.addWidget(placeholder, row_idx + 1, col_idx)
+                    continue
+
+                is_today = (
+                    self._year == today.year
+                    and self._month == today.month
+                    and day == today.day
+                )
+                day_data = daily.get(day)
+                cell = self._make_cell(day, day_data, max_abs, is_today)
+                self._grid.addWidget(cell, row_idx + 1, col_idx)
+
+    def _make_cell(self, day, day_data, max_abs, is_today):
+        """Build a single day cell."""
+        cell = QFrame()
+        cell.setFrameShape(QFrame.Shape.StyledPanel)
+        cell.setMinimumSize(70, 60)
+
+        lay = QVBoxLayout(cell)
+        lay.setContentsMargins(5, 4, 5, 4)
+        lay.setSpacing(1)
+
+        # Day number
+        day_lbl = QLabel(str(day))
+        day_weight = QFont.Weight.Bold if is_today else QFont.Weight.Normal
+        day_lbl.setFont(QFont("", 9, day_weight))
+        day_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        lay.addWidget(day_lbl)
+
+        if day_data:
+            pnl = day_data['net_pnl']
+            count = day_data['trade_count']
+
+            pnl_lbl = QLabel(f"{pnl:+.2f}")
+            pnl_lbl.setFont(QFont("", 10, QFont.Weight.Bold))
+            pnl_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lay.addWidget(pnl_lbl)
+
+            trade_word = 'trade' if count == 1 else 'trades'
+            cnt_lbl = QLabel(f"{count} {trade_word}")
+            cnt_lbl.setFont(QFont("", 7))
+            cnt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lay.addWidget(cnt_lbl)
+
+            # Background colour proportional to |P&L| / max_abs
+            intensity = min(abs(pnl) / max_abs, 1.0)
+            if pnl > 0:
+                r = int(232 - intensity * 160)
+                g = int(245 - intensity * 105)
+                b = int(233 - intensity * 180)
+                border_col = '#2e7d32' if intensity > 0.3 else '#81c784'
+            elif pnl < 0:
+                r = int(255 - intensity * 110)
+                g = int(235 - intensity * 215)
+                b = int(238 - intensity * 220)
+                border_col = '#c62828' if intensity > 0.3 else '#e57373'
+            else:
+                r, g, b = 240, 240, 240
+                border_col = '#aaa'
+
+            text_color = '#fff' if intensity > 0.65 else '#000'
+            bg = f'#{r:02x}{g:02x}{b:02x}'
+
+            pnl_lbl.setStyleSheet(f"color: {text_color};")
+            cnt_lbl.setStyleSheet(f"color: {text_color};")
+            day_lbl.setStyleSheet(f"color: {text_color};")
+
+            border_width = '2px' if is_today else '1px'
+            border_color = '#1565c0' if is_today else border_col
+            cell.setStyleSheet(
+                f"QFrame {{ background-color: {bg}; "
+                f"border: {border_width} solid {border_color}; "
+                f"border-radius: 4px; }}"
+            )
+
+            cell.setToolTip(
+                f"{self._year}-{self._month:02d}-{day:02d}\n"
+                f"Net P&L: {pnl:+.2f}\n"
+                f"Trades: {count}"
+            )
+        else:
+            # No trades that day
+            if is_today:
+                cell.setStyleSheet(
+                    "QFrame { background-color: #fff; "
+                    "border: 2px solid #1565c0; border-radius: 4px; }"
+                )
+            else:
+                cell.setStyleSheet(
+                    "QFrame { background-color: #fafafa; "
+                    "border: 1px solid #e0e0e0; border-radius: 4px; }"
+                )
+            day_lbl.setStyleSheet("color: #aaa;")
+
+        return cell
+
+
 class StatsTab(BaseTab):
     def __init__(self, conn, get_aid_fn):
         super().__init__(conn, get_aid_fn)
@@ -345,6 +582,10 @@ class StatsTab(BaseTab):
             self.bd_tables[group_by] = bt
             self.tabs.addTab(bt, tab_title)
 
+        # Calendar heatmap sub-tab
+        self.calendar_heatmap = CalendarHeatmapWidget(self.conn, self.aid)
+        self.tabs.addTab(self.calendar_heatmap, "Calendar")
+
         # Formula editor sub-tab
         self.formula_editor = FormulaEditorWidget(self.conn)
         self.tabs.addTab(self.formula_editor, "Formulas")
@@ -373,6 +614,7 @@ class StatsTab(BaseTab):
             self.stats_text.setHtml("<h3>Please select an account</h3>")
             for bt in self.bd_tables.values():
                 bt.populate([])
+            self.calendar_heatmap.refresh(self.conn)
             return
 
         date_from, date_to = self._get_date_range()
@@ -481,6 +723,9 @@ class StatsTab(BaseTab):
             data = get_trade_breakdowns(self.conn, aid, group_by,
                                         date_from=date_from, date_to=date_to)
             bt.populate(data, currency=currency)
+
+        # Calendar heatmap (pass conn so it stays current after a restore)
+        self.calendar_heatmap.refresh(self.conn)
 
     def _on_info_clicked(self, url):
         """Handle clicks on ⓘ info icons in the overview."""
