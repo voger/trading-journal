@@ -467,11 +467,15 @@ class TradeChartWidget(QWidget):
         ax.set_ylabel('', labelpad=0)
         ax.yaxis.label.set_visible(False)
         ax.yaxis.label.set_text('')
-        # Compact tick labels
-        ax.tick_params(axis='x', labelsize=6)
-        ax.tick_params(axis='y', which='both', labelsize=6, pad=2)
-        # Denser y-scale
-        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=10, prune=None))
+        # Compact tick labels — 5 px keeps them readable while allowing more ticks
+        ax.tick_params(axis='x', labelsize=5)
+        ax.tick_params(axis='y', which='both', labelsize=5, pad=1)
+        # Denser price scale (15 ticks) and denser datetime scale (12 ticks).
+        # mplfinance with show_nontrading=False uses integer x-positions with a
+        # custom date formatter, so MaxNLocator(integer=True) spaces them evenly
+        # while the existing formatter still maps each position to the right date.
+        ax.yaxis.set_major_locator(mticker.MaxNLocator(nbins=15, prune=None))
+        ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=12, integer=True, prune=None))
 
         # y-axis limits — used to clamp label placement below
         y_lo, y_hi = ax.get_ylim()
