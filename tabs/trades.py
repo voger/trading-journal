@@ -76,6 +76,7 @@ class TradesTab(BaseTab):
         super().__init__(conn, get_aid_fn)
         self._status = status_bar_fn
         self._selected_trade_id = None
+        self._visible_trades = []
         self._build()
 
     def _build(self):
@@ -724,8 +725,11 @@ class TradesTab(BaseTab):
         if event_count: msg += f", {event_count} deposits/withdrawals"
         self._status(msg)
 
+        # Store visible trades for export (trade rows only, in display order)
+        self._visible_trades = [data for _, rt, data in rows_data if rt == 'trade']
+
         # Update KPI cards from the filtered trade list (excludes event rows)
-        self._update_kpi([data for _, rt, data in rows_data if rt == 'trade'])
+        self._update_kpi(self._visible_trades)
 
         # Re-select previously selected trade if still in table
         if self._selected_trade_id:
@@ -831,13 +835,19 @@ class TradesTab(BaseTab):
     # ── Export ──
 
     def _on_export(self):
-        """Export trades to CSV file."""
-        aid = self.aid()
-        if aid is None:
-            QMessageBox.warning(self, "No Account", "Please select an account first.")
+        """Export the currently visible (filtered) trades to a CSV file.
+
+        Exports exactly the trades shown in the table, respecting all active
+        filters (account, status, direction, period, grade, exit reason,
+        outcome, symbol search). Includes a computed 'Net P&L' column
+        (pnl + swap + commission) in addition to the raw DB columns.
+        """
+        if not self._visible_trades:
+            QMessageBox.information(self, "Export", "No trades to export.")
             return
 
-        acct = get_account(self.conn, aid)
+        aid = self.aid()
+        acct = get_account(self.conn, aid) if aid else None
         acct_name = acct['name'].replace(' ', '_') if acct else 'trades'
         default_name = f"{acct_name}_export_{datetime.now().strftime('%Y%m%d')}.csv"
 
@@ -847,37 +857,23 @@ class TradesTab(BaseTab):
         if not fp:
             return
 
-        # Use current filter state to determine status filter
-        flt_status = self.flt_status.currentText()
-        status_filter = None
-        if flt_status == 'Open':
-            status_filter = 'open'
-        elif flt_status == 'Closed':
-            status_filter = 'closed'
-
-        trades = get_trades_for_export(self.conn, aid, status_filter=status_filter)
-        if not trades:
-            QMessageBox.information(self, "Export", "No trades to export.")
-            return
-
         try:
             with open(fp, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
-                # Header row
-                writer.writerow([label for _, label in EXPORT_COLUMNS])
-                # Data rows
-                for t in trades:
+                # Header: all DB columns + computed Net P&L
+                writer.writerow([label for _, label in EXPORT_COLUMNS] + ['Net P&L'])
+                for t in self._visible_trades:
                     row = []
                     for key, _ in EXPORT_COLUMNS:
                         val = t[key] if key in t.keys() else ''
-                        if val is None:
-                            val = ''
-                        row.append(val)
+                        row.append('' if val is None else val)
+                    row.append(round(effective_pnl(t), 8))
                     writer.writerow(row)
 
-            self._status(f"Exported {len(trades)} trades to {os.path.basename(fp)}")
+            count = len(self._visible_trades)
+            self._status(f"Exported {count} trades to {os.path.basename(fp)}")
             QMessageBox.information(self, "Export Complete",
-                f"Exported {len(trades)} trades to:\n{fp}")
+                f"Exported {count} trades to:\n{fp}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", str(e))
 

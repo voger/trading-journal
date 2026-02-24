@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
         mb = self.menuBar()
         fm = mb.addMenu("&File")
         for text, slot in [("&Import Trades...", lambda: self.trades_tab._on_import()),
+                           ("&Export Trades...", lambda: self.trades_tab._on_export()),
                            ("&Backup...", self._on_backup), ("&Restore...", self._on_restore)]:
             a = QAction(text, self); a.triggered.connect(slot); fm.addAction(a)
 
