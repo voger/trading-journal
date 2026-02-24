@@ -65,8 +65,8 @@ class EquityTab(BaseTab):
         self._mode = mode
         self._btn_balance.setChecked(mode == 'balance')
         self._btn_pnl.setChecked(mode == 'pnl')
-        self._dirty = False
         self._render()
+        self._dirty = False
 
     def _populate_deposits_table(self, events, currency):
         self.deposits_table.setRowCount(len(events))

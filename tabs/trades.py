@@ -756,7 +756,9 @@ class TradesTab(BaseTab):
     def _on_edit(self):
         r = self.table.currentRow()
         if r < 0: return
-        id_text = self.table.item(r, 0).text()
+        id_item = self.table.item(r, 0)
+        if not id_item: return
+        id_text = id_item.text()
         if not id_text: return
         tid = int(id_text)
         trade = get_trade(self.conn, tid)
