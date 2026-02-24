@@ -99,6 +99,65 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
 - Current baseline: **483 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
 
+## Planned features (roadmap)
+
+These are agreed-upon next steps. Implement them in roughly this order; update this section as work progresses.
+
+### Dark mode toggle
+- `theme.py` already contains a full QSS stylesheet — **but the colour palette needs to be replaced** before shipping.
+- Target palette (from reference screenshot): deep charcoal/purple-tinted backgrounds, **not** ocean-blue. Key colours:
+  - `BG_DARK`  `#13131f` — near-black with slight purple tint
+  - `BG_MID`   `#1c1c2e` — panel / card surface
+  - `BG_LIGHT` `#252538` — input fields, table rows
+  - `BG_HOVER` `#2e2e4a` — hover / highlight
+  - `BORDER`   `#32324e` — subtle borders
+  - `TEXT`     `#e4e4f0` — primary text
+  - `TEXT_DIM` `#7c7c98` — secondary text
+  - `GREEN`    `#4dbb8a` — profit (emerald, not teal)
+  - `RED`      `#e05555` — loss
+  - `ACCENT`   `#5c7cfa` — buttons, links, focus (muted blue-purple)
+- Wire toggle to **View → Dark Mode** menu item in `main.py`.
+- Persist the preference in the `app_settings` DB table.
+- The chart widget (matplotlib) needs its own dark style (`mpf.make_marketcolors` / `mpf.make_mpf_style`) to match.
+
+### Calendar P&L heatmap
+- New panel inside the **Summary Stats** tab (below existing stats, or as a toggle).
+- Monthly grid: one cell per calendar day, coloured by net P&L (green → red gradient), blank for days with no closed trades.
+- Tooltip or status-bar text on hover showing exact P&L and trade count for the day.
+- Uses existing `get_trade_breakdowns()` data; pure Python + matplotlib (no new DB queries needed).
+
+### Unlimited trade list (remove 2 000-row cap)
+- Current code in `tabs/trades.py` fetches 2 001 rows and shows an amber warning if more than 2 000 exist.
+- Replace with proper pagination: Previous / Next page buttons + "Page N of M" label in the filter bar.
+- Page size configurable (default 500). The existing filter/sort logic must be applied server-side (SQL `LIMIT`/`OFFSET`), not in Python.
+- When a page boundary is crossed, re-select the first row of the new page.
+
+### Tags
+- DB schema already has a `tags` table and `trade_tags` join table.
+- Add a tags field to `TradeDialog` (comma-separated `QLineEdit` or a small tag-chip widget).
+- Add a **Tag** filter combo to the trades tab filter bar.
+- Show tags as small chips in the preview panel.
+
+### Setup performance stats
+- Add a "Setup Breakdown" section to the **Summary Stats** tab.
+- Table columns: Setup name | Trades | Win % | Avg R | Avg P&L | Avg Duration.
+- Data from existing `trades` + `setup_types` tables; no schema changes needed.
+
+### R-multiple distribution histogram
+- Single matplotlib bar chart in the Stats tab showing bucketed R multiples (e.g. < −2, −2→−1, −1→0, 0→1, 1→2, > 2).
+- Requires `risk_percent` and `pnl_account_currency` to be set on each trade (open trades and trades without risk % are excluded with a note).
+
+### Time-of-day / day-of-week analysis
+- Two bar charts in Stats: net P&L by hour-of-day and by weekday.
+- Pure SQL aggregation on `entry_date`; no schema changes.
+
+### CSV / ODS export
+- **File → Export Trades…** menu item.
+- Writes the currently-filtered trade list (respecting account + all active filters) to a `.csv` file.
+- Optionally also offer `.ods` (OpenDocument Spreadsheet) via the `odfpy` library if installed; fall back to CSV only if not.
+
+---
+
 ## Recent changes (v2.5.2)
 
 ### Bug fix — table selection colour goes gray on focus-loss (`tabs/trades.py`)
@@ -109,6 +168,17 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 ### Bug fix — splitter initial sizing fragile on Windows (`tabs/trades.py`)
 - `resizeEvent` once-flag fired before the window was fully laid out at some DPI-scaling settings on Windows, so `sum(splitter.sizes())` returned unreliable minimum-size values and the 58 %/42 % split was applied incorrectly.
 - Fix: replaced `resizeEvent` with `showEvent + QTimer.singleShot(0, ...)` which defers one event-loop tick until layout is complete, guaranteeing real widget dimensions when `setSizes()` is called.
+- **Note**: this still does not work reliably on Windows — left as a known issue; the splitter proportions are visually wrong on first launch but can be dragged to the desired size.
+
+### Denser chart axis ticks (`chart_widget.py`)
+- y-axis: `MaxNLocator` `nbins` increased from 10 → 15.
+- x-axis: added `MaxNLocator(nbins=12, integer=True)` — mplfinance non-trading mode uses integer x-positions so the existing date formatter still labels them correctly.
+- Tick label font size reduced from 6 px → 5 px on both axes to keep labels readable at higher density.
+
+### Font embedding — attempted and reverted
+- Tried bundling Ubuntu TTF files and loading them via `QFontDatabase.addApplicationFont()` to unify Linux/Windows font appearance.
+- Result: loading fonts via the application font database bypasses the OS sub-pixel rendering pipeline (FreeType hinting on Linux, ClearType on Windows), producing fuzzy bold text.
+- The platform font difference is a rendering-engine difference, not a font-file difference. No clean cross-platform solution without a full custom style engine. Approach abandoned.
 
 ## Recent changes (v2.5.1)
 
