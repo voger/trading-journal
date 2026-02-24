@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
     QLineEdit, QGridLayout, QSizePolicy, QGroupBox,
     QPlainTextEdit, QProgressDialog,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence
 
 from tabs import BaseTab
@@ -165,6 +165,15 @@ class TradesTab(BaseTab):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
+        # Keep selection highlight blue even when the table loses focus (e.g. when
+        # the user clicks "Fetch Chart" in the preview panel).  Without this, Qt's
+        # Fusion theme renders the unfocused selection in gray, making the selected
+        # row indistinguishable from unselected rows.
+        self.table.setStyleSheet(
+            "QTableWidget { outline: none; }"
+            "QTableWidget::item:selected:!active {"
+            "  background-color: #1565c0; color: white; }"
+        )
         self.table.doubleClicked.connect(self._on_edit)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.splitter.addWidget(self.table)
@@ -174,13 +183,20 @@ class TradesTab(BaseTab):
 
         self._splitter_sized = False
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+    def showEvent(self, event):
+        super().showEvent(event)
         if not self._splitter_sized:
-            total = sum(self.splitter.sizes())
-            if total > 0:
-                self._splitter_sized = True
-                self.splitter.setSizes([int(total * 0.58), int(total * 0.42)])
+            # Defer one event-loop tick so the window is fully laid out and
+            # sum(splitter.sizes()) reflects the real available width.
+            # resizeEvent fired too early on Windows (before maximise completes),
+            # producing wrong proportions at some DPI-scaling settings.
+            QTimer.singleShot(0, self._set_initial_split)
+
+    def _set_initial_split(self):
+        total = sum(self.splitter.sizes())
+        if total > 0:
+            self._splitter_sized = True
+            self.splitter.setSizes([int(total * 0.58), int(total * 0.42)])
 
     def _build_preview_panel(self):
         """Build the persistent read-only trade preview panel."""
