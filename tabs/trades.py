@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit, QProgressDialog,
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence
+from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence, QPalette
 
 from tabs import BaseTab
 from dialogs import TradeDialog
@@ -165,15 +165,19 @@ class TradesTab(BaseTab):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(True)
-        # Keep selection highlight blue even when the table loses focus (e.g. when
-        # the user clicks "Fetch Chart" in the preview panel).  Without this, Qt's
-        # Fusion theme renders the unfocused selection in gray, making the selected
-        # row indistinguishable from unselected rows.
-        self.table.setStyleSheet(
-            "QTableWidget { outline: none; }"
-            "QTableWidget::item:selected:!active {"
-            "  background-color: #1565c0; color: white; }"
-        )
+        # Keep selection highlight colour consistent when the table loses focus
+        # (e.g. when the user clicks "Fetch Chart" in the preview panel).
+        # Qt's Fusion theme uses a separate Inactive palette group for unfocused
+        # widgets, which renders the selected row in a washed-out gray.
+        # The correct, theme-aware fix is to copy the Active Highlight colours
+        # into the Inactive group so the row stays visually selected regardless
+        # of which widget currently has keyboard focus.
+        _pal = self.table.palette()
+        _pal.setColor(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight,
+                      _pal.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight))
+        _pal.setColor(QPalette.ColorGroup.Inactive, QPalette.ColorRole.HighlightedText,
+                      _pal.color(QPalette.ColorGroup.Active, QPalette.ColorRole.HighlightedText))
+        self.table.setPalette(_pal)
         self.table.doubleClicked.connect(self._on_edit)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.splitter.addWidget(self.table)
