@@ -26,7 +26,7 @@ from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 
-APP_VERSION = "2.4.0"
+APP_VERSION = "2.5.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 

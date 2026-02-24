@@ -435,7 +435,7 @@ class StatsTab(BaseTab):
             sortino_c = '#008200' if adv['sortino_ratio'] > 1 else '#c80000' if adv['sortino_ratio'] < 0 else '#666'
             sortino_s = f"{adv['sortino_ratio']:.2f}" if adv['sortino_ratio'] != float('inf') else "∞"
             calmar_c  = '#008200' if adv['calmar_ratio'] > 0 else '#c80000'
-            calmar_s  = f"{adv['calmar_ratio']:.2f}"
+            calmar_s  = f"{adv['calmar_ratio']:.2f}" if adv['calmar_ratio'] != float('inf') else "∞"
 
             html += f"""
             <hr>

@@ -1142,7 +1142,13 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
         sortino = float('inf') if mean_pnl > 0 else 0.0
 
     # ── Calmar ratio (net P&L / max absolute drawdown) ──
-    calmar = sum(pnls) / max_dd_abs if max_dd_abs > 0 else 0.0
+    net_pnl_total = sum(pnls)
+    if max_dd_abs > 0:
+        calmar = net_pnl_total / max_dd_abs
+    elif net_pnl_total > 0:
+        calmar = float('inf')  # positive P&L with no drawdown → ∞ (like Sharpe/Sortino)
+    else:
+        calmar = 0.0
 
     return {
         'max_drawdown_pct': round(max_dd_pct, 2),

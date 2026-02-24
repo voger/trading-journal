@@ -328,7 +328,7 @@ class TradesTab(BaseTab):
         # Badges
         direction = (t['direction'] or 'long').upper()
         status = t['status'] or 'open'
-        pnl = t['pnl_account_currency'] or 0
+        epnl = effective_pnl(t)
 
         if direction == 'LONG':
             dir_html = '<span style="color:#fff;background:#16a34a;padding:2px 8px;border-radius:3px;font-weight:bold;">▲ LONG</span>'
@@ -337,9 +337,9 @@ class TradesTab(BaseTab):
 
         if status == 'open':
             st_html = '<span style="color:#fff;background:#3b82f6;padding:2px 8px;border-radius:3px;font-weight:bold;">OPEN</span>'
-        elif pnl > 0:
+        elif epnl > 0:
             st_html = '<span style="color:#fff;background:#16a34a;padding:2px 8px;border-radius:3px;font-weight:bold;">WIN</span>'
-        elif pnl < 0:
+        elif epnl < 0:
             st_html = '<span style="color:#fff;background:#dc2626;padding:2px 8px;border-radius:3px;font-weight:bold;">LOSS</span>'
         else:
             st_html = '<span style="color:#fff;background:#6b7280;padding:2px 8px;border-radius:3px;font-weight:bold;">B/E</span>'
@@ -347,9 +347,9 @@ class TradesTab(BaseTab):
         self.pv_badges.setTextFormat(Qt.TextFormat.RichText)
         self.pv_badges.setText(f"{dir_html}&nbsp;&nbsp;{st_html}")
 
-        # P&L Hero
-        pc = '#008200' if pnl > 0 else '#c80000' if pnl < 0 else '#666'
-        self.pv_pnl_hero.setText(f"<span style='color:{pc}'>{pnl:+.2f}</span>")
+        # P&L Hero (effective P&L: includes swap + commission)
+        pc = '#008200' if epnl > 0 else '#c80000' if epnl < 0 else '#666'
+        self.pv_pnl_hero.setText(f"<span style='color:{pc}'>{epnl:+.2f}</span>")
 
         # Metrics
         entry = t['entry_price'] or 0
@@ -632,16 +632,17 @@ class TradesTab(BaseTab):
         for row, (_, rtype, data) in enumerate(rows_data):
             if rtype == 'trade':
                 t = data
-                pnl = t['pnl_account_currency'] or 0
-                pc = profit_fg if pnl > 0 else loss_fg if pnl < 0 else neutral_fg
+                epnl = effective_pnl(t)
+                raw_pnl = t['pnl_account_currency'] or 0
+                pc = profit_fg if epnl > 0 else loss_fg if epnl < 0 else neutral_fg
                 cc = chart_counts.get(t['id'], 0)
 
-                # Determine status display
+                # Determine status display (use effective P&L for WIN/LOSS classification)
                 status = t['status'] or 'open'
                 if status == 'closed':
-                    if pnl > 0:
+                    if epnl > 0:
                         status_text, status_key = 'WIN', 'win'
-                    elif pnl < 0:
+                    elif epnl < 0:
                         status_text, status_key = 'LOSS', 'loss'
                     else:
                         status_text, status_key = 'B/E', 'be'
@@ -653,7 +654,7 @@ class TradesTab(BaseTab):
                 cells = [str(t['id']), (t['entry_date'] or '')[:16], t['symbol'] or '', dir_text]
                 for c in mod_cols:
                     cells.append(mod.format_trade_cell(t, c['key']) if mod else '')
-                cells += [f"{pnl:+.2f}", t['setup_name'] or '', str(cc) if cc else '',
+                cells += [f"{raw_pnl:+.2f}", t['setup_name'] or '', str(cc) if cc else '',
                           status_text]
 
                 for col, val in enumerate(cells):
@@ -788,7 +789,9 @@ class TradesTab(BaseTab):
     def _on_delete(self):
         r = self.table.currentRow()
         if r < 0: return
-        id_text = self.table.item(r, 0).text()
+        id_item = self.table.item(r, 0)
+        if not id_item: return
+        id_text = id_item.text()
         if not id_text: return
         tid = int(id_text)
         if QMessageBox.question(self, "Delete", f"Delete trade #{tid}?",

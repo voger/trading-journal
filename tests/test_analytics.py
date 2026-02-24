@@ -432,3 +432,62 @@ class TestDrawdownWithInitialBalance:
         # Peak=100, trough=40, dd_abs=60, dd_pct=60%
         assert adv['max_drawdown_abs'] == pytest.approx(60, abs=0.01)
         assert adv['max_drawdown_pct'] == pytest.approx(60.0, abs=0.1)
+
+
+# ── Calmar ratio edge cases ───────────────────────────────────────────────
+
+class TestCalmarRatio:
+    """Calmar ratio = net P&L / max drawdown. Edge cases when drawdown is zero."""
+
+    def _make_winner(self, conn, aid, pnl):
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        return db.create_trade(conn, account_id=aid, instrument_id=iid,
+                               direction='long', entry_date='2025-01-01 10:00:00',
+                               entry_price=1.0, position_size=1,
+                               exit_date='2025-01-02 10:00:00', exit_price=1.1,
+                               status='closed', pnl_account_currency=pnl)
+
+    def test_calmar_with_drawdown(self, conn):
+        """Normal case: positive P&L with a drawdown."""
+        aid = db.create_account(conn, name='C1', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        db.create_trade(conn, account_id=aid, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-02', exit_price=1.1,
+                        status='closed', pnl_account_currency=200)
+        db.create_trade(conn, account_id=aid, instrument_id=iid,
+                        direction='long', entry_date='2025-01-03',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-04', exit_price=0.9,
+                        status='closed', pnl_account_currency=-100)
+        adv = get_advanced_stats(conn, account_id=aid)
+        # net_pnl=100, max_dd_abs=100 → calmar=1.0
+        assert adv['calmar_ratio'] == pytest.approx(1.0, abs=0.01)
+
+    def test_calmar_no_drawdown_positive_pnl_is_infinity(self, conn):
+        """With no drawdown and positive P&L, Calmar should be infinity, not 0."""
+        aid = db.create_account(conn, name='C2', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        self._make_winner(conn, aid, 100)
+        self._make_winner(conn, aid, 50)
+        adv = get_advanced_stats(conn, account_id=aid)
+        assert adv['max_drawdown_abs'] == pytest.approx(0.0, abs=0.001)
+        assert adv['calmar_ratio'] == float('inf')
+
+    def test_calmar_no_drawdown_zero_pnl_is_zero(self, conn):
+        """With no drawdown and zero net P&L, Calmar should be 0."""
+        aid = db.create_account(conn, name='C3', broker='B',
+                                currency='EUR', asset_type='forex',
+                                initial_balance=1000)
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        db.create_trade(conn, account_id=aid, instrument_id=iid,
+                        direction='long', entry_date='2025-01-01',
+                        entry_price=1.0, position_size=1,
+                        exit_date='2025-01-02', exit_price=1.0,
+                        status='closed', pnl_account_currency=0)
+        adv = get_advanced_stats(conn, account_id=aid)
+        assert adv['calmar_ratio'] == pytest.approx(0.0, abs=0.001)

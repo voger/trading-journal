@@ -97,7 +97,7 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - `tests/conftest.py` provides `db_path`, `conn`, `stock_account`, `forex_account`, `sample_t212_csv` fixtures plus the optional `real_csv` / `real_mt4` fixtures (skipped if paths not provided).
 - Integration tests in `test_integration_real_csv.py` and `test_integration_real_mt4.py` pin exact counts from real broker exports and are the main regression guard for the import pipeline.
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
-- Current baseline: **464 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
+- Current baseline: **469 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
 
 ## Recent changes (v2.5.0)
 

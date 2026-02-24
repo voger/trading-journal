@@ -496,8 +496,6 @@ class TradeChartWidget(QWidget):
                     color='#ff9800', linestyle='--', linewidth=1.5,
                     alpha=0.9, zorder=5)
 
-        pad = y_range * 0.015
-
         # ── Entry: ► for buy (long), ◄ for sell (short) — at price level ──
         if entry_price is not None and xi is not None:
             e_col = '#1565c0'

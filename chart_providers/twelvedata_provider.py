@@ -167,9 +167,9 @@ class TwelveDataProvider(ChartProvider):
         if clean in _FOREX_MAP:
             return _FOREX_MAP[clean]
 
-        # Strip common MT4 suffixes
+        # Strip common MT4 suffixes (use exact substring removal, not rstrip which strips chars)
         for suffix in ['M', '.RAW', '.ECN', '.PRO', '.STD', 'MINI']:
-            stripped = clean.rstrip(suffix) if clean.endswith(suffix) else clean
+            stripped = clean[:-len(suffix)] if clean.endswith(suffix) else clean
             if stripped in _FOREX_MAP:
                 return _FOREX_MAP[stripped]
 
