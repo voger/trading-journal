@@ -25,6 +25,7 @@ from database import (
     get_accounts, get_setup_types, get_setup_rules,
     get_setup_charts, get_trade_charts, get_trade_rule_checks,
     get_or_create_instrument, get_app_data_dir, get_account,
+    get_trade_tags,
 )
 from asset_modules import get_module_choices
 
@@ -364,6 +365,14 @@ class TradeDialog(QDialog):
         col3.addRow("Risk %:", self.risk_pct)
         id_lay.addLayout(col3)
         left.addWidget(id_group)
+
+        # ── Tags ──
+        tags_row = QHBoxLayout()
+        tags_row.addWidget(QLabel("Tags:"))
+        self.tags_edit = QLineEdit()
+        self.tags_edit.setPlaceholderText("tag1, tag2, tag3  (comma-separated)")
+        tags_row.addWidget(self.tags_edit)
+        left.addLayout(tags_row)
 
         # ── Notes side-by-side ──
         notes_row = QHBoxLayout()
@@ -782,6 +791,10 @@ class TradeDialog(QDialog):
         cached = t['chart_data'] if 'chart_data' in t.keys() else None
         self.chart_widget.load_saved_or_cached(cached)
 
+        # Tags
+        tags = get_trade_tags(self.conn, t['id'])
+        self.tags_edit.setText(', '.join(tag['name'] for tag in tags))
+
         # Executions
         self._populate_executions(t)
         self._recalc_metrics()
@@ -819,6 +832,13 @@ class TradeDialog(QDialog):
                 self.conn, sym, instrument_type=self.itype_combo.currentText()
             )
         return vals
+
+    def get_tag_names(self):
+        """Return list of tag name strings from the tags field (stripped, non-empty)."""
+        text = self.tags_edit.text().strip()
+        if not text:
+            return []
+        return [t.strip() for t in text.split(',') if t.strip()]
 
     def get_rule_checks(self):
         checks = {}

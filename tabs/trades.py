@@ -24,7 +24,11 @@ from database import (
     get_import_logs,
     get_trade_rule_checks, get_trades_for_export, EXPORT_COLUMNS,
     get_app_data_dir, effective_pnl,
+    get_tags, get_trade_tags, set_trade_tags, get_or_create_tag,
+    get_trades_paged, get_trades_all_filtered,
 )
+
+_PAGE_SIZE = 500
 from asset_modules import get_module
 
 SCREENSHOTS_DIR = os.path.join(get_app_data_dir(), 'screenshots')
@@ -77,6 +81,7 @@ class TradesTab(BaseTab):
         self._status = status_bar_fn
         self._selected_trade_id = None
         self._visible_trades = []
+        self._page = 0
         self._build()
 
     def _build(self):
@@ -111,10 +116,20 @@ class TradesTab(BaseTab):
         for card in [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
                      self.kpi_expectancy, self.kpi_pf]:
             kpi_row.addWidget(card)
-        self.lbl_truncated = QLabel("⚠ Showing first 2000 trades — use filters to narrow results")
-        self.lbl_truncated.setStyleSheet("color: #b45309; font-size: 11px; padding: 2px 8px;")
-        self.lbl_truncated.setVisible(False)
-        kpi_row.addWidget(self.lbl_truncated)
+        # Pagination controls (replace old lbl_truncated)
+        self.btn_prev = QPushButton("◀ Prev")
+        self.btn_prev.setFixedHeight(28)
+        self.btn_prev.setEnabled(False)
+        self.btn_prev.clicked.connect(self._on_prev_page)
+        kpi_row.addWidget(self.btn_prev)
+        self.lbl_page = QLabel("Page 1 of 1 · 0 trades")
+        self.lbl_page.setStyleSheet("font-size: 11px; padding: 2px 8px;")
+        kpi_row.addWidget(self.lbl_page)
+        self.btn_next = QPushButton("Next ▶")
+        self.btn_next.setFixedHeight(28)
+        self.btn_next.setEnabled(False)
+        self.btn_next.clicked.connect(self._on_next_page)
+        kpi_row.addWidget(self.btn_next)
         layout.addLayout(kpi_row)
 
         # ── Filter bar ──
@@ -149,12 +164,17 @@ class TradesTab(BaseTab):
         filt.addWidget(self.flt_exit)
         self.flt_outcome = QComboBox()
         self.flt_outcome.addItems(["All P&L", "Winners", "Losers", "Breakeven"]); filt.addWidget(self.flt_outcome)
+        self.flt_tag = QComboBox(); self.flt_tag.addItem("All Tags", None)
+        self.flt_tag.setMinimumWidth(100); filt.addWidget(self.flt_tag)
         btn_clear = QPushButton("Clear"); btn_clear.clicked.connect(self._clear_filters)
         filt.addWidget(btn_clear); filt.addStretch()
         layout.addLayout(filt)
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
-                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period]:
-            w.currentIndexChanged.connect(self.refresh)
+                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period,
+                  self.flt_tag]:
+            w.currentIndexChanged.connect(self._on_filter_changed)
+        self.flt_search.textChanged.disconnect(self.refresh)
+        self.flt_search.textChanged.connect(self._on_filter_changed)
 
         # ── Split pane: Table (left) | Preview (right) ──
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -426,6 +446,15 @@ class TradesTab(BaseTab):
         lines.append(f"<b>Grade:</b> {grade}")
         if conf: lines.append(f"<b>Confidence:</b> {'★' * conf}{'☆' * (5 - conf)}")
 
+        tags = get_trade_tags(self.conn, trade_id)
+        if tags:
+            chips = ' '.join(
+                f'<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;'
+                f'border-radius:3px;font-size:11px;">{_esc(tag["name"])}</span>'
+                for tag in tags
+            )
+            lines.append(f"<b>Tags:</b> {chips}")
+
         self.pv_metrics.setText("<br>".join(lines))
 
         # Notes
@@ -471,11 +500,13 @@ class TradesTab(BaseTab):
 
     def _clear_filters(self):
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
-                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period]:
+                  self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period,
+                  self.flt_tag]:
             w.blockSignals(True); w.setCurrentIndex(0); w.blockSignals(False)
         self.flt_search.blockSignals(True)
         self.flt_search.clear()
         self.flt_search.blockSignals(False)
+        self._page = 0
         self.refresh()
 
     def refresh_setup_filter(self):
@@ -487,6 +518,94 @@ class TradesTab(BaseTab):
             idx = self.flt_setup.findData(cur)
             if idx >= 0: self.flt_setup.setCurrentIndex(idx)
         self.flt_setup.blockSignals(False)
+
+    def refresh_tag_filter(self):
+        self.flt_tag.blockSignals(True)
+        cur = self.flt_tag.currentData()
+        self.flt_tag.clear()
+        self.flt_tag.addItem("All Tags", None)
+        for tag in get_tags(self.conn):
+            self.flt_tag.addItem(tag['name'], tag['id'])
+        idx = self.flt_tag.findData(cur)
+        if idx >= 0:
+            self.flt_tag.setCurrentIndex(idx)
+        self.flt_tag.blockSignals(False)
+
+    def _on_filter_changed(self):
+        """Reset to page 0 and refresh whenever any filter changes."""
+        self._page = 0
+        self.refresh()
+
+    def _on_prev_page(self):
+        if self._page > 0:
+            self._page -= 1
+            self.refresh()
+
+    def _on_next_page(self):
+        self._page += 1
+        self.refresh()
+
+    def _get_period_range(self):
+        """Return (period_from, period_to) date objects based on flt_period."""
+        today = datetime.now().date()
+        flt_period = self.flt_period.currentText()
+        period_from = period_to = None
+        if flt_period == "This Month":
+            period_from = today.replace(day=1)
+        elif flt_period == "Last Month":
+            first_this = today.replace(day=1)
+            period_from = (first_this - timedelta(days=1)).replace(day=1)
+            period_to = first_this - timedelta(days=1)
+        elif flt_period == "This Year":
+            period_from = today.replace(month=1, day=1)
+        elif flt_period == "Last 30 Days":
+            period_from = today - timedelta(days=30)
+        elif flt_period == "Last 90 Days":
+            period_from = today - timedelta(days=90)
+        return period_from, period_to
+
+    def _build_filter_kwargs(self):
+        """Translate UI filter state into kwargs for get_trades_paged / get_trades_all_filtered."""
+        period_from, period_to = self._get_period_range()
+        flt_dir = self.flt_direction.currentText()
+        flt_status = self.flt_status.currentText()
+        flt_outcome = self.flt_outcome.currentText()
+
+        kwargs = {}
+        setup_id = self.flt_setup.currentData()
+        if setup_id is not None:
+            kwargs['setup_id'] = setup_id
+        if flt_dir == 'Long':
+            kwargs['direction'] = 'long'
+        elif flt_dir == 'Short':
+            kwargs['direction'] = 'short'
+        if flt_status == 'Open':
+            kwargs['status'] = 'open'
+        elif flt_status == 'Closed':
+            kwargs['status'] = 'closed'
+        grade = self.flt_grade.currentText()
+        if grade not in ('All Grades',):
+            kwargs['grade'] = grade
+        exit_reason = self.flt_exit.currentData()
+        if exit_reason is not None:
+            kwargs['exit_reason'] = exit_reason
+        if flt_outcome == 'Winners':
+            kwargs['outcome'] = 'winners'
+        elif flt_outcome == 'Losers':
+            kwargs['outcome'] = 'losers'
+        elif flt_outcome == 'Breakeven':
+            kwargs['outcome'] = 'breakeven'
+        tag_id = self.flt_tag.currentData()
+        if tag_id is not None:
+            kwargs['tag_id'] = tag_id
+        sym = self.flt_search.text().strip()
+        if sym:
+            kwargs['symbol_search'] = sym
+        if period_from is not None:
+            kwargs['date_from'] = str(period_from)
+        if period_to is not None:
+            kwargs['date_to'] = str(period_to)
+        return kwargs
 
     def _get_module(self):
         aid = self.aid()
@@ -540,60 +659,33 @@ class TradesTab(BaseTab):
     def refresh(self):
         aid = self.aid()
         mod = self._get_module()
-        trades = get_trades(self.conn, account_id=aid, limit=2001)
-        _truncated = len(trades) > 2000
-        if _truncated:
-            trades = trades[:2000]
-        self.lbl_truncated.setVisible(_truncated)
+        filters = self._build_filter_kwargs()
+
+        # All matching trades — for KPI and export (no LIMIT)
+        all_trades = get_trades_all_filtered(self.conn, account_id=aid, **filters)
+        total = len(all_trades)
+
+        # Clamp page to valid range
+        page_count = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+        if self._page >= page_count:
+            self._page = max(0, page_count - 1)
+
+        # Current page — for the table display
+        page_trades = get_trades_paged(
+            self.conn, account_id=aid, page=self._page,
+            page_size=_PAGE_SIZE, **filters
+        )
+
+        # Update pagination controls
+        self.btn_prev.setEnabled(self._page > 0)
+        self.btn_next.setEnabled(self._page < page_count - 1)
+        self.lbl_page.setText(
+            f"Page {self._page + 1} of {page_count} · {total} trades"
+        )
+
         chart_counts = get_trade_chart_counts(self.conn, aid)
         events = get_account_events(self.conn, aid) if aid else []
-
-        # Apply filters
-        flt_setup = self.flt_setup.currentData()
-        flt_dir = self.flt_direction.currentText()
-        flt_status = self.flt_status.currentText()
-        flt_grade = self.flt_grade.currentText()
-        flt_exit = self.flt_exit.currentData()   # None means "All Exits"
-        flt_outcome = self.flt_outcome.currentText()
-        flt_period = self.flt_period.currentText()
-        flt_search = self.flt_search.text().strip().upper()
-
-        # Compute date range for the period filter
-        today = datetime.now().date()
-        period_from = None
-        if flt_period == "This Month":
-            period_from = today.replace(day=1)
-        elif flt_period == "Last Month":
-            first_this = today.replace(day=1)
-            period_from = (first_this - timedelta(days=1)).replace(day=1)
-            period_to = first_this - timedelta(days=1)
-        elif flt_period == "This Year":
-            period_from = today.replace(month=1, day=1)
-        elif flt_period == "Last 30 Days":
-            period_from = today - timedelta(days=30)
-        elif flt_period == "Last 90 Days":
-            period_from = today - timedelta(days=90)
-
-        filtered = []
-        for t in trades:
-            if flt_setup is not None and t['setup_type_id'] != flt_setup: continue
-            if flt_dir == "Long" and t['direction'] != 'long': continue
-            if flt_dir == "Short" and t['direction'] != 'short': continue
-            if flt_status == "Open" and t['status'] != 'open': continue
-            if flt_status == "Closed" and t['status'] != 'closed': continue
-            if flt_grade not in ("All Grades",) and (t['execution_grade'] or '') != flt_grade: continue
-            if flt_exit is not None and (t['exit_reason'] or '') != flt_exit: continue
-            epnl = effective_pnl(t)
-            if flt_outcome == "Winners" and epnl <= 0: continue
-            if flt_outcome == "Losers" and epnl >= 0: continue
-            if flt_outcome == "Breakeven" and epnl != 0: continue
-            if period_from is not None:
-                entry = (t['entry_date'] or '')[:10]
-                if entry < str(period_from): continue
-                if flt_period == "Last Month" and entry > str(period_to): continue
-            if flt_search and flt_search not in (t['symbol'] or '').upper(): continue
-            filtered.append(t)
-        trades = filtered
+        period_from, period_to = self._get_period_range()
 
         # Build columns dynamically
         mod_cols = mod.trade_columns() if mod else []
@@ -621,12 +713,14 @@ class TradesTab(BaseTab):
         status_idx = pnl_idx + 3
         self._pnl_col_idx = pnl_idx  # stored for use in _show_event_preview
 
+        # Build rows: current page trades + date-filtered events (interleaved by date)
         rows_data = []
-        for t in trades: rows_data.append((t['entry_date'] or '', 'trade', t))
+        for t in page_trades:
+            rows_data.append((t['entry_date'] or '', 'trade', t))
         for ev in events:
             ev_date = (ev['event_date'] or '')[:10]
             if period_from is not None and ev_date < str(period_from): continue
-            if flt_period == "Last Month" and ev_date > str(period_to): continue
+            if period_to is not None and ev_date > str(period_to): continue
             rows_data.append((ev_date, 'event', ev))
         rows_data.sort(key=lambda x: x[0], reverse=True)
 
@@ -719,19 +813,18 @@ class TradesTab(BaseTab):
             self.table.setColumnWidth(self._setup_col_idx, max(60, min(w, 130)))
         self.table.setSortingEnabled(True)
 
-        trade_count = sum(1 for _, rt, _ in rows_data if rt == 'trade')
-        event_count = len(rows_data) - trade_count
-        msg = f"Loaded {trade_count} trades"
+        event_count = sum(1 for _, rt, _ in rows_data if rt == 'event')
+        msg = f"Loaded {total} trades"
         if event_count: msg += f", {event_count} deposits/withdrawals"
         self._status(msg)
 
-        # Store visible trades for export (trade rows only, in display order)
-        self._visible_trades = [data for _, rt, data in rows_data if rt == 'trade']
+        # All filtered trades: used for KPI (across all pages) and for export
+        self._visible_trades = list(all_trades)
 
-        # Update KPI cards from the filtered trade list (excludes event rows)
+        # Update KPI cards from the complete filtered trade set
         self._update_kpi(self._visible_trades)
 
-        # Re-select previously selected trade if still in table
+        # Re-select previously selected trade if still in current page
         if self._selected_trade_id:
             self._reselect_trade(self._selected_trade_id)
 
@@ -775,6 +868,10 @@ class TradesTab(BaseTab):
                 self._save_screenshots(tid, dlg)
                 checks = dlg.get_rule_checks()
                 if checks: save_trade_rule_checks(self.conn, tid, checks)
+                tag_names = dlg.get_tag_names()
+                tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
+                set_trade_tags(self.conn, tid, tag_ids)
+                self.refresh_tag_filter()
                 self.data_changed.emit()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
@@ -806,6 +903,10 @@ class TradesTab(BaseTab):
                 self._save_screenshots(tid, dlg)
                 checks = dlg.get_rule_checks()
                 if checks: save_trade_rule_checks(self.conn, tid, checks)
+                tag_names = dlg.get_tag_names()
+                tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
+                set_trade_tags(self.conn, tid, tag_ids)
+                self.refresh_tag_filter()
                 self._selected_trade_id = tid
                 self.data_changed.emit()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))

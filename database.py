@@ -1529,6 +1529,122 @@ def get_equity_events(conn: sqlite3.Connection, account_id=None):
     return conn.execute(sql, params).fetchall()
 
 
+# ── Tags ─────────────────────────────────────────────────────────────────
+
+def get_or_create_tag(conn: sqlite3.Connection, name: str) -> int:
+    """Return the id for a tag, creating it if it doesn't exist."""
+    name = name.strip()
+    conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (name,))
+    conn.commit()
+    return conn.execute("SELECT id FROM tags WHERE name = ?", (name,)).fetchone()['id']
+
+
+_TRADES_BASE_SQL = """SELECT t.*, a.name as account_name, a.currency as account_currency,
+                    i.symbol, i.display_name as instrument_name, i.instrument_type,
+                    st.name as setup_name
+             FROM trades t
+             JOIN accounts a ON t.account_id = a.id
+             JOIN instruments i ON t.instrument_id = i.id
+             LEFT JOIN setup_types st ON t.setup_type_id = st.id"""
+
+
+def _build_trade_filters(account_id=None, setup_id=None, direction=None,
+                         status=None, grade=None, exit_reason=None, outcome=None,
+                         date_from=None, date_to=None, symbol_search=None,
+                         tag_id=None):
+    """Build SQL WHERE clauses and params list for trade queries.
+
+    Returns (clauses, params) where clauses is a list of SQL fragments
+    (joined with AND) and params is the corresponding list of bind values.
+    """
+    clauses = ["1=1"]
+    params = []
+
+    if account_id is not None:
+        clauses.append("t.account_id = ?")
+        params.append(account_id)
+
+    if setup_id is not None:
+        clauses.append("t.setup_type_id = ?")
+        params.append(setup_id)
+
+    if direction in ('long', 'short'):
+        clauses.append("t.direction = ?")
+        params.append(direction)
+
+    if status in ('open', 'closed'):
+        clauses.append("t.status = ?")
+        params.append(status)
+
+    if grade:
+        clauses.append("COALESCE(t.execution_grade, '') = ?")
+        params.append(grade)
+
+    if exit_reason is not None:
+        clauses.append("COALESCE(t.exit_reason, '') = ?")
+        params.append(exit_reason)
+
+    _epnl = ("(COALESCE(t.pnl_account_currency, 0)"
+             " + COALESCE(t.swap, 0)"
+             " + COALESCE(t.commission, 0))")
+    if outcome == 'winners':
+        clauses.append(f"{_epnl} > 0")
+    elif outcome == 'losers':
+        clauses.append(f"{_epnl} < 0")
+    elif outcome == 'breakeven':
+        clauses.append(f"{_epnl} = 0")
+
+    if date_from:
+        clauses.append("t.entry_date >= ?")
+        params.append(str(date_from))
+
+    if date_to:
+        clauses.append("t.entry_date <= ?")
+        params.append(str(date_to) + 'T23:59:59')
+
+    if symbol_search:
+        clauses.append("UPPER(i.symbol) LIKE ?")
+        params.append(f'%{symbol_search.upper()}%')
+
+    if tag_id is not None:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM trade_tags tt WHERE tt.trade_id = t.id AND tt.tag_id = ?)"
+        )
+        params.append(tag_id)
+
+    return clauses, params
+
+
+def get_trades_paged(conn: sqlite3.Connection, account_id=None,
+                     page: int = 0, page_size: int = 500, **filters):
+    """Return one page of trades matching filters, ordered entry_date DESC."""
+    clauses, params = _build_trade_filters(account_id=account_id, **filters)
+    sql = _TRADES_BASE_SQL + " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY t.entry_date DESC LIMIT ? OFFSET ?"
+    params.extend([page_size, page * page_size])
+    return conn.execute(sql, params).fetchall()
+
+
+def count_trades_filtered(conn: sqlite3.Connection, account_id=None, **filters) -> int:
+    """Return total count of trades matching filters (no LIMIT)."""
+    clauses, params = _build_trade_filters(account_id=account_id, **filters)
+    sql = ("""SELECT COUNT(*) as cnt
+              FROM trades t
+              JOIN accounts a ON t.account_id = a.id
+              JOIN instruments i ON t.instrument_id = i.id
+              LEFT JOIN setup_types st ON t.setup_type_id = st.id
+              WHERE """ + " AND ".join(clauses))
+    return conn.execute(sql, params).fetchone()['cnt']
+
+
+def get_trades_all_filtered(conn: sqlite3.Connection, account_id=None, **filters):
+    """Return ALL trades matching filters (no LIMIT), for KPI and export."""
+    clauses, params = _build_trade_filters(account_id=account_id, **filters)
+    sql = _TRADES_BASE_SQL + " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY t.entry_date DESC"
+    return conn.execute(sql, params).fetchall()
+
+
 # ── CSV Export ───────────────────────────────────────────────────────────
 
 def get_trades_for_export(conn: sqlite3.Connection, account_id: int,
