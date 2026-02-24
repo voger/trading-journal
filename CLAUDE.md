@@ -99,6 +99,17 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
 - Current baseline: **483 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
 
+## Recent changes (v2.5.2)
+
+### Bug fix — table selection colour goes gray on focus-loss (`tabs/trades.py`)
+- Qt's Fusion theme uses a separate `Inactive` palette group for unfocused widgets, rendering the selected row in washed-out gray when focus moves to the preview panel (e.g. clicking "Fetch Chart").
+- **Wrong fix (reverted)**: QSS `::item:selected:!active { background: #1565c0 }` — hardcoded a slightly different shade of blue, still visually inconsistent.
+- **Correct fix**: copy `Active` → `Inactive` for `QPalette.ColorRole.Highlight` and `HighlightedText` on the table. Qt then uses the exact same colour for both focused and unfocused selection states. Theme-aware — works with Fusion, dark theme, and Windows accent colours.
+
+### Bug fix — splitter initial sizing fragile on Windows (`tabs/trades.py`)
+- `resizeEvent` once-flag fired before the window was fully laid out at some DPI-scaling settings on Windows, so `sum(splitter.sizes())` returned unreliable minimum-size values and the 58 %/42 % split was applied incorrectly.
+- Fix: replaced `resizeEvent` with `showEvent + QTimer.singleShot(0, ...)` which defers one event-loop tick until layout is complete, guaranteeing real widget dimensions when `setSizes()` is called.
+
 ## Recent changes (v2.5.1)
 
 ### Bug fix — `twelvedata_provider.py` `normalize_symbol` suffix stripping
