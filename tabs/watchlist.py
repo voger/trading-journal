@@ -182,7 +182,8 @@ class WatchlistTab(BaseTab):
         # Restore selection
         if self._current_item_id is not None:
             for r in range(self.table.rowCount()):
-                if self.table.item(r, 0).text() == str(self._current_item_id):
+                _id_item = self.table.item(r, 0)
+                if _id_item and _id_item.text() == str(self._current_item_id):
                     self.table.setCurrentCell(r, 1)
                     return
         # Clear detail if no selection
@@ -318,7 +319,8 @@ class WatchlistTab(BaseTab):
         if self._current_item_id is None:
             return
         r = self.table.currentRow()
-        symbol = self.table.item(r, 1).text() if r >= 0 else "this item"
+        _sym_item = self.table.item(r, 1) if r >= 0 else None
+        symbol = _sym_item.text() if _sym_item else "this item"
         reply = QMessageBox.question(self, "Remove",
             f"Remove {symbol} from watchlist?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)

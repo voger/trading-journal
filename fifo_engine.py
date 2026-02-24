@@ -163,6 +163,13 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
                 if lot['remaining'] < 1e-10:
                     lot_queue.popleft()
 
+            if shares_to_sell > 1e-10:
+                import warnings
+                warnings.warn(
+                    f"FIFO oversell: {shares_to_sell:.6f} shares unmatched after exhausting lot queue",
+                    stacklevel=2,
+                )
+
         # Insert lot consumption records
         for rec in lot_records:
             conn.execute(

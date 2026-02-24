@@ -580,10 +580,11 @@ class TradeDialog(QDialog):
             self.metric_risk.set_value(f"{risk_val:.2f}%", "#3b82f6")
         elif auto_risk is not None:
             self.metric_risk.set_value(f"~{auto_risk:.2f}%", "#3b82f6")
-            # Auto-fill the form field (block signals to avoid recursion)
-            self.risk_pct.blockSignals(True)
-            self.risk_pct.setValue(round(auto_risk, 2))
-            self.risk_pct.blockSignals(False)
+            # Auto-fill the form field only if user is not actively editing it
+            if not self.risk_pct.hasFocus():
+                self.risk_pct.blockSignals(True)
+                self.risk_pct.setValue(round(auto_risk, 2))
+                self.risk_pct.blockSignals(False)
         else:
             self.metric_risk.set_value("—")
 
