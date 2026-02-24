@@ -97,7 +97,26 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - `tests/conftest.py` provides `db_path`, `conn`, `stock_account`, `forex_account`, `sample_t212_csv` fixtures plus the optional `real_csv` / `real_mt4` fixtures (skipped if paths not provided).
 - Integration tests in `test_integration_real_csv.py` and `test_integration_real_mt4.py` pin exact counts from real broker exports and are the main regression guard for the import pipeline.
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
-- Current baseline: **469 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
+- Current baseline: **483 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
+
+## Recent changes (v2.5.1)
+
+### Bug fix — `twelvedata_provider.py` `normalize_symbol` suffix stripping
+- Dots were removed from the symbol **before** checking broker suffixes, making `.RAW`, `.ECN`, `.PRO`, `.STD` dead code: `'EURUSD.RAW'` became `'EURUSDRAW'` with no suffix match, returning the wrong ticker.
+- Suffix order also had `'M'` before `'MINI'`, risking partial matches.
+- Fix (matching `yfinance_provider.py`): strip suffixes **before** dot removal; add `break` after first match; reorder to `['.RAW', '.ECN', '.PRO', '.STD', 'MINI', 'M']`.
+- 10 new tests added in `test_coverage_gaps.py::TestNormalizeSymbol`.
+
+### Bug fix — `dialogs.py` `TradeDialog._populate()` crash on NULL direction
+- `self.dir_combo.setCurrentText(t['direction'])` raised `TypeError` in PyQt6 when `t['direction']` was `None` (e.g. corrupted or legacy imported trade).
+- Fix: `self.dir_combo.setCurrentText(t['direction'] or 'long')`.
+
+### Bug fixes — `tabs/trades.py`, `database.py` (v2.5.0 fixes committed separately)
+- WIN/LOSS badge inconsistency: table row, preview panel, and KPI filter now all use `effective_pnl()` for classification.
+- Calmar ratio returns `float('inf')` (not `0.0`) when P&L is positive but drawdown is zero.
+- `tabs/stats.py`: Calmar display guard added for `float('inf')` → "∞".
+- `chart_providers/twelvedata_provider.py`: `rstrip(suffix)` → `[:-len(suffix)]` for exact suffix removal (same fix as yfinance).
+- `APP_VERSION` bumped to `"2.5.0"`.
 
 ## Recent changes (v2.5.0)
 

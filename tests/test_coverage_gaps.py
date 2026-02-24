@@ -833,3 +833,67 @@ class TestImportManagerBalanceEvents:
         # Verify the JSON round-trip
         parsed = _json.loads(log['errors'])
         assert len(parsed) == 3  # not 1 (old split-on-newline bug)
+
+
+# ── normalize_symbol (chart providers) ──────────────────────────────────────
+
+class TestNormalizeSymbol:
+    """Tests for chart provider normalize_symbol — suffix stripping and forex mapping."""
+
+    def _td(self):
+        from chart_providers.twelvedata_provider import TwelveDataProvider
+        return TwelveDataProvider()
+
+    def _yf(self):
+        from chart_providers.yfinance_provider import YFinanceProvider
+        return YFinanceProvider()
+
+    # TwelveData ──────────────────────────────────────────────────────────────
+
+    def test_td_plain_eurusd(self):
+        assert self._td().normalize_symbol('EURUSD') == 'EUR/USD'
+
+    def test_td_dot_suffix_raw(self):
+        """'.RAW' suffix must be stripped before dot-removal — was dead code previously."""
+        assert self._td().normalize_symbol('EURUSD.RAW') == 'EUR/USD'
+
+    def test_td_dot_suffix_ecn(self):
+        assert self._td().normalize_symbol('GBPUSD.ECN') == 'GBP/USD'
+
+    def test_td_dot_suffix_pro(self):
+        assert self._td().normalize_symbol('USDJPY.PRO') == 'USD/JPY'
+
+    def test_td_dot_suffix_std(self):
+        assert self._td().normalize_symbol('EURUSD.STD') == 'EUR/USD'
+
+    def test_td_suffix_mini_before_m(self):
+        """MINI suffix must be fully stripped, not just the trailing M."""
+        assert self._td().normalize_symbol('EURUSDMINI') == 'EUR/USD'
+
+    def test_td_suffix_m(self):
+        assert self._td().normalize_symbol('EURUSDM') == 'EUR/USD'
+
+    def test_td_stock_passthrough(self):
+        assert self._td().normalize_symbol('AAPL', asset_type='stocks') == 'AAPL'
+
+    def test_td_six_char_auto_slash(self):
+        # Unknown 6-char forex pair → auto slash insertion
+        result = self._td().normalize_symbol('NOKSEK', asset_type='forex')
+        assert result == 'NOK/SEK'
+
+    # YFinance ────────────────────────────────────────────────────────────────
+
+    def test_yf_plain_eurusd(self):
+        assert self._yf().normalize_symbol('EURUSD') == 'EURUSD=X'
+
+    def test_yf_dot_suffix_raw(self):
+        assert self._yf().normalize_symbol('EURUSD.RAW') == 'EURUSD=X'
+
+    def test_yf_suffix_mini_before_m(self):
+        assert self._yf().normalize_symbol('EURUSDMINI') == 'EURUSD=X'
+
+    def test_yf_suffix_m(self):
+        assert self._yf().normalize_symbol('EURUSDM') == 'EURUSD=X'
+
+    def test_yf_stock_passthrough(self):
+        assert self._yf().normalize_symbol('AAPL', asset_type='stocks') == 'AAPL'

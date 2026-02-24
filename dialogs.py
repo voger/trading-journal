@@ -730,7 +730,7 @@ class TradeDialog(QDialog):
         self.instrument_edit.setText(t['symbol'] or '')
         ii = self.itype_combo.findText(t['instrument_type'] or 'forex')
         if ii >= 0: self.itype_combo.setCurrentIndex(ii)
-        self.dir_combo.setCurrentText(t['direction'])
+        self.dir_combo.setCurrentText(t['direction'] or 'long')
 
         self.setup_combo.blockSignals(True)
         if t['setup_type_id']:

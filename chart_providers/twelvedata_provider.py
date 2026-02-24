@@ -161,17 +161,23 @@ class TwelveDataProvider(ChartProvider):
         return bars
 
     def normalize_symbol(self, symbol: str, asset_type: str = 'forex') -> str:
-        clean = symbol.upper().replace('.', '').replace(' ', '').replace('#', '')
+        # Uppercase and remove spaces/hashes; keep dots until after suffix stripping
+        # so that suffixes like '.RAW' can be matched correctly.
+        s = symbol.upper().replace(' ', '').replace('#', '')
+
+        # Strip known broker suffixes before dot removal.
+        # Check MINI before M so a symbol ending in 'MINI' isn't partially matched by 'M'.
+        for suffix in ['.RAW', '.ECN', '.PRO', '.STD', 'MINI', 'M']:
+            if s.endswith(suffix):
+                s = s[:-len(suffix)]
+                break  # only one suffix at a time
+
+        # Remove dots now (e.g. 'EUR.USD' → 'EURUSD')
+        clean = s.replace('.', '')
 
         # Check forex map
         if clean in _FOREX_MAP:
             return _FOREX_MAP[clean]
-
-        # Strip common MT4 suffixes (use exact substring removal, not rstrip which strips chars)
-        for suffix in ['M', '.RAW', '.ECN', '.PRO', '.STD', 'MINI']:
-            stripped = clean[:-len(suffix)] if clean.endswith(suffix) else clean
-            if stripped in _FOREX_MAP:
-                return _FOREX_MAP[stripped]
 
         # Auto-detect 6-char forex pair and insert slash
         if len(clean) == 6 and clean.isalpha() and asset_type == 'forex':
