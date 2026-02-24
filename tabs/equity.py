@@ -277,7 +277,7 @@ class EquityTab(BaseTab):
         selected = self.deposits_table.selectedItems()
         if selected:
             row = self.deposits_table.row(selected[0])
-            if row < len(self._event_lines) and self._event_lines[row] is not None:
+            if 0 <= row < len(self._event_lines) and self._event_lines[row] is not None:
                 line = self._event_lines[row]
                 line.set_linewidth(2.5)
                 line.set_alpha(1.0)

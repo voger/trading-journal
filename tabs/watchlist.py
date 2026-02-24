@@ -306,7 +306,8 @@ class WatchlistTab(BaseTab):
             self.refresh()
             # Select the newly added item
             for r in range(self.table.rowCount()):
-                if self.table.item(r, 1) and self.table.item(r, 1).text() == symbol:
+                _new_item = self.table.item(r, 1)
+                if _new_item and _new_item.text() == symbol:
                     self.table.setCurrentCell(r, 1)
                     break
         except sqlite3.IntegrityError:
