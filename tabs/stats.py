@@ -2,6 +2,12 @@
 import calendar as _calendar
 from datetime import timedelta, date as _date
 
+# Force English month names regardless of system locale
+_MONTH_NAMES = [
+    '', 'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QWidget, QLabel,
@@ -16,7 +22,7 @@ from tabs import BaseTab
 from database import (
     get_account, get_trade_stats, get_all_formulas, get_trade_breakdowns,
     update_formula, reset_formulas_to_defaults, get_formula,
-    get_advanced_stats, get_daily_pnl,
+    get_advanced_stats, get_daily_pnl, effective_pnl,
     get_setup_performance, get_r_multiple_distribution,
 )
 
@@ -293,6 +299,108 @@ class FormulaEditorWidget(QWidget):
             self.populate()
 
 
+class DayDetailDialog(QDialog):
+    """Shows individual trade details for a clicked calendar day."""
+
+    def __init__(self, date_str, trades, currency, parent=None):
+        super().__init__(parent)
+        from datetime import datetime as _dt
+        self.setWindowTitle(f"Closed trades — {date_str}")
+        self.setMinimumSize(680, 320)
+        self.resize(760, 400)
+
+        lay = QVBoxLayout(self)
+
+        # Summary line
+        total_pnl = sum(effective_pnl(t) for t in trades)
+        cur = f" {currency}" if currency else ''
+        color = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
+        n = len(trades)
+        summary = QLabel(
+            f"<b>{n}</b> closed trade{'s' if n != 1 else ''} &nbsp;|&nbsp; "
+            f"Net P&L: <b style='color:{color}'>{total_pnl:+.2f}{cur}</b>"
+        )
+        summary.setTextFormat(Qt.TextFormat.RichText)
+        summary.setStyleSheet("padding: 4px 2px; font-size: 12px;")
+        lay.addWidget(summary)
+
+        # Trade table
+        cols = ['Symbol', 'Dir', 'Setup', 'Entry', 'Exit', 'Duration', f'P&L{cur}']
+        tbl = QTableWidget(len(trades), len(cols))
+        tbl.setHorizontalHeaderLabels(cols)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tbl.setAlternatingRowColors(True)
+        tbl.setSortingEnabled(True)
+        h = tbl.horizontalHeader()
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
+
+        profit_fg = QColor(0, 130, 0)
+        loss_fg   = QColor(200, 0, 0)
+        bold = QFont("", -1, QFont.Weight.Bold)
+
+        tbl.setSortingEnabled(False)
+        for row, t in enumerate(trades):
+            pnl = effective_pnl(t)
+
+            # Duration
+            dur_str = '—'
+            try:
+                entry_dt = _dt.strptime(t['entry_date'][:19], '%Y-%m-%d %H:%M:%S')
+                exit_dt  = _dt.strptime(t['exit_date'][:19],  '%Y-%m-%d %H:%M:%S')
+                delta = exit_dt - entry_dt
+                d, s = delta.days, delta.seconds
+                h_part, m_part = s // 3600, (s % 3600) // 60
+                if d > 0:
+                    dur_str = f"{d}d {h_part}h"
+                else:
+                    dur_str = f"{h_part}h {m_part}m"
+            except (ValueError, TypeError):
+                pass
+
+            # Entry label: show date+time if different day from exit date
+            entry_label = '—'
+            try:
+                entry_d = t['entry_date'][:10]
+                entry_label = (t['entry_date'][11:16]
+                               if entry_d == date_str
+                               else f"{entry_d} {t['entry_date'][11:16]}")
+            except (TypeError, IndexError):
+                pass
+
+            exit_label = t['exit_date'][11:16] if t['exit_date'] else '—'
+
+            cells = [
+                t['symbol'] or '—',
+                (t['direction'] or '—').capitalize(),
+                t['setup_name'] or '—',
+                entry_label,
+                exit_label,
+                dur_str,
+                f"{pnl:+.2f}",
+            ]
+            for col, text in enumerate(cells):
+                item = QTableWidgetItem(text)
+                if col == len(cells) - 1:  # P&L column
+                    item.setForeground(profit_fg if pnl > 0 else loss_fg if pnl < 0 else QColor(100, 100, 100))
+                    item.setFont(bold)
+                    item.setData(Qt.ItemDataRole.UserRole, pnl)
+                tbl.setItem(row, col, item)
+
+        tbl.setSortingEnabled(True)
+        lay.addWidget(tbl)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+
 class CalendarHeatmapWidget(QWidget):
     """Monthly P&L calendar heatmap.
 
@@ -380,7 +488,7 @@ class CalendarHeatmapWidget(QWidget):
                 item.widget().deleteLater()
 
         self._lbl_month.setText(
-            f"{_calendar.month_name[self._month]} {self._year}"
+            f"{_MONTH_NAMES[self._month]} {self._year}"
         )
 
         aid = self._get_aid()
@@ -399,13 +507,13 @@ class CalendarHeatmapWidget(QWidget):
             total_pnl = sum(d['net_pnl'] for d in daily.values())
             total_trades = sum(d['trade_count'] for d in daily.values())
             color = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
-            trade_word = 'trade' if total_trades == 1 else 'trades'
+            closed_word = 'closed trade' if total_trades == 1 else 'closed trades'
             self._lbl_summary.setText(
                 f"Month total: <b style='color:{color}'>{total_pnl:+.2f}</b>"
-                f"&nbsp;&nbsp;({total_trades} {trade_word})"
+                f"&nbsp;&nbsp;({total_trades} {closed_word})"
             )
         else:
-            self._lbl_summary.setText("No trades this month.")
+            self._lbl_summary.setText("No closed trades this month.")
 
         # Day-of-week headers (Monday-first)
         day_headers = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -441,10 +549,33 @@ class CalendarHeatmapWidget(QWidget):
                     and day == today.day
                 )
                 day_data = daily.get(day)
-                cell = self._make_cell(day, day_data, max_abs, is_today)
+                date_str = f"{self._year}-{self._month:02d}-{day:02d}"
+                cell = self._make_cell(day, day_data, max_abs, is_today, date_str)
                 self._grid.addWidget(cell, row_idx + 1, col_idx)
 
-    def _make_cell(self, day, day_data, max_abs, is_today):
+    def _on_day_clicked(self, date_str):
+        """Show detailed trade list for the clicked day."""
+        aid = self._get_aid()
+        if aid is None:
+            return
+        rows = self._conn.execute(
+            """SELECT t.*, i.symbol, st.name as setup_name
+               FROM trades t
+               JOIN instruments i ON t.instrument_id = i.id
+               LEFT JOIN setup_types st ON t.setup_type_id = st.id
+               WHERE t.account_id = ? AND t.status = 'closed'
+                 AND t.is_excluded = 0 AND DATE(t.exit_date) = ?
+               ORDER BY t.exit_date""",
+            [aid, date_str]
+        ).fetchall()
+        if not rows:
+            return
+        acct = get_account(self._conn, aid)
+        currency = acct['currency'] if acct else ''
+        dlg = DayDetailDialog(date_str, rows, currency, self)
+        dlg.exec()
+
+    def _make_cell(self, day, day_data, max_abs, is_today, date_str):
         """Build a single day cell."""
         cell = QFrame()
         cell.setFrameShape(QFrame.Shape.StyledPanel)
@@ -470,8 +601,7 @@ class CalendarHeatmapWidget(QWidget):
             pnl_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lay.addWidget(pnl_lbl)
 
-            trade_word = 'trade' if count == 1 else 'trades'
-            cnt_lbl = QLabel(f"{count} {trade_word}")
+            cnt_lbl = QLabel(f"{count} closed")
             cnt_lbl.setFont(QFont("", 7))
             cnt_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lay.addWidget(cnt_lbl)
@@ -508,10 +638,13 @@ class CalendarHeatmapWidget(QWidget):
             )
 
             cell.setToolTip(
-                f"{self._year}-{self._month:02d}-{day:02d}\n"
+                f"{date_str}\n"
                 f"Net P&L: {pnl:+.2f}\n"
-                f"Trades: {count}"
+                f"Closed trades: {count}\n"
+                f"Click for details"
             )
+            cell.setCursor(Qt.CursorShape.PointingHandCursor)
+            cell.mousePressEvent = lambda e, d=date_str: self._on_day_clicked(d)
         else:
             # No trades that day
             if is_today:

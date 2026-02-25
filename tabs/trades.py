@@ -116,20 +116,6 @@ class TradesTab(BaseTab):
         for card in [self.kpi_trades, self.kpi_winrate, self.kpi_pnl,
                      self.kpi_expectancy, self.kpi_pf]:
             kpi_row.addWidget(card)
-        # Pagination controls (replace old lbl_truncated)
-        self.btn_prev = QPushButton("◀ Prev")
-        self.btn_prev.setFixedHeight(28)
-        self.btn_prev.setEnabled(False)
-        self.btn_prev.clicked.connect(self._on_prev_page)
-        kpi_row.addWidget(self.btn_prev)
-        self.lbl_page = QLabel("Page 1 of 1 · 0 trades")
-        self.lbl_page.setStyleSheet("font-size: 11px; padding: 2px 8px;")
-        kpi_row.addWidget(self.lbl_page)
-        self.btn_next = QPushButton("Next ▶")
-        self.btn_next.setFixedHeight(28)
-        self.btn_next.setEnabled(False)
-        self.btn_next.clicked.connect(self._on_next_page)
-        kpi_row.addWidget(self.btn_next)
         layout.addLayout(kpi_row)
 
         # ── Filter bar ──
@@ -175,6 +161,24 @@ class TradesTab(BaseTab):
             w.currentIndexChanged.connect(self._on_filter_changed)
         self.flt_search.textChanged.disconnect(self.refresh)
         self.flt_search.textChanged.connect(self._on_filter_changed)
+
+        # ── Pagination bar (sits directly above the table) ──
+        page_row = QHBoxLayout()
+        self.btn_prev = QPushButton("◀ Prev")
+        self.btn_prev.setFixedHeight(24)
+        self.btn_prev.setEnabled(False)
+        self.btn_prev.clicked.connect(self._on_prev_page)
+        page_row.addWidget(self.btn_prev)
+        self.lbl_page = QLabel("Page 1 of 1 · 0 trades")
+        self.lbl_page.setStyleSheet("font-size: 11px; padding: 0 8px;")
+        page_row.addWidget(self.lbl_page)
+        self.btn_next = QPushButton("Next ▶")
+        self.btn_next.setFixedHeight(24)
+        self.btn_next.setEnabled(False)
+        self.btn_next.clicked.connect(self._on_next_page)
+        page_row.addWidget(self.btn_next)
+        page_row.addStretch()
+        layout.addLayout(page_row)
 
         # ── Split pane: Table (left) | Preview (right) ──
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
