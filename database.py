@@ -1529,6 +1529,104 @@ def get_equity_events(conn: sqlite3.Connection, account_id=None):
     return conn.execute(sql, params).fetchall()
 
 
+# ── Setup performance & R distribution ───────────────────────────────────
+
+def get_setup_performance(conn: sqlite3.Connection, account_id: int,
+                          date_from=None, date_to=None):
+    """Per-setup stats for closed, non-excluded trades.
+
+    Returns a list of dicts (sorted by net_pnl descending), each with:
+        setup_name, total_trades, win_rate, net_pnl, avg_pnl,
+        avg_r (None if no r_multiple recorded), avg_duration (None if no dates)
+    """
+    from collections import defaultdict
+    from datetime import datetime as _dt
+
+    sql = """SELECT t.*, st.name as setup_name
+             FROM trades t
+             LEFT JOIN setup_types st ON t.setup_type_id = st.id
+             WHERE t.status = 'closed' AND t.is_excluded = 0 AND t.account_id = ?"""
+    params = [account_id]
+    if date_from:
+        sql += " AND t.exit_date >= ?"
+        params.append(str(date_from))
+    if date_to:
+        sql += " AND t.exit_date <= ?"
+        params.append(str(date_to) + 'T23:59:59')
+
+    trades = conn.execute(sql, params).fetchall()
+    if not trades:
+        return []
+
+    groups = defaultdict(list)
+    for t in trades:
+        key = t['setup_name'] or '(no setup)'
+        groups[key].append(t)
+
+    results = []
+    for setup_name, group_trades in groups.items():
+        n = len(group_trades)
+        pnls = [effective_pnl(t) for t in group_trades]
+        winners = sum(1 for p in pnls if p > 0)
+        win_rate = winners / n * 100
+        net_pnl = sum(pnls)
+        avg_pnl = net_pnl / n
+
+        r_vals = [t['r_multiple'] for t in group_trades if t['r_multiple'] is not None]
+        avg_r = sum(r_vals) / len(r_vals) if r_vals else None
+
+        durations = []
+        for t in group_trades:
+            if t['entry_date'] and t['exit_date']:
+                try:
+                    ed = _dt.strptime(t['entry_date'][:10], '%Y-%m-%d')
+                    xd = _dt.strptime(t['exit_date'][:10], '%Y-%m-%d')
+                    days = (xd - ed).days
+                    if days >= 0:
+                        durations.append(days)
+                except (ValueError, TypeError):
+                    pass
+        avg_duration = sum(durations) / len(durations) if durations else None
+
+        results.append({
+            'setup_name': setup_name,
+            'total_trades': n,
+            'win_rate': win_rate,
+            'net_pnl': net_pnl,
+            'avg_pnl': avg_pnl,
+            'avg_r': avg_r,
+            'avg_duration': avg_duration,
+        })
+
+    results.sort(key=lambda r: r['net_pnl'], reverse=True)
+    return results
+
+
+def get_r_multiple_distribution(conn: sqlite3.Connection, account_id: int,
+                                date_from=None, date_to=None):
+    """Collect R multiples for closed, non-excluded trades.
+
+    Returns (r_values, excluded_count) where:
+        r_values:       list of float R multiples (trades with r_multiple set)
+        excluded_count: number of closed trades without r_multiple recorded
+    """
+    sql = """SELECT t.r_multiple
+             FROM trades t
+             WHERE t.status = 'closed' AND t.is_excluded = 0 AND t.account_id = ?"""
+    params = [account_id]
+    if date_from:
+        sql += " AND t.exit_date >= ?"
+        params.append(str(date_from))
+    if date_to:
+        sql += " AND t.exit_date <= ?"
+        params.append(str(date_to) + 'T23:59:59')
+
+    rows = conn.execute(sql, params).fetchall()
+    r_values = [float(r['r_multiple']) for r in rows if r['r_multiple'] is not None]
+    excluded = len(rows) - len(r_values)
+    return r_values, excluded
+
+
 # ── Tags ─────────────────────────────────────────────────────────────────
 
 def get_or_create_tag(conn: sqlite3.Connection, name: str) -> int:

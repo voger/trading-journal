@@ -17,6 +17,7 @@ from database import (
     get_account, get_trade_stats, get_all_formulas, get_trade_breakdowns,
     update_formula, reset_formulas_to_defaults, get_formula,
     get_advanced_stats, get_daily_pnl,
+    get_setup_performance, get_r_multiple_distribution,
 )
 
 
@@ -528,6 +529,203 @@ class CalendarHeatmapWidget(QWidget):
         return cell
 
 
+class SetupPerformanceWidget(QWidget):
+    """Per-setup performance breakdown: trades, win%, avg R, avg P&L, net P&L, avg duration."""
+
+    _COLS = [
+        ('setup_name',   'Setup',    200),
+        ('total_trades', 'Trades',    60),
+        ('win_rate',     'Win %',     65),
+        ('avg_r',        'Avg R',     65),
+        ('avg_pnl',      'Avg P&L',   80),
+        ('net_pnl',      'Net P&L',   90),
+        ('avg_duration', 'Avg Days',  75),
+    ]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+
+        self.summary_label = QLabel("")
+        self.summary_label.setStyleSheet("font-size: 12px; padding: 4px;")
+        self.summary_label.setWordWrap(True)
+        lay.addWidget(self.summary_label)
+
+        self.table = QTableWidget()
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setSortingEnabled(True)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setColumnCount(len(self._COLS))
+        self.table.setHorizontalHeaderLabels([c[1] for c in self._COLS])
+        h = self.table.horizontalHeader()
+        h.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for i, (_, _, w) in enumerate(self._COLS):
+            if i > 0:
+                self.table.setColumnWidth(i, w)
+        lay.addWidget(self.table)
+
+    def populate(self, rows, currency=''):
+        cur = f" ({currency})" if currency else ''
+        for col, (key, label, _) in enumerate(self._COLS):
+            suffix = cur if key in ('avg_pnl', 'net_pnl') else ''
+            self.table.setHorizontalHeaderItem(col, QTableWidgetItem(label + suffix))
+
+        profit_fg = QColor(0, 130, 0)
+        loss_fg   = QColor(200, 0, 0)
+        neutral_fg = QColor(100, 100, 100)
+        bold = QFont("", -1, QFont.Weight.Bold)
+
+        self.table.setSortingEnabled(False)
+        self.table.setRowCount(len(rows))
+
+        for row_idx, r in enumerate(rows):
+            for col, (key, _, _) in enumerate(self._COLS):
+                val = r.get(key)
+
+                if key == 'win_rate':
+                    text = f"{val:.1f}%" if val is not None else "—"
+                elif key == 'avg_r':
+                    text = f"{val:+.2f}R" if val is not None else "—"
+                elif key in ('avg_pnl', 'net_pnl'):
+                    text = f"{val:+.2f}" if val is not None else "—"
+                elif key == 'avg_duration':
+                    text = f"{val:.1f}" if val is not None else "—"
+                else:
+                    text = str(val) if val is not None else "—"
+
+                item = QTableWidgetItem()
+                if isinstance(val, (int, float)) and key != 'setup_name':
+                    item.setData(Qt.ItemDataRole.DisplayRole, text)
+                    item.setData(Qt.ItemDataRole.UserRole, float(val))
+                else:
+                    item.setText(text)
+
+                if key == 'win_rate' and val is not None:
+                    item.setForeground(profit_fg if val >= 50 else loss_fg)
+                elif key == 'avg_r' and val is not None:
+                    item.setForeground(profit_fg if val > 0 else loss_fg if val < 0 else neutral_fg)
+                    item.setFont(bold)
+                elif key in ('avg_pnl', 'net_pnl') and val is not None:
+                    item.setForeground(profit_fg if val > 0 else loss_fg if val < 0 else neutral_fg)
+                    item.setFont(bold)
+
+                self.table.setItem(row_idx, col, item)
+
+        self.table.setSortingEnabled(True)
+
+        if rows:
+            n = sum(r['total_trades'] for r in rows)
+            net = sum(r['net_pnl'] for r in rows)
+            pc = '#008200' if net > 0 else '#c80000' if net < 0 else '#666'
+            self.summary_label.setTextFormat(Qt.TextFormat.RichText)
+            self.summary_label.setText(
+                f"<b>{len(rows)}</b> setups &nbsp;|&nbsp; "
+                f"<b>{n}</b> trades &nbsp;|&nbsp; "
+                f"Net P&L: <b style='color:{pc}'>{net:+.2f}</b>"
+            )
+        else:
+            self.summary_label.setText(
+                "No data. Close trades with a setup type assigned to see per-setup stats."
+            )
+
+
+class RMultipleHistogramWidget(QWidget):
+    """R-multiple distribution bar chart (6 buckets: <-2, -2–-1, -1–0, 0–1, 1–2, >2)."""
+
+    _BUCKETS = ['< -2', '-2 to -1', '-1 to 0', '0 to 1', '1 to 2', '> 2']
+    _COLORS  = ['#c62828', '#e57373', '#ffcdd2', '#c8e6c9', '#66bb6a', '#2e7d32']
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(4, 4, 4, 4)
+
+        self._canvas = None
+        self._fig = None
+        try:
+            from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+            from matplotlib.figure import Figure
+            self._fig = Figure(figsize=(8, 4), dpi=100)
+            self._canvas = FigureCanvasQTAgg(self._fig)
+            self._canvas.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            lay.addWidget(self._canvas)
+        except ImportError:
+            lbl = QLabel("matplotlib is required for this chart.")
+            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lay.addWidget(lbl)
+
+        self._note = QLabel("")
+        self._note.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._note.setStyleSheet("font-size: 11px; color: #666; padding: 4px;")
+        self._note.setWordWrap(True)
+        lay.addWidget(self._note)
+
+    def populate(self, r_values, excluded_count=0):
+        if self._fig is None:
+            return
+
+        self._fig.clear()
+        ax = self._fig.add_subplot(111)
+
+        if not r_values:
+            ax.text(0.5, 0.5,
+                    'No R-multiple data.\nAdd risk % to your closed trades.',
+                    ha='center', va='center', fontsize=12, color='#888',
+                    transform=ax.transAxes)
+            ax.set_axis_off()
+            self._note.setText(
+                f"{excluded_count} trades excluded (no risk % set)." if excluded_count else ""
+            )
+            self._canvas.draw()
+            return
+
+        buckets = [0] * 6
+        for r in r_values:
+            if r < -2:
+                buckets[0] += 1
+            elif r < -1:
+                buckets[1] += 1
+            elif r < 0:
+                buckets[2] += 1
+            elif r <= 1:
+                buckets[3] += 1
+            elif r <= 2:
+                buckets[4] += 1
+            else:
+                buckets[5] += 1
+
+        bars = ax.bar(self._BUCKETS, buckets, color=self._COLORS,
+                      edgecolor='#555', linewidth=0.5)
+
+        for bar, count in zip(bars, buckets):
+            if count > 0:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.3,
+                    str(count),
+                    ha='center', va='bottom', fontsize=9, fontweight='bold',
+                )
+
+        ax.set_ylabel('Trade Count', fontsize=10)
+        ax.set_xlabel('R Multiple', fontsize=10)
+        ax.set_title('R-Multiple Distribution', fontsize=11)
+        ax.tick_params(axis='both', labelsize=8)
+        ax.grid(axis='y', alpha=0.3)
+        ax.set_ylim(bottom=0)
+        self._fig.tight_layout(pad=1.2)
+
+        note_parts = [f"{len(r_values)} trades plotted"]
+        if excluded_count:
+            note_parts.append(f"{excluded_count} excluded (no risk % set)")
+        self._note.setText(" — ".join(note_parts))
+        self._canvas.draw()
+
+
 class StatsTab(BaseTab):
     def __init__(self, conn, get_aid_fn):
         super().__init__(conn, get_aid_fn)
@@ -582,6 +780,14 @@ class StatsTab(BaseTab):
             self.bd_tables[group_by] = bt
             self.tabs.addTab(bt, tab_title)
 
+        # Setup performance sub-tab
+        self.setup_perf = SetupPerformanceWidget()
+        self.tabs.addTab(self.setup_perf, "Setup Stats")
+
+        # R-multiple histogram sub-tab
+        self.r_hist = RMultipleHistogramWidget()
+        self.tabs.addTab(self.r_hist, "R Distribution")
+
         # Calendar heatmap sub-tab
         self.calendar_heatmap = CalendarHeatmapWidget(self.conn, self.aid)
         self.tabs.addTab(self.calendar_heatmap, "Calendar")
@@ -614,6 +820,8 @@ class StatsTab(BaseTab):
             self.stats_text.setHtml("<h3>Please select an account</h3>")
             for bt in self.bd_tables.values():
                 bt.populate([])
+            self.setup_perf.populate([])
+            self.r_hist.populate([], 0)
             self.calendar_heatmap.refresh(self.conn)
             return
 
@@ -629,6 +837,8 @@ class StatsTab(BaseTab):
             self.stats_text.setHtml(f"<h3>No closed trades to analyze{period_note}.</h3>")
             for bt in self.bd_tables.values():
                 bt.populate([])
+            self.setup_perf.populate([])
+            self.r_hist.populate([], 0)
             return
 
         acct = get_account(self.conn, aid)
@@ -723,6 +933,16 @@ class StatsTab(BaseTab):
             data = get_trade_breakdowns(self.conn, aid, group_by,
                                         date_from=date_from, date_to=date_to)
             bt.populate(data, currency=currency)
+
+        # Setup performance sub-tab
+        setup_rows = get_setup_performance(self.conn, aid,
+                                           date_from=date_from, date_to=date_to)
+        self.setup_perf.populate(setup_rows, currency=currency)
+
+        # R-multiple histogram
+        r_values, excluded = get_r_multiple_distribution(self.conn, aid,
+                                                          date_from=date_from, date_to=date_to)
+        self.r_hist.populate(r_values, excluded)
 
         # Calendar heatmap (pass conn so it stays current after a restore)
         self.calendar_heatmap.refresh(self.conn)
