@@ -526,6 +526,24 @@ class TradeDialog(QDialog):
         acct = get_account(self.conn, aid)
         return acct['currency'] if acct else ''
 
+    def _calc_r_multiple(self):
+        """Compute R-multiple from entry / initial SL / exit prices.
+
+        Only valid when the stored SL is the *initial* stop loss (fixed stops).
+        Returns float or None if any required field is missing/zero.
+        """
+        entry = self.entry_price.value()
+        sl = self.sl_spin.value()
+        exit_p = self.exit_price.value()
+        if entry <= 0 or sl <= 0 or exit_p <= 0:
+            return None
+        risk = abs(entry - sl)
+        if risk < 1e-10:
+            return None
+        is_long = self.dir_combo.currentText() == 'long'
+        actual = (exit_p - entry) if is_long else (entry - exit_p)
+        return actual / risk
+
     def _calc_risk_percent(self):
         """Auto-calculate risk % from entry/SL/size/exit/P&L and account balance.
 
@@ -820,6 +838,7 @@ class TradeDialog(QDialog):
             exit_reason=self.exit_reason.currentText() or None,
             pnl_account_currency=self.pnl_spin.value(),
             risk_percent=self.risk_pct.value() or None,
+            r_multiple=self._calc_r_multiple(),
             confidence_rating=self.confidence.value() or None,
             execution_grade=self.exec_grade.currentText() or None,
             pre_trade_notes=self.pre_notes.toPlainText().strip() or None,
