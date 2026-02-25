@@ -118,8 +118,36 @@ class TradesTab(BaseTab):
             kpi_row.addWidget(card)
         layout.addLayout(kpi_row)
 
-        # ── Filter bar ──
+        # ── Filter bar (pagination first, then filters) ──
         filt = QHBoxLayout()
+        filt.setSpacing(4)
+
+        # Pagination group at the left
+        self.btn_prev = QPushButton("◀")
+        self.btn_prev.setFixedSize(28, 24)
+        self.btn_prev.setEnabled(False)
+        self.btn_prev.setToolTip("Previous page")
+        self.btn_prev.clicked.connect(self._on_prev_page)
+        self.lbl_page = QLabel("Page 1 of 1 · 0 trades")
+        self.lbl_page.setStyleSheet(
+            "font-size: 11px; font-weight: bold; padding: 0 4px;"
+        )
+        self.btn_next = QPushButton("▶")
+        self.btn_next.setFixedSize(28, 24)
+        self.btn_next.setEnabled(False)
+        self.btn_next.setToolTip("Next page")
+        self.btn_next.clicked.connect(self._on_next_page)
+        filt.addWidget(self.btn_prev)
+        filt.addWidget(self.lbl_page)
+        filt.addWidget(self.btn_next)
+
+        # Vertical separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        filt.addWidget(sep)
+
+        # Filters
         filt.addWidget(QLabel("Filters:"))
         self.flt_setup = QComboBox(); self.flt_setup.addItem("All Setups", None)
         self.flt_setup.setMinimumWidth(120); filt.addWidget(self.flt_setup)
@@ -153,7 +181,8 @@ class TradesTab(BaseTab):
         self.flt_tag = QComboBox(); self.flt_tag.addItem("All Tags", None)
         self.flt_tag.setMinimumWidth(100); filt.addWidget(self.flt_tag)
         btn_clear = QPushButton("Clear"); btn_clear.clicked.connect(self._clear_filters)
-        filt.addWidget(btn_clear); filt.addStretch()
+        filt.addWidget(btn_clear)
+        filt.addStretch()
         layout.addLayout(filt)
         for w in [self.flt_setup, self.flt_direction, self.flt_status,
                   self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period,
@@ -161,24 +190,6 @@ class TradesTab(BaseTab):
             w.currentIndexChanged.connect(self._on_filter_changed)
         self.flt_search.textChanged.disconnect(self.refresh)
         self.flt_search.textChanged.connect(self._on_filter_changed)
-
-        # ── Pagination bar (sits directly above the table) ──
-        page_row = QHBoxLayout()
-        self.btn_prev = QPushButton("◀ Prev")
-        self.btn_prev.setFixedHeight(24)
-        self.btn_prev.setEnabled(False)
-        self.btn_prev.clicked.connect(self._on_prev_page)
-        page_row.addWidget(self.btn_prev)
-        self.lbl_page = QLabel("Page 1 of 1 · 0 trades")
-        self.lbl_page.setStyleSheet("font-size: 11px; padding: 0 8px;")
-        page_row.addWidget(self.lbl_page)
-        self.btn_next = QPushButton("Next ▶")
-        self.btn_next.setFixedHeight(24)
-        self.btn_next.setEnabled(False)
-        self.btn_next.clicked.connect(self._on_next_page)
-        page_row.addWidget(self.btn_next)
-        page_row.addStretch()
-        layout.addLayout(page_row)
 
         # ── Split pane: Table (left) | Preview (right) ──
         self.splitter = QSplitter(Qt.Orientation.Horizontal)

@@ -302,9 +302,11 @@ class FormulaEditorWidget(QWidget):
 class DayDetailDialog(QDialog):
     """Shows individual trade details for a clicked calendar day."""
 
-    def __init__(self, date_str, trades, currency, parent=None):
+    def __init__(self, date_str, trades, currency, conn, parent=None):
         super().__init__(parent)
         from datetime import datetime as _dt
+        self._conn = conn
+        self._trades = trades
         self.setWindowTitle(f"Closed trades — {date_str}")
         self.setMinimumSize(680, 320)
         self.resize(760, 400)
@@ -387,18 +389,38 @@ class DayDetailDialog(QDialog):
             ]
             for col, text in enumerate(cells):
                 item = QTableWidgetItem(text)
+                if col == 0:  # store trade ID for double-click lookup
+                    item.setData(Qt.ItemDataRole.UserRole, t['id'])
                 if col == len(cells) - 1:  # P&L column
                     item.setForeground(profit_fg if pnl > 0 else loss_fg if pnl < 0 else QColor(100, 100, 100))
                     item.setFont(bold)
-                    item.setData(Qt.ItemDataRole.UserRole, pnl)
                 tbl.setItem(row, col, item)
 
         tbl.setSortingEnabled(True)
+        tbl.doubleClicked.connect(self._on_row_double_clicked)
+        hint = QLabel("Double-click a row to open full trade details.")
+        hint.setStyleSheet("font-size: 10px; color: #888; padding: 2px;")
         lay.addWidget(tbl)
+        lay.addWidget(hint)
 
         bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
+
+    def _on_row_double_clicked(self, index):
+        from dialogs import TradeDialog
+        from database import get_trade
+        id_item = self.sender().item(index.row(), 0)
+        if id_item is None:
+            return
+        tid = id_item.data(Qt.ItemDataRole.UserRole)
+        if tid is None:
+            return
+        trade = get_trade(self._conn, tid)
+        if trade is None:
+            return
+        dlg = TradeDialog(self, self._conn, trade=trade)
+        dlg.exec()
 
 
 class CalendarHeatmapWidget(QWidget):
@@ -572,7 +594,7 @@ class CalendarHeatmapWidget(QWidget):
             return
         acct = get_account(self._conn, aid)
         currency = acct['currency'] if acct else ''
-        dlg = DayDetailDialog(date_str, rows, currency, self)
+        dlg = DayDetailDialog(date_str, rows, currency, self._conn, self)
         dlg.exec()
 
     def _make_cell(self, day, day_data, max_abs, is_today, date_str):
