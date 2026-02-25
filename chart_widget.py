@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 
 from chart_providers import get_all_providers, get_provider
+import theme as _theme
 
 
 def _cal_days_for_bars(tf, n):
@@ -35,14 +36,8 @@ def _cal_days_for_bars(tf, n):
 
 
 def _make_style():
-    import mplfinance as mpf
-    mc = mpf.make_marketcolors(
-        up='#26a69a', down='#ef5350',
-        edge={'up': '#1b7a6e', 'down': '#c62828'},
-        wick={'up': '#1b7a6e', 'down': '#c62828'})
-    return mpf.make_mpf_style(marketcolors=mc, facecolor='#fafafa',
-                              gridstyle='-', gridcolor='#e8e8e8',
-                              y_on_right=True)
+    import theme as _theme
+    return _theme.make_mpf_style()
 
 
 def _fmt_price(price):
@@ -488,7 +483,7 @@ class TradeChartWidget(QWidget):
                 transform=ax.transAxes,
                 fontsize=6, fontweight='bold', va='top', ha='left',
                 color='#333',
-                bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
+                bbox=dict(boxstyle='round,pad=0.15', facecolor=(_theme.BG_LIGHT if _theme.is_dark() else 'white'),
                           edgecolor='none', alpha=0.72),
                 zorder=10)
 
@@ -515,7 +510,7 @@ class TradeChartWidget(QWidget):
                         xytext=(4, 0), textcoords='offset points',
                         fontsize=6.5, color=e_col, fontweight='bold',
                         va='center', ha='left', annotation_clip=False,
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor=(_theme.BG_LIGHT if _theme.is_dark() else 'white'),
                                   edgecolor=e_col, linewidth=0.8, alpha=0.9))
 
         # ── Exit: ◄ for sell-to-close (long), ► for buy-to-cover (short) ──
@@ -533,7 +528,7 @@ class TradeChartWidget(QWidget):
                         xytext=(4, 0), textcoords='offset points',
                         fontsize=6.5, color=x_col, fontweight='bold',
                         va='center', ha='left', annotation_clip=False,
-                        bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                        bbox=dict(boxstyle='round,pad=0.2', facecolor=(_theme.BG_LIGHT if _theme.is_dark() else 'white'),
                                   edgecolor=x_col, linewidth=0.8, alpha=0.9))
 
         # ── SL / TP labels (subtle, right-edge reference) ──

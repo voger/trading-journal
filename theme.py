@@ -1,25 +1,41 @@
 """
-Trading Journal — Dark Theme
-Apply with: app.setStyleSheet(get_stylesheet())
+Trading Journal — Theme
+Apply dark mode: app.setStyleSheet(get_stylesheet()); set_dark(True)
+Clear (light mode): app.setStyleSheet(""); set_dark(False)
 """
 
-# ── Color palette ──
-BG_DARK = "#1a1a2e"       # Main background
-BG_MID = "#16213e"         # Panel/card background
-BG_LIGHT = "#1f2b47"       # Input fields, table rows
-BG_HOVER = "#2a3a5c"       # Hover state
-BORDER = "#2e3d5f"         # Borders
-BORDER_FOCUS = "#4a9eff"   # Focused input border
-TEXT = "#e0e0e0"           # Primary text
-TEXT_DIM = "#8892a4"       # Secondary text
-TEXT_BRIGHT = "#ffffff"    # Headers, emphasis
-GREEN = "#26a69a"          # Profit / positive
-GREEN_BG = "#1a3a2a"      # Profit background tint
-RED = "#ef5350"            # Loss / negative
-RED_BG = "#3a1a1a"        # Loss background tint
-ACCENT = "#4a9eff"         # Buttons, links, focus
-ACCENT_HOVER = "#6bb3ff"   # Button hover
+# ── Dark state ────────────────────────────────────────────────────────────
+_dark = False
 
+def is_dark():
+    return _dark
+
+def set_dark(value: bool):
+    global _dark
+    _dark = value
+
+
+# ── Colour palette (neutral dark gray — no color tint) ────────────────────
+BG_DARK  = "#111111"   # near-pure black — main window background
+BG_MID   = "#1a1a1a"   # panels, cards, table background
+BG_LIGHT = "#222222"   # input fields, alternate table rows
+BG_HOVER = "#2c2c2c"   # hover / selection highlight
+BORDER   = "#2e2e2e"   # subtle borders
+BORDER_FOCUS = "#3d7cf4"
+
+TEXT      = "#e8e8e8"  # primary text
+TEXT_DIM  = "#666666"  # secondary / placeholder
+TEXT_BRIGHT = "#ffffff"
+
+GREEN    = "#00c896"   # profit — bright teal-green
+GREEN_BG = "#0d2e22"
+RED      = "#ff4757"   # loss — crisp red
+RED_BG   = "#2e0d10"
+ACCENT   = "#3d7cf4"   # buttons, links, focus — medium blue
+ACCENT_HOVER = "#5d96f6"
+
+
+# ── QSS stylesheet ────────────────────────────────────────────────────────
 
 def get_stylesheet():
     return f"""
@@ -49,6 +65,11 @@ def get_stylesheet():
     QMenu::item:selected {{
         background-color: {BG_HOVER};
     }}
+    QMenu::separator {{
+        height: 1px;
+        background: {BORDER};
+        margin: 3px 8px;
+    }}
 
     /* ── Labels ── */
     QLabel {{
@@ -69,6 +90,7 @@ def get_stylesheet():
     QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus {{
         border-color: {BORDER_FOCUS};
     }}
+    QLineEdit::placeholder {{ color: {TEXT_DIM}; }}
     QSpinBox::up-button, QDoubleSpinBox::up-button, QDateTimeEdit::up-button {{
         border-left: 1px solid {BORDER};
         background: {BG_HOVER};
@@ -89,9 +111,7 @@ def get_stylesheet():
         padding: 4px 8px;
         min-height: 20px;
     }}
-    QComboBox:hover {{
-        border-color: {BORDER_FOCUS};
-    }}
+    QComboBox:hover {{ border-color: {BORDER_FOCUS}; }}
     QComboBox::drop-down {{
         border-left: 1px solid {BORDER};
         background: {BG_HOVER};
@@ -127,8 +147,6 @@ def get_stylesheet():
         background-color: {BG_DARK};
         border-color: {BORDER};
     }}
-
-    /* Primary action button style — use with setObjectName("primaryButton") */
     QPushButton#primaryButton {{
         background-color: {ACCENT};
         color: {TEXT_BRIGHT};
@@ -167,9 +185,7 @@ def get_stylesheet():
         font-size: 11px;
         text-transform: uppercase;
     }}
-    QHeaderView::section:hover {{
-        color: {TEXT_BRIGHT};
-    }}
+    QHeaderView::section:hover {{ color: {TEXT_BRIGHT}; }}
 
     /* ── Tab widget ── */
     QTabWidget::pane {{
@@ -212,52 +228,29 @@ def get_stylesheet():
         color: {ACCENT};
     }}
 
-    /* ── Scroll areas ── */
-    QScrollArea {{
-        border: none;
-        background: transparent;
-    }}
+    /* ── Scroll bars ── */
+    QScrollArea {{ border: none; background: transparent; }}
     QScrollBar:vertical {{
-        background: {BG_DARK};
-        width: 10px;
-        border: none;
+        background: {BG_DARK}; width: 10px; border: none;
     }}
     QScrollBar::handle:vertical {{
-        background: {BORDER};
-        border-radius: 5px;
-        min-height: 30px;
+        background: {BORDER}; border-radius: 5px; min-height: 30px;
     }}
-    QScrollBar::handle:vertical:hover {{
-        background: {TEXT_DIM};
-    }}
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-        height: 0px;
-    }}
+    QScrollBar::handle:vertical:hover {{ background: {TEXT_DIM}; }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
     QScrollBar:horizontal {{
-        background: {BG_DARK};
-        height: 10px;
-        border: none;
+        background: {BG_DARK}; height: 10px; border: none;
     }}
     QScrollBar::handle:horizontal {{
-        background: {BORDER};
-        border-radius: 5px;
-        min-width: 30px;
+        background: {BORDER}; border-radius: 5px; min-width: 30px;
     }}
-    QScrollBar::handle:horizontal:hover {{
-        background: {TEXT_DIM};
-    }}
-    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
-        width: 0px;
-    }}
+    QScrollBar::handle:horizontal:hover {{ background: {TEXT_DIM}; }}
+    QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
 
     /* ── Check boxes ── */
-    QCheckBox {{
-        color: {TEXT};
-        spacing: 8px;
-    }}
+    QCheckBox {{ color: {TEXT}; spacing: 8px; }}
     QCheckBox::indicator {{
-        width: 16px;
-        height: 16px;
+        width: 16px; height: 16px;
         border: 1px solid {BORDER};
         border-radius: 3px;
         background-color: {BG_LIGHT};
@@ -273,21 +266,16 @@ def get_stylesheet():
         color: {TEXT};
         border: 1px solid {BORDER};
         border-radius: 4px;
+        outline: none;
     }}
-    QListWidget::item:selected {{
-        background-color: {BG_HOVER};
-    }}
+    QListWidget::item {{ padding: 8px 12px; border-bottom: 1px solid {BORDER}; }}
+    QListWidget::item:selected {{ background-color: {ACCENT}; color: {TEXT_BRIGHT}; }}
+    QListWidget::item:hover:!selected {{ background-color: {BG_HOVER}; }}
 
     /* ── Splitter ── */
-    QSplitter::handle {{
-        background-color: {BORDER};
-    }}
-    QSplitter::handle:horizontal {{
-        width: 3px;
-    }}
-    QSplitter::handle:vertical {{
-        height: 3px;
-    }}
+    QSplitter::handle {{ background-color: {BORDER}; }}
+    QSplitter::handle:horizontal {{ width: 3px; }}
+    QSplitter::handle:vertical {{ height: 3px; }}
 
     /* ── Status bar ── */
     QStatusBar {{
@@ -296,12 +284,16 @@ def get_stylesheet():
         border-top: 1px solid {BORDER};
     }}
 
-    /* ── Dialog button box ── */
-    QDialogButtonBox QPushButton {{
-        min-width: 80px;
+    /* ── Frames (VLine/HLine separators) ── */
+    QFrame[frameShape="4"],
+    QFrame[frameShape="5"] {{
+        color: {BORDER};
     }}
 
-    /* ── Tooltip ── */
+    /* ── Dialog button box ── */
+    QDialogButtonBox QPushButton {{ min-width: 80px; }}
+
+    /* ── Tooltips ── */
     QToolTip {{
         background-color: {BG_MID};
         color: {TEXT};
@@ -309,11 +301,17 @@ def get_stylesheet():
         padding: 4px;
     }}
 
-    /* ── Calendar popup ── */
-    QCalendarWidget {{
+    /* ── Text browser (stats overview) ── */
+    QTextBrowser {{
         background-color: {BG_MID};
         color: {TEXT};
+        border: 1px solid {BORDER};
+        border-radius: 4px;
+        padding: 6px;
     }}
+
+    /* ── Calendar popup ── */
+    QCalendarWidget {{ background-color: {BG_MID}; color: {TEXT}; }}
     QCalendarWidget QTableView {{
         alternate-background-color: {BG_LIGHT};
         selection-background-color: {ACCENT};
@@ -321,9 +319,58 @@ def get_stylesheet():
     """
 
 
-# ── Color constants for use in code (e.g. table cell foreground) ──
-PROFIT_COLOR = GREEN
-LOSS_COLOR = RED
+# ── Matplotlib helpers ────────────────────────────────────────────────────
+
+def apply_mpl_dark(fig, *axes):
+    """Apply dark theme to a matplotlib Figure and its axes."""
+    fig.patch.set_facecolor(BG_MID)
+    for ax in axes:
+        ax.set_facecolor(BG_LIGHT)
+        ax.tick_params(colors=TEXT, labelsize=8)
+        ax.xaxis.label.set_color(TEXT)
+        ax.yaxis.label.set_color(TEXT)
+        if ax.get_title():
+            ax.title.set_color(TEXT)
+        for spine in ax.spines.values():
+            spine.set_color(BORDER)
+        ax.grid(True, color=BORDER, alpha=0.5)
+
+
+def make_mpf_style():
+    """Return an mplfinance style matching the current theme."""
+    import mplfinance as mpf
+    if _dark:
+        mc = mpf.make_marketcolors(
+            up=GREEN, down=RED,
+            edge={'up': '#00a87e', 'down': '#e03040'},
+            wick={'up': '#00a87e', 'down': '#e03040'})
+        return mpf.make_mpf_style(
+            marketcolors=mc,
+            facecolor=BG_MID,
+            gridstyle='-', gridcolor=BORDER,
+            y_on_right=True,
+            rc={
+                'axes.labelcolor': TEXT,
+                'xtick.color': TEXT,
+                'ytick.color': TEXT,
+                'axes.edgecolor': BORDER,
+                'figure.facecolor': BG_DARK,
+                'axes.facecolor': BG_MID,
+            })
+    else:
+        mc = mpf.make_marketcolors(
+            up='#26a69a', down='#ef5350',
+            edge={'up': '#1b7a6e', 'down': '#c62828'},
+            wick={'up': '#1b7a6e', 'down': '#c62828'})
+        return mpf.make_mpf_style(
+            marketcolors=mc, facecolor='#fafafa',
+            gridstyle='-', gridcolor='#e8e8e8',
+            y_on_right=True)
+
+
+# ── Colour constants for use in code ─────────────────────────────────────
+PROFIT_COLOR   = GREEN
+LOSS_COLOR     = RED
 PROFIT_BG_COLOR = GREEN_BG
-LOSS_BG_COLOR = RED_BG
-NEUTRAL_COLOR = TEXT_DIM
+LOSS_BG_COLOR  = RED_BG
+NEUTRAL_COLOR  = TEXT_DIM

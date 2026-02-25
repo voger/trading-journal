@@ -10,6 +10,7 @@ from PyQt6.QtGui import QFont, QColor
 
 from tabs import BaseTab
 from database import get_account, get_equity_curve_data, get_equity_events
+import theme as _theme
 
 
 class EquityTab(BaseTab):
@@ -125,9 +126,14 @@ class EquityTab(BaseTab):
 
         initial = acct['initial_balance'] if acct else 0
 
-        profit_color = '#2e7d32'  # dark green — readable on white
-        loss_color   = '#c62828'  # dark red — readable on white
-        line_color   = '#1565c0'  # dark blue
+        if _theme.is_dark():
+            profit_color = _theme.GREEN
+            loss_color   = _theme.RED
+            line_color   = _theme.ACCENT
+        else:
+            profit_color = '#2e7d32'
+            loss_color   = '#c62828'
+            line_color   = '#1565c0'  # dark blue
 
         # ── Cumulative P&L mode ──
         if self._mode == 'pnl':
@@ -166,6 +172,8 @@ class EquityTab(BaseTab):
             ax.set_title(f'Cumulative P&L ({currency})', fontsize=13, fontweight='bold')
             ax.set_ylabel(f'P&L ({currency})')
             ax.grid(True, alpha=0.3)
+            if _theme.is_dark():
+                _theme.apply_mpl_dark(self.fig, ax)
             self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
 
             net_pnl = balances[-1]
@@ -247,6 +255,8 @@ class EquityTab(BaseTab):
         ax.set_title(f'Equity Curve ({currency})', fontsize=13, fontweight='bold')
         ax.set_ylabel(f'Balance ({currency})')
         ax.grid(True, alpha=0.3)
+        if _theme.is_dark():
+            _theme.apply_mpl_dark(self.fig, ax)
         self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
 
         self._populate_deposits_table(events, currency)

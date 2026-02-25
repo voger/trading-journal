@@ -1,5 +1,6 @@
 """Summary Stats tab — overview + analytics breakdowns + formula editor."""
 import calendar as _calendar
+import theme as _theme
 from datetime import timedelta, date as _date
 
 # Force English month names regardless of system locale
@@ -872,6 +873,8 @@ class RMultipleHistogramWidget(QWidget):
         ax.tick_params(axis='both', labelsize=8)
         ax.grid(axis='y', alpha=0.3)
         ax.set_ylim(bottom=0)
+        if _theme.is_dark():
+            _theme.apply_mpl_dark(self._fig, ax)
         self._fig.tight_layout(pad=1.2)
 
         note_parts = [f"{len(r_values)} trades plotted"]

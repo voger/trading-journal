@@ -1818,3 +1818,17 @@ EXPORT_COLUMNS = [
     ('account_currency',        'Currency'),
     ('broker_ticket_id',        'Ticket ID'),
 ]
+
+
+def get_setting(conn: sqlite3.Connection, key: str, default=None):
+    """Read a value from app_settings. Returns default if key not found."""
+    row = conn.execute("SELECT value FROM app_settings WHERE key = ?", (key,)).fetchone()
+    return row['value'] if row else default
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value):
+    """Write a value to app_settings (upsert)."""
+    conn.execute(
+        "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
+        "VALUES (?, ?, datetime('now'))", (key, str(value)))
+    conn.commit()

@@ -25,6 +25,8 @@ from database import (
 from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
+import theme as _theme
+from database import get_setting, set_setting
 
 APP_VERSION = "2.5.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
@@ -74,6 +76,12 @@ class MainWindow(QMainWindow):
                            ("&Delete Account", self._on_delete_account)]:
             a = QAction(text, self); a.triggered.connect(slot); am.addAction(a)
 
+        vm = mb.addMenu("&View")
+        self._dark_action = QAction("&Dark Mode", self)
+        self._dark_action.setCheckable(True)
+        self._dark_action.triggered.connect(self._toggle_dark_mode)
+        vm.addAction(self._dark_action)
+
         cw = QWidget(); self.setCentralWidget(cw)
         ml = QVBoxLayout(cw)
         ml.setContentsMargins(0, 0, 0, 0)
@@ -94,12 +102,7 @@ class MainWindow(QMainWindow):
         sb_lay.addWidget(hdr)
 
         self.account_list = QListWidget()
-        self.account_list.setStyleSheet("""
-            QListWidget { background: #f5f5f5; border: none; outline: none; }
-            QListWidget::item { padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }
-            QListWidget::item:selected { background: #1565c0; color: white; }
-            QListWidget::item:hover:!selected { background: #dce8f5; }
-        """)
+        self._apply_sidebar_style()
         self.account_list.currentRowChanged.connect(lambda _: self._on_account_changed())
         sb_lay.addWidget(self.account_list)
 
@@ -195,10 +198,43 @@ class MainWindow(QMainWindow):
         if self.tabs.widget(index) == self.equity_tab:
             self.equity_tab.try_render_if_visible()
 
+    def _apply_sidebar_style(self):
+        if _theme.is_dark():
+            self.account_list.setStyleSheet("")  # let global QSS handle it
+        else:
+            self.account_list.setStyleSheet("""
+                QListWidget { background: #f5f5f5; border: none; outline: none; }
+                QListWidget::item { padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }
+                QListWidget::item:selected { background: #1565c0; color: white; }
+                QListWidget::item:hover:!selected { background: #dce8f5; }
+            """)
+
+    def _apply_theme(self, dark: bool):
+        app = QApplication.instance()
+        if dark:
+            app.setStyleSheet(_theme.get_stylesheet())
+        else:
+            app.setStyleSheet("")
+        _theme.set_dark(dark)
+        self._apply_sidebar_style()
+        set_setting(self.conn, 'dark_mode', '1' if dark else '0')
+        # Re-render charts to pick up new colors
+        self.equity_tab.refresh()
+        self.stats_tab.refresh()
+
+    def _toggle_dark_mode(self, checked: bool):
+        self._apply_theme(checked)
+
     # ── Refresh ──
 
     def _refresh_all(self):
         self._refresh_account_list()
+        # Apply saved theme on first run
+        if get_setting(self.conn, 'dark_mode', '0') == '1':
+            _theme.set_dark(True)
+            QApplication.instance().setStyleSheet(_theme.get_stylesheet())
+            self._dark_action.setChecked(True)
+            self._apply_sidebar_style()
         self.trades_tab.refresh()
         self.stats_tab.refresh()
         self.journal_tab.refresh()
