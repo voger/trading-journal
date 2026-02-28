@@ -826,6 +826,7 @@ class RMultipleHistogramWidget(QWidget):
             return
 
         self._fig.clear()
+        self._fig.patch.set_facecolor(_theme.BG_MID if _theme.is_dark() else 'white')
         ax = self._fig.add_subplot(111)
 
         if not r_values:

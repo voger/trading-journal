@@ -3,6 +3,15 @@ Trading Journal — Theme
 Apply dark mode: app.setStyleSheet(get_stylesheet()); set_dark(True)
 Clear (light mode): app.setStyleSheet(""); set_dark(False)
 """
+import os as _os, sys as _sys
+
+# Resource dir: _MEIPASS in frozen build, else the project directory
+if getattr(_sys, 'frozen', False) and hasattr(_sys, '_MEIPASS'):
+    _RESOURCE_DIR = _sys._MEIPASS
+else:
+    _RESOURCE_DIR = _os.path.dirname(_os.path.abspath(__file__))
+
+_ARROW_PATH = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_down.svg').replace('\\', '/')
 
 # ── Dark state ────────────────────────────────────────────────────────────
 _dark = False
@@ -27,10 +36,12 @@ TEXT      = "#e8e8e8"  # primary text
 TEXT_DIM  = "#666666"  # secondary / placeholder
 TEXT_BRIGHT = "#ffffff"
 
-GREEN    = "#00c896"   # profit — bright teal-green
-GREEN_BG = "#0d2e22"
-RED      = "#ff4757"   # loss — crisp red
-RED_BG   = "#2e0d10"
+GREEN    = "#6bbc9a"   # profit — pale sage-green  (for UI text, badges, stats)
+GREEN_BG = "#0d2b1f"
+GREEN_VIV = "#00c896"  # profit — vivid teal-green (for chart candles)
+RED      = "#d97580"   # loss   — pale pinkish-red  (for UI text, badges, stats)
+RED_BG   = "#2a0d14"
+RED_VIV  = "#ff4757"   # loss   — vivid red          (for chart candles)
 ACCENT   = "#3d7cf4"   # buttons, links, focus — medium blue
 ACCENT_HOVER = "#5d96f6"
 
@@ -116,6 +127,11 @@ def get_stylesheet():
         border-left: 1px solid {BORDER};
         background: {BG_HOVER};
         width: 20px;
+    }}
+    QComboBox::down-arrow {{
+        image: url("{_ARROW_PATH}");
+        width: 10px;
+        height: 6px;
     }}
     QComboBox QAbstractItemView {{
         background-color: {BG_MID};
@@ -290,6 +306,13 @@ def get_stylesheet():
         color: {BORDER};
     }}
 
+    /* ── KPI Cards ── */
+    KPICard {{
+        border: 1px solid {BORDER};
+        border-radius: 6px;
+        padding: 6px;
+    }}
+
     /* ── Dialog button box ── */
     QDialogButtonBox QPushButton {{ min-width: 80px; }}
 
@@ -341,7 +364,7 @@ def make_mpf_style():
     import mplfinance as mpf
     if _dark:
         mc = mpf.make_marketcolors(
-            up=GREEN, down=RED,
+            up=GREEN_VIV, down=RED_VIV,
             edge={'up': '#00a87e', 'down': '#e03040'},
             wick={'up': '#00a87e', 'down': '#e03040'})
         return mpf.make_mpf_style(

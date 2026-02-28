@@ -95,7 +95,7 @@ class TradeChartWidget(QWidget):
         ctrl.addWidget(self.provider_combo)
 
         self.key_btn = QPushButton("\U0001F511")
-        self.key_btn.setFixedWidth(32)
+        self.key_btn.setFixedWidth(44)
         self.key_btn.setToolTip("Manage API key for current provider")
         self.key_btn.clicked.connect(self._on_manage_key)
         ctrl.addWidget(self.key_btn)
@@ -146,14 +146,12 @@ class TradeChartWidget(QWidget):
             self.tf_combo.addItem("Daily", "1d")
 
     def _show_placeholder(self):
-        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
-        from matplotlib.figure import Figure
-        fig = Figure(figsize=(8, 3), dpi=80)
-        ax = fig.add_subplot(111)
-        ax.text(0.5, 0.5, 'Click "Fetch Chart" to load price data',
-                ha='center', va='center', fontsize=12, color='#999')
-        ax.set_axis_off()
-        self._swap_canvas(FigureCanvasQTAgg(fig))
+        from PyQt6.QtWidgets import QLabel
+        lbl = QLabel('Click "Fetch Chart" to load price data')
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl.setStyleSheet(
+            f"color: {_theme.TEXT_DIM if _theme.is_dark() else '#999'}; font-size: 12px;")
+        self._swap_canvas(lbl)
 
     def _swap_canvas(self, canvas):
         if self._canvas:
@@ -593,3 +591,20 @@ class TradeChartWidget(QWidget):
     def load_saved_or_cached(self, json_str):
         """Render chart from cached OHLC data stored in the database."""
         self.load_cached_data(json_str)
+
+    def refresh_theme(self):
+        """Re-render with the current theme — call after a dark/light toggle."""
+        if self._cached_data and self.trade:
+            try:
+                entry_dt, exit_dt = self._parse_dates()
+                sym = self._last_symbol or self.trade.get('symbol', '?')
+                tf  = self._last_tf or '1d'
+                canvas, fig = self._render(self._cached_data, sym, tf,
+                                           entry_dt, exit_dt, (10, 5))
+                self._swap_canvas(canvas)
+                import matplotlib.pyplot as plt
+                plt.close(fig)
+            except Exception:
+                self._show_placeholder()
+        else:
+            self._show_placeholder()

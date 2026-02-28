@@ -58,7 +58,6 @@ class EquityTab(BaseTab):
         self.deposits_table.setColumnCount(len(cols)); self.deposits_table.setHorizontalHeaderLabels(cols)
         h = self.deposits_table.horizontalHeader(); h.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.deposits_table)
-        b = QPushButton("Refresh"); b.clicked.connect(self.force_refresh); layout.addWidget(b)
         self._event_lines = []  # parallel to events list; None for events with no chart marker
         self.deposits_table.itemSelectionChanged.connect(self._on_event_selected)
 
@@ -85,9 +84,12 @@ class EquityTab(BaseTab):
         self._dirty = True
 
     def refresh(self):
-        """Called by MainWindow — only render if visible, otherwise mark dirty."""
+        """Called by MainWindow — render immediately if visible, otherwise mark dirty."""
         if self.canvas is None: return
-        self._dirty = True  # always mark dirty, render on demand
+        if self.isVisible():
+            self._render()
+        else:
+            self._dirty = True
 
     def try_render_if_visible(self):
         """Called when this tab becomes visible."""
@@ -102,11 +104,16 @@ class EquityTab(BaseTab):
     def _render(self):
         if self.canvas is None: return
         self.fig.clear()
+        # Reset figure patch so switching dark↔light doesn't leave a stale background
+        self.fig.patch.set_facecolor(_theme.BG_MID if _theme.is_dark() else 'white')
         aid = self.aid()
 
         if aid is None:
             ax = self.fig.add_subplot(111)
-            ax.text(0.5, 0.5, 'Please select an account', ha='center', va='center', fontsize=14, color='gray')
+            if _theme.is_dark():
+                _theme.apply_mpl_dark(self.fig, ax)
+            ax.text(0.5, 0.5, 'Please select an account', ha='center', va='center',
+                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
             ax.set_axis_off(); self.canvas.draw()
             self.deposits_table.setRowCount(0)
             self.account_label.setText(""); self.info_label.setText(""); return
@@ -120,7 +127,10 @@ class EquityTab(BaseTab):
 
         if not data and not events:
             ax = self.fig.add_subplot(111)
-            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center', fontsize=14, color='gray')
+            if _theme.is_dark():
+                _theme.apply_mpl_dark(self.fig, ax)
+            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
+                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
             ax.set_axis_off(); self.canvas.draw()
             self.deposits_table.setRowCount(0); self.info_label.setText(""); return
 
@@ -153,8 +163,10 @@ class EquityTab(BaseTab):
 
             if not dates:
                 ax = self.fig.add_subplot(111)
+                if _theme.is_dark():
+                    _theme.apply_mpl_dark(self.fig, ax)
                 ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
-                        fontsize=14, color='gray')
+                        fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
                 ax.set_axis_off(); self.canvas.draw()
                 self._populate_deposits_table(events, currency)
                 self.info_label.setText(""); return
@@ -208,8 +220,10 @@ class EquityTab(BaseTab):
 
         if not timeline:
             ax = self.fig.add_subplot(111)
+            if _theme.is_dark():
+                _theme.apply_mpl_dark(self.fig, ax)
             ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
-                    fontsize=14, color='gray')
+                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
             ax.set_axis_off(); self.canvas.draw()
             self._populate_deposits_table(events, currency)
             self.info_label.setText(""); return

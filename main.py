@@ -218,7 +218,9 @@ class MainWindow(QMainWindow):
         _theme.set_dark(dark)
         self._apply_sidebar_style()
         set_setting(self.conn, 'dark_mode', '1' if dark else '0')
-        # Re-render charts to pick up new colors
+        # Re-render all charts and trade preview to pick up new colors
+        self.trades_tab.refresh()
+        self.trades_tab.refresh_chart_theme()
         self.equity_tab.refresh()
         self.stats_tab.refresh()
 

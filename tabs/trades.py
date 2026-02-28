@@ -16,6 +16,7 @@ from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence, QPalette
 
 from tabs import BaseTab
 from dialogs import TradeDialog
+import theme as _theme
 from database import (
     get_accounts, get_account, get_trades, get_trade, create_trade,
     update_trade, delete_trade, get_trade_chart_counts,
@@ -52,9 +53,7 @@ class KPICard(QFrame):
     def __init__(self, title, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(
-            "KPICard { border: 1px solid #ccc; border-radius: 6px; padding: 6px; }"
-        )
+        # Border/radius handled by global QSS in dark mode; StyledPanel draws natively in light mode
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(60)
         lay = QVBoxLayout(self)
@@ -386,25 +385,40 @@ class TradesTab(BaseTab):
         status = t['status'] or 'open'
         epnl = effective_pnl(t)
 
-        if direction == 'LONG':
-            dir_html = '<span style="color:#fff;background:#16a34a;padding:2px 8px;border-radius:3px;font-weight:bold;">▲ LONG</span>'
+        if _theme.is_dark():
+            _bg_long  = _theme.GREEN;  _bg_short = _theme.RED
+            _bg_win   = _theme.GREEN;  _bg_loss  = _theme.RED
+            _bg_open  = _theme.ACCENT; _bg_be    = _theme.BG_HOVER
+            _badge_fg = _theme.BG_DARK
         else:
-            dir_html = '<span style="color:#fff;background:#dc2626;padding:2px 8px;border-radius:3px;font-weight:bold;">▼ SHORT</span>'
+            _bg_long  = '#16a34a';  _bg_short = '#dc2626'
+            _bg_win   = '#16a34a';  _bg_loss  = '#dc2626'
+            _bg_open  = '#3b82f6';  _bg_be    = '#6b7280'
+            _badge_fg = '#fff'
+
+        _bs = f"color:{_badge_fg};padding:2px 8px;border-radius:3px;font-weight:bold;"
+        if direction == 'LONG':
+            dir_html = f'<span style="{_bs}background:{_bg_long};">▲ LONG</span>'
+        else:
+            dir_html = f'<span style="{_bs}background:{_bg_short};">▼ SHORT</span>'
 
         if status == 'open':
-            st_html = '<span style="color:#fff;background:#3b82f6;padding:2px 8px;border-radius:3px;font-weight:bold;">OPEN</span>'
+            st_html = f'<span style="{_bs}background:{_bg_open};">OPEN</span>'
         elif epnl > 0:
-            st_html = '<span style="color:#fff;background:#16a34a;padding:2px 8px;border-radius:3px;font-weight:bold;">WIN</span>'
+            st_html = f'<span style="{_bs}background:{_bg_win};">WIN</span>'
         elif epnl < 0:
-            st_html = '<span style="color:#fff;background:#dc2626;padding:2px 8px;border-radius:3px;font-weight:bold;">LOSS</span>'
+            st_html = f'<span style="{_bs}background:{_bg_loss};">LOSS</span>'
         else:
-            st_html = '<span style="color:#fff;background:#6b7280;padding:2px 8px;border-radius:3px;font-weight:bold;">B/E</span>'
+            st_html = f'<span style="{_bs}background:{_bg_be};">B/E</span>'
 
         self.pv_badges.setTextFormat(Qt.TextFormat.RichText)
         self.pv_badges.setText(f"{dir_html}&nbsp;&nbsp;{st_html}")
 
         # P&L Hero (effective P&L: includes swap + commission)
-        pc = '#008200' if epnl > 0 else '#c80000' if epnl < 0 else '#666'
+        _pos = _theme.GREEN if _theme.is_dark() else '#008200'
+        _neg = _theme.RED if _theme.is_dark() else '#c80000'
+        _neu = _theme.TEXT_DIM if _theme.is_dark() else '#666'
+        pc = _pos if epnl > 0 else _neg if epnl < 0 else _neu
         self.pv_pnl_hero.setText(f"<span style='color:{pc}'>{epnl:+.2f}</span>")
 
         # Metrics
@@ -434,11 +448,12 @@ class TradesTab(BaseTab):
             if tp and tp > 0:
                 reward_dist = abs(tp - entry)
                 rr = reward_dist / risk_dist if risk_dist > 0 else 0
-                lines.append(f"<b>R:R:</b> <span style='color:#3b82f6'>1:{rr:.1f}</span>")
+                _rr_col = _theme.ACCENT if _theme.is_dark() else '#3b82f6'
+                lines.append(f"<b>R:R:</b> <span style='color:{_rr_col}'>1:{rr:.1f}</span>")
             if exit_p and exit_p > 0:
                 actual = (exit_p - entry) if direction == 'LONG' else (entry - exit_p)
                 r_mult = actual / risk_dist if risk_dist > 0 else 0
-                rc = '#008200' if r_mult > 0 else '#c80000' if r_mult < 0 else '#666'
+                rc = _pos if r_mult > 0 else _neg if r_mult < 0 else _neu
                 lines.append(f"<b>R Multiple:</b> <span style='color:{rc}'>{r_mult:+.2f}R</span>")
 
         if risk_pct: lines.append(f"<b>Risk:</b> {risk_pct:.2f}%")
@@ -523,6 +538,10 @@ class TradesTab(BaseTab):
         self.flt_search.blockSignals(False)
         self._page = 0
         self.refresh()
+
+    def refresh_chart_theme(self):
+        """Re-render the preview chart with the new theme colours."""
+        self.pv_chart.refresh_theme()
 
     def refresh_setup_filter(self):
         self.flt_setup.blockSignals(True)
@@ -653,21 +672,26 @@ class TradesTab(BaseTab):
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
         expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
 
+        _p = _theme.GREEN if _theme.is_dark() else "#008200"
+        _n = _theme.RED   if _theme.is_dark() else "#c80000"
+        _z = _theme.TEXT_DIM if _theme.is_dark() else "#666"
+
         self.kpi_trades.set_value(
-            f"{total}  ({len(winners)}W / {len(losers)}L)", "#333")
+            f"{total}  ({len(winners)}W / {len(losers)}L)",
+            _theme.TEXT_DIM if _theme.is_dark() else "#333")
 
         self.kpi_winrate.set_value(
-            f"{win_rate:.1f}%", "#008200" if win_rate >= 50 else "#c80000")
+            f"{win_rate:.1f}%", _p if win_rate >= 50 else _n)
 
         self.kpi_pnl.set_value(
-            f"{net_pnl:+.2f}", "#008200" if net_pnl > 0 else "#c80000" if net_pnl < 0 else "#666")
+            f"{net_pnl:+.2f}", _p if net_pnl > 0 else _n if net_pnl < 0 else _z)
 
         self.kpi_expectancy.set_value(
-            f"{expectancy:+.2f}", "#008200" if expectancy > 0 else "#c80000" if expectancy < 0 else "#666")
+            f"{expectancy:+.2f}", _p if expectancy > 0 else _n if expectancy < 0 else _z)
 
         pfs = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
         self.kpi_pf.set_value(
-            pfs, "#008200" if profit_factor > 1 else "#c80000" if profit_factor < 1 else "#666")
+            pfs, _p if profit_factor > 1 else _n if profit_factor < 1 else _z)
 
     # ── Table refresh ──
 
@@ -743,21 +767,34 @@ class TradesTab(BaseTab):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(rows_data))
 
-        dep_bg = QColor(230, 245, 230)
-        wd_bg = QColor(250, 235, 235)
-        profit_fg = QColor(0, 130, 0)
-        loss_fg = QColor(200, 0, 0)
-        neutral_fg = QColor(100, 100, 100)
-        long_fg = QColor(0, 100, 180)
-        short_fg = QColor(180, 80, 0)
-
-        # Status badge colors
-        status_colors = {
-            'win':  (QColor(255, 255, 255), QColor(22, 163, 106)),   # white on green
-            'loss': (QColor(255, 255, 255), QColor(220, 38, 38)),    # white on red
-            'open': (QColor(255, 255, 255), QColor(59, 130, 246)),   # white on blue
-            'be':   (QColor(255, 255, 255), QColor(107, 114, 128)),  # white on gray
-        }
+        if _theme.is_dark():
+            dep_bg = QColor(_theme.GREEN_BG)
+            wd_bg = QColor(_theme.RED_BG)
+            profit_fg = QColor(_theme.GREEN)
+            loss_fg = QColor(_theme.RED)
+            neutral_fg = QColor(_theme.TEXT_DIM)
+            long_fg = QColor(_theme.ACCENT)
+            short_fg = QColor("#c8804a")
+            status_colors = {
+                'win':  (QColor(_theme.BG_DARK), QColor(_theme.GREEN)),
+                'loss': (QColor(_theme.BG_DARK), QColor(_theme.RED)),
+                'open': (QColor(_theme.TEXT_BRIGHT), QColor(_theme.ACCENT)),
+                'be':   (QColor(_theme.TEXT_DIM), QColor(_theme.BG_HOVER)),
+            }
+        else:
+            dep_bg = QColor(230, 245, 230)
+            wd_bg = QColor(250, 235, 235)
+            profit_fg = QColor(0, 130, 0)
+            loss_fg = QColor(200, 0, 0)
+            neutral_fg = QColor(100, 100, 100)
+            long_fg = QColor(0, 100, 180)
+            short_fg = QColor(180, 80, 0)
+            status_colors = {
+                'win':  (QColor(255, 255, 255), QColor(22, 163, 106)),
+                'loss': (QColor(255, 255, 255), QColor(220, 38, 38)),
+                'open': (QColor(255, 255, 255), QColor(59, 130, 246)),
+                'be':   (QColor(255, 255, 255), QColor(107, 114, 128)),
+            }
 
         for row, (_, rtype, data) in enumerate(rows_data):
             if rtype == 'trade':
