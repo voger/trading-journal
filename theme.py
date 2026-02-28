@@ -11,7 +11,8 @@ if getattr(_sys, 'frozen', False) and hasattr(_sys, '_MEIPASS'):
 else:
     _RESOURCE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 
-_ARROW_PATH = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_down.svg').replace('\\', '/')
+_ARROW_PATH    = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_down.svg').replace('\\', '/')
+_ARROW_UP_PATH = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_up.svg').replace('\\', '/')
 
 # ── Dark state ────────────────────────────────────────────────────────────
 _dark = False
@@ -107,10 +108,18 @@ def get_stylesheet():
         background: {BG_HOVER};
         width: 16px;
     }}
+    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow, QDateTimeEdit::up-arrow {{
+        image: url({_ARROW_UP_PATH});
+        width: 8px; height: 5px;
+    }}
     QSpinBox::down-button, QDoubleSpinBox::down-button, QDateTimeEdit::down-button {{
         border-left: 1px solid {BORDER};
         background: {BG_HOVER};
         width: 16px;
+    }}
+    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow, QDateTimeEdit::down-arrow {{
+        image: url({_ARROW_PATH});
+        width: 8px; height: 5px;
     }}
 
     /* ── Combo boxes ── */
@@ -184,7 +193,7 @@ def get_stylesheet():
         selection-color: {TEXT_BRIGHT};
     }}
     QTableWidget::item, QTableView::item {{
-        padding: 3px 6px;
+        padding: 4px 3px;
     }}
     QTableWidget::item:hover, QTableView::item:hover {{
         background-color: {BG_HOVER};
@@ -196,10 +205,9 @@ def get_stylesheet():
         border: none;
         border-bottom: 2px solid {BORDER};
         border-right: 1px solid {BORDER};
-        padding: 5px 8px;
+        padding: 5px 6px;
         font-weight: bold;
-        font-size: 11px;
-        text-transform: uppercase;
+        font-size: 12px;
     }}
     QHeaderView::section:hover {{ color: {TEXT_BRIGHT}; }}
 
