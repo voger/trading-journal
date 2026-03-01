@@ -65,6 +65,7 @@ class _ManageHistoryDialog(QDialog):
         self._list = QListWidget()
         self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._list.addItems(_load_history(conn))
+        self._list.installEventFilter(self)
         lay.addWidget(self._list)
 
         btn_remove = QPushButton("Remove Selected")
@@ -75,11 +76,11 @@ class _ManageHistoryDialog(QDialog):
         bb.rejected.connect(self.reject)
         lay.addWidget(bb)
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Delete:
+    def eventFilter(self, obj, event):
+        if obj is self._list and event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Delete:
             self._remove()
-        else:
-            super().keyPressEvent(event)
+            return True
+        return super().eventFilter(obj, event)
 
     def _remove(self):
         row = self._list.currentRow()
@@ -91,9 +92,10 @@ class _ManageHistoryDialog(QDialog):
 
 
 class _AddSymbolDialog(QDialog):
-    def __init__(self, conn, parent=None):
+    def __init__(self, conn, instruments, parent=None):
         super().__init__(parent)
         self._conn = conn
+        self._instruments = instruments
         self.setWindowTitle("Add to Watchlist")
         self.setMinimumWidth(340)
 
@@ -130,16 +132,16 @@ class _AddSymbolDialog(QDialog):
         history = _load_history(self._conn)
         seen = {s.upper() for s in history}
         extras = [
-            i['symbol'].upper() for i in get_instruments(self._conn)
+            i['symbol'].upper() for i in self._instruments
             if i['symbol'] and i['symbol'].upper() not in seen
         ]
         return QStringListModel(history + extras)
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
-            if self._completer.popup().isVisible():
+            if obj is self._completer.popup():
                 self._completer.popup().hide()
-            else:
+            elif obj is self._edit:
                 self.reject()
             return True
         return super().eventFilter(obj, event)
@@ -402,7 +404,7 @@ class WatchlistTab(BaseTab):
         instruments = get_instruments(self.conn)
         existing_symbols = [i['symbol'] for i in instruments]
 
-        dlg = _AddSymbolDialog(self.conn, self)
+        dlg = _AddSymbolDialog(self.conn, instruments, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         symbol = dlg.symbol()
@@ -464,6 +466,9 @@ class WatchlistTab(BaseTab):
                 self._current_item_id = None
                 self._clear_detail()
                 self.refresh()
+                if self.table.rowCount() > 0:
+                    self.table.setCurrentCell(min(r, self.table.rowCount() - 1), 1)
+                    self._on_selection_changed()
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
