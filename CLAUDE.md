@@ -115,21 +115,19 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 
 ## Planned features (roadmap)
 
-Remaining items — everything else from the original roadmap is shipped.
-
-### ODS export (partial)
-- **CSV export** (File → Export Trades…) is already implemented.
-- What's missing: optional `.ods` output via the `odfpy` library if installed, falling back to CSV when not present.
+All roadmap items are shipped. No open items.
 
 ---
 
 ## Recent changes (v2.5.11)
 
-### Refactor: split large files into focused modules
-- **`database.py`** (1846 lines) split into `db/` package: `connection.py`, `schema.py`, `crud.py`, `analytics.py`, `queries.py`. `database.py` kept as a star-import shim — zero changes to any importer.
-- **`dialogs.py`** (1054 lines) split into `dialogs_widgets.py`, `dialogs_account.py`, `dialogs_trade.py`, `dialogs_setup.py`. `dialogs.py` kept as shim.
-- **`tabs/stats.py`** (1233 lines) split into `tabs/stats_widgets.py`, `tabs/stats_formula.py`, `tabs/stats_calendar.py`. `tabs/stats.py` reduced to `StatsTab` only (~270 lines).
-- **`tabs/trades.py`** (1135 lines) split via mixins into `tabs/trades_widgets.py`, `tabs/trades_preview.py`, `tabs/trades_actions.py`. `tabs/trades.py` reduced to ~565 lines.
+### ODS export + refactor: split large files into focused modules
+- **ODS export**: Export Trades dialog now offers ODS (default) and CSV. `_write_ods()` uses `odfpy` — header row bold with dark-blue background, Net P&L column color-coded green/red, numeric cells stored as `valuetype="float"` for spreadsheet math. `odfpy>=1.4` added to `requirements.txt`.
+- **Refactor: split large files into focused modules**:
+  - **`database.py`** (1846 lines) → `db/` package: `connection.py`, `schema.py`, `crud.py`, `analytics.py`, `queries.py`. `database.py` kept as star-import shim — zero changes to any importer.
+  - **`dialogs.py`** (1054 lines) → `dialogs_widgets.py`, `dialogs_account.py`, `dialogs_trade.py`, `dialogs_setup.py`. `dialogs.py` kept as shim.
+  - **`tabs/stats.py`** (1233 lines) → `tabs/stats_widgets.py`, `tabs/stats_formula.py`, `tabs/stats_calendar.py`. `tabs/stats.py` reduced to `StatsTab` only (~270 lines).
+  - **`tabs/trades.py`** (1135 lines) → mixin split: `tabs/trades_widgets.py`, `tabs/trades_preview.py`, `tabs/trades_actions.py`. `tabs/trades.py` reduced to ~565 lines.
 - Test baseline unchanged: **614 passed, 42 skipped**.
 
 ## Recent changes (v2.5.10)
