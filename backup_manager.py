@@ -98,7 +98,7 @@ def restore_backup(backup_path: str, app_dir: str) -> dict:
             app_dir_real = os.path.realpath(app_dir)
             for member in zf.infolist():
                 dest = os.path.realpath(os.path.join(app_dir, member.filename))
-                if os.path.relpath(dest, app_dir_real).startswith('..'):
+                if not dest.startswith(app_dir_real + os.sep) and dest != app_dir_real:
                     result['message'] = f"Backup contains unsafe path: {member.filename}"
                     return result
 

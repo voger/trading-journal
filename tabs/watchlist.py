@@ -494,6 +494,9 @@ class WatchlistTab(BaseTab):
                 except ValueError:
                     continue
 
+        if len(ids) != self.table.rowCount():
+            return
+
         # Swap
         ids[r], ids[target] = ids[target], ids[r]
         try:

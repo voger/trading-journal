@@ -332,7 +332,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
     )
     conn.commit()
 
-    result['success'] = not fifo_failed or trades_created > 0
+    result['success'] = not fifo_failed
     result['trades_imported'] = imported
     result['trades_skipped'] = skipped
     result['trades_created'] = trades_created
