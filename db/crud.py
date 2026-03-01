@@ -10,6 +10,11 @@ from datetime import datetime
 
 from db.schema import SEED_SQL
 
+_VALID_ORDER_BY = frozenset({
+    'entry_date DESC', 'entry_date ASC',
+    'exit_date DESC',  'exit_date ASC',
+})
+
 
 # ── Accounts ──────────────────────────────────────────────────────────────
 
@@ -51,13 +56,17 @@ def update_account(conn: sqlite3.Connection, account_id, **kwargs):
 
 def delete_account(conn: sqlite3.Connection, account_id: int):
     """Delete an account and all associated data."""
-    conn.execute("DELETE FROM trades WHERE account_id = ?", (account_id,))
-    conn.execute("DELETE FROM account_events WHERE account_id = ?", (account_id,))
-    conn.execute("DELETE FROM watchlist_items WHERE account_id = ?", (account_id,))
-    conn.execute("DELETE FROM import_logs WHERE account_id = ?", (account_id,))
-    conn.execute("DELETE FROM daily_journal WHERE account_id = ?", (account_id,))
-    conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM trades WHERE account_id = ?", (account_id,))
+        conn.execute("DELETE FROM account_events WHERE account_id = ?", (account_id,))
+        conn.execute("DELETE FROM watchlist_items WHERE account_id = ?", (account_id,))
+        conn.execute("DELETE FROM import_logs WHERE account_id = ?", (account_id,))
+        conn.execute("DELETE FROM daily_journal WHERE account_id = ?", (account_id,))
+        conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Instruments ───────────────────────────────────────────────────────────
@@ -108,6 +117,8 @@ def get_trades(conn: sqlite3.Connection, account_id=None, status=None,
     if instrument_id is not None:
         sql += " AND t.instrument_id = ?"
         params.append(instrument_id)
+    if order_by not in _VALID_ORDER_BY:
+        raise ValueError(f"Invalid order_by: {order_by!r}")
     sql += f" ORDER BY {order_by} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
     return conn.execute(sql, params).fetchall()
@@ -135,12 +146,25 @@ def create_trade(conn: sqlite3.Connection, **kwargs):
     return cur.lastrowid
 
 
+_UPDATE_TRADE_ALLOWED = {
+    'account_id', 'instrument_id', 'direction', 'setup_type_id',
+    'entry_date', 'entry_price', 'position_size', 'stop_loss_price',
+    'take_profit_price', 'exit_date', 'exit_price', 'exit_reason',
+    'pnl_pips', 'pnl_account_currency', 'pnl_percent', 'commission',
+    'swap', 'risk_percent', 'risk_amount', 'r_multiple', 'timeframes_used',
+    'confidence_rating', 'execution_grade', 'pre_trade_notes',
+    'post_trade_notes', 'broker_ticket_id', 'import_log_id', 'status',
+    'chart_data', 'is_excluded',
+}
+
+
 def update_trade(conn: sqlite3.Connection, trade_id: int, **kwargs):
-    if not kwargs:
+    fields = {k: v for k, v in kwargs.items() if k in _UPDATE_TRADE_ALLOWED}
+    if not fields:
         return
-    kwargs['updated_at'] = datetime.now().isoformat()
-    set_clause = ', '.join(f"{k} = ?" for k in kwargs)
-    values = list(kwargs.values()) + [trade_id]
+    fields['updated_at'] = datetime.now().isoformat()
+    set_clause = ', '.join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [trade_id]
     conn.execute(f"UPDATE trades SET {set_clause} WHERE id = ?", values)
     conn.commit()
 
@@ -455,20 +479,27 @@ def get_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=No
         (journal_date,)).fetchone()
 
 
+_JOURNAL_ALLOWED = {
+    'market_conditions', 'emotional_state', 'followed_plan',
+    'observations', 'lessons_learned', 'plan_for_tomorrow',
+}
+
+
 def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=None, **kwargs):
+    fields = {k: v for k, v in kwargs.items() if k in _JOURNAL_ALLOWED}
     existing = get_journal_entry(conn, journal_date, account_id)
-    kwargs['updated_at'] = datetime.now().isoformat()
+    fields['updated_at'] = datetime.now().isoformat()
     if existing:
-        set_clause = ', '.join(f"{k} = ?" for k in kwargs)
-        values = list(kwargs.values()) + [existing['id']]
+        set_clause = ', '.join(f"{k} = ?" for k in fields)
+        values = list(fields.values()) + [existing['id']]
         conn.execute(f"UPDATE daily_journal SET {set_clause} WHERE id = ?", values)
     else:
-        kwargs['journal_date'] = journal_date
-        kwargs['account_id'] = account_id
-        columns = ', '.join(kwargs.keys())
-        placeholders = ', '.join('?' * len(kwargs))
+        fields['journal_date'] = journal_date
+        fields['account_id'] = account_id
+        columns = ', '.join(fields.keys())
+        placeholders = ', '.join('?' * len(fields))
         conn.execute(f"INSERT INTO daily_journal ({columns}) VALUES ({placeholders})",
-                     list(kwargs.values()))
+                     list(fields.values()))
     conn.commit()
 
 
@@ -483,7 +514,7 @@ def add_account_event(conn: sqlite3.Connection, account_id: int, event_type: str
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id))
     conn.commit()
-    return cur.lastrowid
+    return cur.lastrowid if cur.rowcount else None
 
 
 def get_account_events(conn: sqlite3.Connection, account_id: int):
@@ -566,12 +597,19 @@ def add_watchlist_item(conn: sqlite3.Connection, instrument_id: int,
     return cur.lastrowid
 
 
+_UPDATE_WATCHLIST_ALLOWED = {
+    'bias_weekly', 'bias_daily', 'bias_h4', 'key_levels',
+    'notes', 'alert_notes', 'sort_order', 'is_active',
+}
+
+
 def update_watchlist_item(conn: sqlite3.Connection, item_id: int, **kwargs):
-    if not kwargs:
+    fields = {k: v for k, v in kwargs.items() if k in _UPDATE_WATCHLIST_ALLOWED}
+    if not fields:
         return
-    kwargs['updated_at'] = datetime.now().isoformat()
-    set_clause = ', '.join(f"{k} = ?" for k in kwargs)
-    values = list(kwargs.values()) + [item_id]
+    fields['updated_at'] = datetime.now().isoformat()
+    set_clause = ', '.join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [item_id]
     conn.execute(f"UPDATE watchlist_items SET {set_clause} WHERE id = ?", values)
     conn.commit()
 

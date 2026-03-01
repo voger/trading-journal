@@ -78,7 +78,7 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
     old_trade_ids = conn.execute(
         """SELECT DISTINCT id FROM trades
            WHERE account_id = ? AND instrument_id = ?
-             AND broker_ticket_id LIKE 'EXEC_FIFO_%'""",
+             AND broker_ticket_id LIKE 'EXEC!_FIFO!_%' ESCAPE '!'""",
         (account_id, instrument_id)
     ).fetchall()
     for row in old_trade_ids:
@@ -116,9 +116,6 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
                 'original': b['shares'],
                 'price': b['price'],
                 'xrate': b['exchange_rate'] or 1.0,
-                'commission_per_share': (
-                    (b['commission'] or 0) / b['shares'] if b['shares'] else 0
-                ),
             })
 
         # Process sells in chronological order
@@ -552,7 +549,7 @@ def audit_instrument_integrity(conn: sqlite3.Connection, account_id: int,
     trade_ids = conn.execute(
         """SELECT id FROM trades
            WHERE account_id = ? AND instrument_id = ?
-             AND broker_ticket_id LIKE 'EXEC_FIFO_%'
+             AND broker_ticket_id LIKE 'EXEC!_FIFO!_%' ESCAPE '!'
            ORDER BY entry_date""",
         (account_id, instrument_id)
     ).fetchall()

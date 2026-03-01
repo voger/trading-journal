@@ -119,6 +119,19 @@ All roadmap items are shipped. No open items.
 
 ---
 
+## Recent changes (v2.5.13)
+
+### Bug fixes — deep codebase scan round 3
+
+- **`db/crud.py` `update_trade()`**: added `_UPDATE_TRADE_ALLOWED` whitelist — kwargs are now filtered before building the `SET` clause, preventing accidental updates to `id`, `account_id`, or other columns that should not change via this path.
+- **`db/crud.py` `update_watchlist_item()`**: added `_UPDATE_WATCHLIST_ALLOWED` whitelist for the same reason.
+- **`db/crud.py` `save_journal_entry()`**: added `_JOURNAL_ALLOWED` whitelist — both the UPDATE and INSERT paths now only touch the six journal content columns.
+- **`db/crud.py` `delete_account()`**: wrapped all six DELETE statements in `try/except … rollback/raise` — a mid-sequence failure no longer leaves the database in a partially deleted state.
+- **`db/schema.py` `init_database()`**: added `except … rollback/raise` inside the `try/finally` — a migration failure now rolls back uncommitted changes before closing the connection.
+- **`fifo_engine.py`**: fixed two `LIKE 'EXEC_FIFO_%'` patterns — the bare `_` is a single-char wildcard in SQLite LIKE; replaced with `LIKE 'EXEC!_FIFO!_%' ESCAPE '!'` to match literal underscores.
+- **`plugins/mt4_plugin.py`**: `source_ea` now evaluates to `None` instead of an empty string when `title_attr.strip()` produces `''` (e.g. empty HTML `<title>` element).
+- Test baseline unchanged: **614 passed, 42 skipped**.
+
 ## Recent changes (v2.5.12)
 
 ### Bug fixes — deep codebase scan round 2

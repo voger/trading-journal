@@ -246,8 +246,8 @@ def parse(file_path: str) -> list:
                 'swap': swap,
                 'pip_size': pip_size,
                 'status': status,
-                'source_ea': title_attr.split(']')[-1].strip() if ']' in title_attr
-                            else title_attr.strip() if title_attr else None,
+                'source_ea': (title_attr.split(']')[-1].strip() if ']' in title_attr
+                             else title_attr.strip() if title_attr else None) or None,
             }
             trades.append(trade)
 

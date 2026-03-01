@@ -380,6 +380,9 @@ def init_database(db_path: str = None) -> str:
         # Migrations for existing databases
         _migrate(conn)
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
     return db_path
