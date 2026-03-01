@@ -45,7 +45,13 @@ The import mode is selected by `IMPORT_MODE` on the plugin module (`'trades'` or
 
 ### Key modules
 
-- **`database.py`** — All SQLite access. Single connection per session (`sqlite3.Row` factory, WAL mode, FK enforcement). Schema in `SCHEMA_SQL` constant; `init_database()` is idempotent. `get_app_data_dir()` returns the platform data directory (`~/.local/share/TradingJournal` on Linux, `%APPDATA%\TradingJournal` on Windows, `~/Library/Application Support/TradingJournal` on macOS).
+- **`database.py`** — Thin backward-compat shim; star-imports from the `db/` package so all existing importers continue to work unchanged.
+- **`db/`** — Database layer, split into focused modules:
+  - `db/connection.py` — `DB_NAME`, `get_app_data_dir()`, `get_db_path()`, `get_connection()`. `get_app_data_dir()` returns the platform data directory (`~/.local/share/TradingJournal` on Linux, `%APPDATA%\TradingJournal` on Windows, `~/Library/Application Support/TradingJournal` on macOS).
+  - `db/schema.py` — `SCHEMA_SQL`, `SEED_SQL`, `init_database()`, `_migrate()`.
+  - `db/crud.py` — All entity CRUD (accounts, instruments, trades, setups, tags, charts, watchlist, journal, events, executions, import logs, formulas, settings).
+  - `db/analytics.py` — `effective_pnl()`, `get_trade_stats()`, `get_trade_breakdowns()`, `get_advanced_stats()`, `get_daily_pnl()`, equity/setup/R-multiple analytics. Constants: `TRADING_SESSIONS`, `_VALID_GROUP_BY`.
+  - `db/queries.py` — Paginated and filtered trade queries: `get_trades_paged()`, `count_trades_filtered()`, `get_trades_all_filtered()`, `get_trades_for_export()`. `EXPORT_COLUMNS` constant.
 - **`fifo_engine.py`** — Stocks-only. Reads all executions for an (account, instrument) pair, splits them into round trips (a round trip ends when shares reach 0), writes `trades` + `lot_consumptions`. Forex trades bypass this entirely.
 - **`import_manager.py`** — Orchestrates import: plugin selection → validate → parse → `_import_trades` or `_import_executions`. Plugins are loaded dynamically via `importlib` at startup.
 - **`main.py`** — App entry point. Wires tabs together, handles account CRUD and backup/restore. On first run, migrates the database from the old project-directory location to the XDG data directory automatically.
@@ -71,9 +77,11 @@ Each tab is a `QWidget` subclass with a `refresh()` method and receives `(conn, 
 
 Top-level tabs: **Trades**, **Watchlist**, **Daily Journal**, **Setups**, **Equity Curve**, **Summary Stats**, **Import History**.
 
-`StatsTab` (`tabs/stats.py`) uses an inner `QTabWidget` with sub-tabs: **Overview** (key metrics + Sharpe/Sortino/Calmar), **By Instrument**, **By Setup**, **By Day**, **By Session**, **By Exit Reason**, **By Direction**, **By Month**, **Calendar** (P&L heatmap), **Setup Stats**, **R Distribution**.
+`StatsTab` (`tabs/stats.py`) uses an inner `QTabWidget` with sub-tabs: **Overview** (key metrics + Sharpe/Sortino/Calmar), **By Instrument**, **By Setup**, **By Day**, **By Session**, **By Exit Reason**, **By Direction**, **By Month**, **Calendar** (P&L heatmap), **Setup Stats**, **R Distribution**, **By Hour**. Widget classes live in `tabs/stats_widgets.py`, formula editor in `tabs/stats_formula.py`, calendar heatmap in `tabs/stats_calendar.py`.
 
-`TradesTab` (`tabs/trades.py`) has SQL-level pagination (`_PAGE_SIZE = 500`, Prev/Next buttons, "Page N of M" label) and a Tag filter combo. Tags are also editable in `TradeDialog` and shown as chips in the preview panel.
+`TradesTab` (`tabs/trades.py`) has SQL-level pagination (`_PAGE_SIZE = 500`, Prev/Next buttons, "Page N of M" label) and a Tag filter combo. Tags are also editable in `TradeDialog` and shown as chips in the preview panel. Preview-panel logic is in `tabs/trades_preview.py` (mixin); CRUD/import/export in `tabs/trades_actions.py` (mixin); `_NumItem`/`KPICard` in `tabs/trades_widgets.py`.
+
+`dialogs.py` is a thin shim; actual classes live in `dialogs_widgets.py`, `dialogs_account.py`, `dialogs_trade.py`, `dialogs_setup.py`.
 
 ### Intentional design decisions (do not suggest changing these)
 
@@ -109,16 +117,20 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 
 Remaining items — everything else from the original roadmap is shipped.
 
-### Hour-of-day analysis (partial)
-- **Session breakdown** (Asian / London / New York / Off-hours) is already implemented as the "By Session" sub-tab in Stats.
-- What's missing: a finer **hour-of-day bar chart** (0–23 h buckets) showing net P&L per hour.
-- Would sit alongside the existing "By Day" and "By Session" sub-tabs; uses existing `get_trade_breakdowns()` infrastructure.
-
 ### ODS export (partial)
 - **CSV export** (File → Export Trades…) is already implemented.
 - What's missing: optional `.ods` output via the `odfpy` library if installed, falling back to CSV when not present.
 
 ---
+
+## Recent changes (v2.5.11)
+
+### Refactor: split large files into focused modules
+- **`database.py`** (1846 lines) split into `db/` package: `connection.py`, `schema.py`, `crud.py`, `analytics.py`, `queries.py`. `database.py` kept as a star-import shim — zero changes to any importer.
+- **`dialogs.py`** (1054 lines) split into `dialogs_widgets.py`, `dialogs_account.py`, `dialogs_trade.py`, `dialogs_setup.py`. `dialogs.py` kept as shim.
+- **`tabs/stats.py`** (1233 lines) split into `tabs/stats_widgets.py`, `tabs/stats_formula.py`, `tabs/stats_calendar.py`. `tabs/stats.py` reduced to `StatsTab` only (~270 lines).
+- **`tabs/trades.py`** (1135 lines) split via mixins into `tabs/trades_widgets.py`, `tabs/trades_preview.py`, `tabs/trades_actions.py`. `tabs/trades.py` reduced to ~565 lines.
+- Test baseline unchanged: **614 passed, 42 skipped**.
 
 ## Recent changes (v2.5.10)
 
