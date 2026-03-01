@@ -483,8 +483,10 @@ class TradeDialog(QDialog):
             # Auto-fill the form field only if user is not actively editing it
             if not self.risk_pct.hasFocus():
                 self.risk_pct.blockSignals(True)
-                self.risk_pct.setValue(round(auto_risk, 2))
-                self.risk_pct.blockSignals(False)
+                try:
+                    self.risk_pct.setValue(round(auto_risk, 2))
+                finally:
+                    self.risk_pct.blockSignals(False)
         else:
             self.metric_risk.set_value("—")
 
@@ -589,8 +591,9 @@ class TradeDialog(QDialog):
         files, _ = QFileDialog.getOpenFileNames(self, "Attach Screenshots", "",
             "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All (*.*)")
         for f in files:
-            self.pending_screenshots.append(('file', f))
-            self._screenshot_paths.append(('pending', len(self.pending_screenshots) - 1))
+            item = ('file', f)
+            self.pending_screenshots.append(item)
+            self._screenshot_paths.append(('pending', item))
             self._add_thumbnail(f)
 
     def _paste_screenshot(self):
@@ -602,8 +605,9 @@ class TradeDialog(QDialog):
         fname = f"clipboard_{ts}.png"
         temp_path = os.path.join(SCREENSHOTS_DIR, fname)
         img.save(temp_path, "PNG")
-        self.pending_screenshots.append(('clipboard', temp_path))
-        self._screenshot_paths.append(('pending', len(self.pending_screenshots) - 1))
+        item = ('clipboard', temp_path)
+        self.pending_screenshots.append(item)
+        self._screenshot_paths.append(('pending', item))
         self._add_thumbnail(temp_path)
 
     def _remove_screenshot(self, widget):
@@ -614,11 +618,16 @@ class TradeDialog(QDialog):
         if idx < 0: return
         self.screenshot_flow.takeAt(idx); widget.deleteLater()
         if idx < len(self._screenshot_paths):
-            src_type, src_idx = self._screenshot_paths.pop(idx)
+            src_type, src_val = self._screenshot_paths.pop(idx)
             if src_type == 'existing' and self.trade:
                 charts = get_trade_charts(self.conn, self.trade['id'])
-                if src_idx < len(charts):
-                    self.delete_chart_ids.append(charts[src_idx]['id'])
+                if src_val < len(charts):
+                    self.delete_chart_ids.append(charts[src_val]['id'])
+            elif src_type == 'pending':
+                try:
+                    self.pending_screenshots.remove(src_val)
+                except ValueError:
+                    pass
 
     # ──────────────────────────────────────────
     # POPULATE

@@ -102,7 +102,7 @@ def get_trade_stats(conn: sqlite3.Connection, account_id=None,
         params.append(str(date_from))
     if date_to is not None:
         sql += " AND exit_date <= ?"
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
     trades = conn.execute(sql, params).fetchall()
     open_count = conn.execute(open_sql, open_params).fetchone()['cnt']
 
@@ -138,7 +138,7 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
         params.append(str(date_from))
     if date_to is not None:
         sql += " AND t.exit_date <= ?"
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
     trades = conn.execute(sql, params).fetchall()
 
     if not trades:
@@ -269,7 +269,7 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
         params.append(str(date_from))
     if date_to is not None:
         sql += " AND exit_date <= ?"
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
     sql += " ORDER BY exit_date, entry_date"
 
     trades = conn.execute(sql, params).fetchall()
@@ -477,7 +477,7 @@ def get_setup_performance(conn: sqlite3.Connection, account_id: int,
         params.append(str(date_from))
     if date_to:
         sql += " AND t.exit_date <= ?"
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
 
     trades = conn.execute(sql, params).fetchall()
     if not trades:
@@ -544,7 +544,7 @@ def get_r_multiple_distribution(conn: sqlite3.Connection, account_id: int,
         params.append(str(date_from))
     if date_to:
         sql += " AND t.exit_date <= ?"
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
 
     rows = conn.execute(sql, params).fetchall()
     r_values = [float(r['r_multiple']) for r in rows if r['r_multiple'] is not None]

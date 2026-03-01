@@ -114,14 +114,18 @@ class SetupDialog(QDialog):
             item.setData(Qt.ItemDataRole.UserRole, r['id'])
             self.exit_list.addItem(item)
         for c in get_setup_charts(self.conn, s['id']):
-            self.chart_list.addItem(f"[Saved] {c['caption'] or os.path.basename(c['file_path'])}")
+            item = QListWidgetItem(f"[Saved] {c['caption'] or os.path.basename(c['file_path'])}")
+            item.setData(Qt.ItemDataRole.UserRole, ('existing', c['id'], c['file_path']))
+            self.chart_list.addItem(item)
 
     def _chart_attach(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Attach Charts", "",
             "Images (*.png *.jpg *.jpeg *.gif *.bmp);;All (*.*)")
         for f in files:
             self.pending_charts.append(f)
-            self.chart_list.addItem(os.path.basename(f))
+            item = QListWidgetItem(os.path.basename(f))
+            item.setData(Qt.ItemDataRole.UserRole, ('pending', f))
+            self.chart_list.addItem(item)
 
     def _chart_paste(self):
         from PyQt6.QtWidgets import QApplication
@@ -131,7 +135,9 @@ class SetupDialog(QDialog):
         fname = f"setup_clip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         tp = os.path.join(SETUP_CHARTS_DIR, fname); img.save(tp, "PNG")
         self.pending_charts.append(tp)
-        self.chart_list.addItem(f"[Pasted] {fname}")
+        item = QListWidgetItem(f"[Pasted] {fname}")
+        item.setData(Qt.ItemDataRole.UserRole, ('pending', tp))
+        self.chart_list.addItem(item)
 
     def _chart_ctx(self, pos):
         item = self.chart_list.itemAt(pos)
@@ -141,27 +147,28 @@ class SetupDialog(QDialog):
         vw = menu.addAction("View")
         action = menu.exec(self.chart_list.mapToGlobal(pos))
         if action == rm:
-            row = self.chart_list.row(item); self.chart_list.takeItem(row)
-            if row < len(self.pending_charts):
-                self.pending_charts.pop(row)
-            elif self.setup:
-                ci = row - len(self.pending_charts)
-                charts = get_setup_charts(self.conn, self.setup['id'])
-                if ci < len(charts):
-                    self.delete_chart_ids.append(charts[ci]['id'])
+            row = self.chart_list.row(item)
+            data = item.data(Qt.ItemDataRole.UserRole)
+            self.chart_list.takeItem(row)
+            if data and data[0] == 'existing':
+                self.delete_chart_ids.append(data[1])
+            elif data and data[0] == 'pending':
+                try:
+                    self.pending_charts.remove(data[1])
+                except ValueError:
+                    pass
         elif action == vw:
             self._chart_view()
 
     def _chart_view(self):
-        row = self.chart_list.currentRow()
-        if row < 0: return
-        if row < len(self.pending_charts):
-            path = self.pending_charts[row]
-        elif self.setup:
-            ci = row - len(self.pending_charts)
-            charts = get_setup_charts(self.conn, self.setup['id'])
-            if ci < len(charts): path = charts[ci]['file_path']
-            else: return
+        item = self.chart_list.currentItem()
+        if not item: return
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not data: return
+        if data[0] == 'existing':
+            path = data[2]
+        elif data[0] == 'pending':
+            path = data[1]
         else:
             return
         if os.path.exists(path):

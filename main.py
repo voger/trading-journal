@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "2.5.13"
+APP_VERSION = "2.5.14"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
@@ -335,7 +335,18 @@ class MainWindow(QMainWindow):
                 tab.conn = self.conn
             self._refresh_all()
             QMessageBox.information(self, "Restored", "Backup restored successfully.")
-        except Exception as e: QMessageBox.critical(self, "Error", str(e))
+        except Exception as e:
+            # Restore may have closed the old connection; reopen so the app
+            # stays functional even if the restore itself failed.
+            try:
+                self.conn = get_connection(self.db_path)
+                for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
+                            self.equity_tab, self.stats_tab, self.imports_tab,
+                            self.watchlist_tab]:
+                    tab.conn = self.conn
+            except Exception:
+                pass
+            QMessageBox.critical(self, "Error", str(e))
 
     def closeEvent(self, event):
         self.conn.close(); event.accept()

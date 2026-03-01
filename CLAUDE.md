@@ -119,6 +119,18 @@ All roadmap items are shipped. No open items.
 
 ---
 
+## Recent changes (v2.5.14)
+
+### Bug fixes — deep codebase scan round 4
+- **`dialogs_trade.py _remove_screenshot()`** — DATA LOSS: pending screenshot not removed from `pending_screenshots` when user clicked ✕. Switched `_screenshot_paths` from index-based `('pending', int)` to reference-based `('pending', item_tuple)` so `pending_screenshots.remove(item)` reliably removes the right entry even after prior removals.
+- **`dialogs_trade.py _recalc_metrics()`** — `blockSignals(True/False)` around `risk_pct.setValue()` now wrapped in `try/finally` (same pattern as watchlist fix in v2.5.12).
+- **`main.py _on_restore()`** — if `restore_backup()` raised after `conn.close()`, the connection was left dead and the app became unusable. Added `except` block that reopens the connection and re-propagates it to all tabs before showing the error dialog.
+- **`db/analytics.py`** (5 places) + **`db/queries.py`** (2 places) — `str(date_to) + 'T23:59:59'` changed to `str(date_to)[:10] + 'T23:59:59'`. If a caller passed a full ISO datetime string (e.g. `'2026-01-31 23:00:00'`) the old code produced `'2026-01-31 23:00:00T23:59:59'`, which SQLite's string comparison would reject silently.
+- **`dialogs_account.py`** — clicking OK with an empty account name no longer silently proceeds; a `QMessageBox.warning` is shown instead.
+- **`dialogs_setup.py _chart_ctx()` / `_chart_view()`** — replaced fragile position-based index logic with `QListWidgetItem.setData(UserRole, ...)`. Each item carries its own `('existing', id, path)` or `('pending', path)` tag, so removing or viewing charts works correctly regardless of the mix/order of saved vs. pending entries.
+- **`tabs/trades_actions.py _write_ods()`** — `float('inf')` / `float('nan')` values are now written as `valuetype="string"` instead of `valuetype="float"` with an invalid value attribute, preventing ODS corruption.
+- Test baseline unchanged: **614 passed, 42 skipped**.
+
 ## Recent changes (v2.5.13)
 
 ### Bug fixes — deep codebase scan round 3

@@ -90,11 +90,16 @@ class TradesActionsMixin:
                 chart_json = dlg.chart_widget.get_cached_data_json()
                 if chart_json: vals['chart_data'] = chart_json
                 update_trade(self.conn, tid, **vals)
+                oserrors = []
                 for cid in dlg.get_delete_chart_ids():
                     fpath = delete_trade_chart(self.conn, cid)
                     if fpath and os.path.exists(fpath):
-                        try: os.remove(fpath)
-                        except OSError: pass
+                        try:
+                            os.remove(fpath)
+                        except OSError as oe:
+                            oserrors.append(str(oe))
+                if oserrors:
+                    raise OSError("Could not delete screenshot file(s):\n" + "\n".join(oserrors))
                 self._save_screenshots(tid, dlg)
                 checks = dlg.get_rule_checks()
                 if checks: save_trade_rule_checks(self.conn, tid, checks)
@@ -288,6 +293,7 @@ def _write_ods(fp, headers, rows):
     applications can sum/average them. The Net P&L column is color-coded
     green/red. The header row is bold with a dark-blue background.
     """
+    import math
     from odf.opendocument import OpenDocumentSpreadsheet
     from odf.style import Style, TextProperties, TableCellProperties
     from odf.table import Table, TableRow, TableCell
@@ -333,7 +339,7 @@ def _write_ods(fp, headers, rows):
     for row in rows:
         tr = TableRow()
         for col_idx, val in enumerate(row):
-            if isinstance(val, (int, float)):
+            if isinstance(val, (int, float)) and not (math.isinf(val) or math.isnan(val)):
                 # Pick color style for the Net P&L column
                 if col_idx == net_pnl_idx:
                     sname = _s_profit if val > 0 else _s_loss if val < 0 else _s_default
@@ -344,7 +350,7 @@ def _write_ods(fp, headers, rows):
                 tc.addElement(P(text=display))
             else:
                 tc = TableCell(stylename=_s_default, valuetype="string")
-                tc.addElement(P(text=str(val) if val else ''))
+                tc.addElement(P(text=str(val) if val is not None else ''))
             tr.addElement(tc)
         table.addElement(tr)
 

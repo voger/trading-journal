@@ -3,7 +3,7 @@ Trading Journal — AccountDialog.
 """
 from PyQt6.QtWidgets import (
     QDialog, QFormLayout, QDialogButtonBox,
-    QComboBox, QLineEdit, QDoubleSpinBox,
+    QComboBox, QLineEdit, QDoubleSpinBox, QMessageBox,
 )
 
 from database import get_accounts
@@ -42,7 +42,7 @@ class AccountDialog(QDialog):
         btns = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        btns.accepted.connect(self.accept)
+        btns.accepted.connect(self._validate_and_accept)
         btns.rejected.connect(self.reject)
         layout.addRow(btns)
         if account:
@@ -55,6 +55,12 @@ class AccountDialog(QDialog):
             self.currency_edit.setText(account['currency'])
             self.balance_spin.setValue(account['initial_balance'])
             self.desc_edit.setText(account['description'] or '')
+
+    def _validate_and_accept(self):
+        if not self.name_edit.text().strip():
+            QMessageBox.warning(self, "Validation", "Account name is required.")
+            return
+        self.accept()
 
     def get_values(self):
         return dict(

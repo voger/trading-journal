@@ -68,7 +68,7 @@ def _build_trade_filters(account_id=None, setup_id=None, direction=None,
 
     if date_to:
         clauses.append("t.entry_date <= ?")
-        params.append(str(date_to) + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
 
     if symbol_search:
         clauses.append("UPPER(i.symbol) LIKE ?")
@@ -150,7 +150,7 @@ def get_trades_for_export(conn: sqlite3.Connection, account_id: int,
         params.append(date_from)
     if date_to:
         sql += " AND t.entry_date <= ?"
-        params.append(date_to + 'T23:59:59')
+        params.append(str(date_to)[:10] + 'T23:59:59')
 
     sql += " ORDER BY t.entry_date"
     return conn.execute(sql, params).fetchall()
