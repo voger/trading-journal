@@ -123,12 +123,6 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
             "This Year", "Last 30 Days", "Last 90 Days",
         ])
         filt.addWidget(self.flt_period)
-        self.flt_search = QLineEdit()
-        self.flt_search.setPlaceholderText("Search symbol…")
-        self.flt_search.setMaximumWidth(160)
-        self.flt_search.setClearButtonEnabled(True)
-        self.flt_search.textChanged.connect(self.refresh)
-        filt.addWidget(self.flt_search)
         self.flt_exit = QComboBox()
         for label, val in [("All Exits", None), ("Target Hit", "target_hit"),
                            ("Trailing Stop", "trailing_stop"), ("Manual", "manual"),
@@ -148,8 +142,18 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
                   self.flt_grade, self.flt_exit, self.flt_outcome, self.flt_period,
                   self.flt_tag]:
             w.currentIndexChanged.connect(self._on_filter_changed)
-        self.flt_search.textChanged.disconnect(self.refresh)
+
+        # ── Search bar — directly above the table ──
+        search_row = QHBoxLayout()
+        search_row.setSpacing(4)
+        self.flt_search = QLineEdit()
+        self.flt_search.setPlaceholderText("Filter by instrument…")
+        self.flt_search.setMaximumWidth(320)
+        self.flt_search.setClearButtonEnabled(True)
         self.flt_search.textChanged.connect(self._on_filter_changed)
+        search_row.addWidget(self.flt_search)
+        search_row.addStretch()
+        layout.addLayout(search_row)
 
         # ── Split pane: Table (left) | Preview (right) ──
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -422,15 +426,17 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         status_idx = pnl_idx + 3
         self._pnl_col_idx = pnl_idx  # stored for use in _show_event_preview
 
-        # Build rows: current page trades + date-filtered events (interleaved by date)
+        # Build rows: current page trades + date-filtered events (interleaved by date).
+        # Events have no instrument symbol, so suppress them when a symbol search is active.
         rows_data = []
         for t in page_trades:
             rows_data.append((t['entry_date'] or '', 'trade', t))
-        for ev in events:
-            ev_date = (ev['event_date'] or '')[:10]
-            if period_from is not None and ev_date < str(period_from): continue
-            if period_to is not None and ev_date > str(period_to): continue
-            rows_data.append((ev_date, 'event', ev))
+        if not filters.get('symbol_search'):
+            for ev in events:
+                ev_date = (ev['event_date'] or '')[:10]
+                if period_from is not None and ev_date < str(period_from): continue
+                if period_to is not None and ev_date > str(period_to): continue
+                rows_data.append((ev_date, 'event', ev))
         rows_data.sort(key=lambda x: x[0], reverse=True)
 
         self.table.setUpdatesEnabled(False)
