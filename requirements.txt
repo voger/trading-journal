@@ -2,4 +2,5 @@ PyQt6>=6.5
 beautifulsoup4>=4.12
 matplotlib>=3.7
 mplfinance>=0.12.0a0
+odfpy>=1.4
 yfinance>=0.2

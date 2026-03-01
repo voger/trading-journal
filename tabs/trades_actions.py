@@ -131,12 +131,11 @@ class TradesActionsMixin:
     # ── Export ──
 
     def _on_export(self):
-        """Export the currently visible (filtered) trades to a CSV file.
+        """Export the currently visible (filtered) trades to CSV or ODS.
 
         Exports exactly the trades shown in the table, respecting all active
-        filters (account, status, direction, period, grade, exit reason,
-        outcome, symbol search). Includes a computed 'Net P&L' column
-        (pnl + swap + commission) in addition to the raw DB columns.
+        filters. Includes a computed 'Net P&L' column (pnl + swap + commission)
+        in addition to the raw DB columns.
         """
         if not self._visible_trades:
             QMessageBox.information(self, "Export", "No trades to export.")
@@ -145,26 +144,38 @@ class TradesActionsMixin:
         aid = self.aid()
         acct = get_account(self.conn, aid) if aid else None
         acct_name = acct['name'].replace(' ', '_') if acct else 'trades'
-        default_name = f"{acct_name}_export_{datetime.now().strftime('%Y%m%d')}.csv"
+        stem = f"{acct_name}_export_{datetime.now().strftime('%Y%m%d')}"
 
-        fp, _ = QFileDialog.getSaveFileName(
-            self, "Export Trades", default_name,
-            "CSV Files (*.csv);;All Files (*.*)")
+        fp, selected_filter = QFileDialog.getSaveFileName(
+            self, "Export Trades", f"{stem}.ods",
+            "ODS Spreadsheet (*.ods);;CSV Files (*.csv);;All Files (*.*)")
         if not fp:
             return
 
+        # Ensure correct extension when the user doesn't type one
+        if '*.ods' in selected_filter and not fp.lower().endswith('.ods'):
+            fp += '.ods'
+        elif '*.csv' in selected_filter and not fp.lower().endswith('.csv'):
+            fp += '.csv'
+
+        headers = [label for _, label in EXPORT_COLUMNS] + ['Net P&L']
+        rows = []
+        for t in self._visible_trades:
+            row = []
+            for key, _ in EXPORT_COLUMNS:
+                val = t[key] if key in t.keys() else ''
+                row.append('' if val is None else val)
+            row.append(round(effective_pnl(t), 8))
+            rows.append(row)
+
         try:
-            with open(fp, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                # Header: all DB columns + computed Net P&L
-                writer.writerow([label for _, label in EXPORT_COLUMNS] + ['Net P&L'])
-                for t in self._visible_trades:
-                    row = []
-                    for key, _ in EXPORT_COLUMNS:
-                        val = t[key] if key in t.keys() else ''
-                        row.append('' if val is None else val)
-                    row.append(round(effective_pnl(t), 8))
-                    writer.writerow(row)
+            if fp.lower().endswith('.ods'):
+                _write_ods(fp, headers, rows)
+            else:
+                with open(fp, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                    writer.writerows(rows)
 
             count = len(self._visible_trades)
             self._status(f"Exported {count} trades to {os.path.basename(fp)}")
@@ -266,3 +277,76 @@ class TradesActionsMixin:
         if result['success']: QMessageBox.information(self, "Import Complete", msg)
         else: QMessageBox.critical(self, "Import Failed", msg)
         self.data_changed.emit()
+
+
+# ── ODS writer ────────────────────────────────────────────────────────────
+
+def _write_ods(fp, headers, rows):
+    """Write trade data to an ODS spreadsheet using odfpy.
+
+    Numeric values are stored as floats (not strings) so spreadsheet
+    applications can sum/average them. The Net P&L column is color-coded
+    green/red. The header row is bold with a dark-blue background.
+    """
+    from odf.opendocument import OpenDocumentSpreadsheet
+    from odf.style import Style, TextProperties, TableCellProperties
+    from odf.table import Table, TableRow, TableCell
+    from odf.text import P
+
+    doc = OpenDocumentSpreadsheet()
+
+    # ── Styles ────────────────────────────────────────────────────────────
+    def _cell_style(name, bold=False, fg=None, bg=None):
+        s = Style(name=name, family="table-cell")
+        tp_attrs = {}
+        if bold:
+            tp_attrs['fontweight'] = 'bold'
+        if fg:
+            tp_attrs['color'] = fg
+        if tp_attrs:
+            s.addElement(TextProperties(**tp_attrs))
+        if bg:
+            s.addElement(TableCellProperties(backgroundcolor=bg))
+        doc.automaticstyles.addElement(s)
+        return name
+
+    _s_header  = _cell_style("TH",     bold=True, fg="#ffffff", bg="#1e3a5f")
+    _s_default = _cell_style("TD")
+    _s_profit  = _cell_style("Profit", fg="#008200")
+    _s_loss    = _cell_style("Loss",   fg="#c80000")
+
+    # ── Table ─────────────────────────────────────────────────────────────
+    table = Table(name="Trades")
+
+    # Header row
+    tr = TableRow()
+    for h in headers:
+        tc = TableCell(stylename=_s_header, valuetype="string")
+        tc.addElement(P(text=str(h)))
+        tr.addElement(tc)
+    table.addElement(tr)
+
+    # Detect which column index holds Net P&L (always last)
+    net_pnl_idx = len(headers) - 1
+
+    # Data rows
+    for row in rows:
+        tr = TableRow()
+        for col_idx, val in enumerate(row):
+            if isinstance(val, (int, float)):
+                # Pick color style for the Net P&L column
+                if col_idx == net_pnl_idx:
+                    sname = _s_profit if val > 0 else _s_loss if val < 0 else _s_default
+                else:
+                    sname = _s_default
+                display = str(val) if isinstance(val, int) else f"{val:.8g}"
+                tc = TableCell(stylename=sname, valuetype="float", value=str(val))
+                tc.addElement(P(text=display))
+            else:
+                tc = TableCell(stylename=_s_default, valuetype="string")
+                tc.addElement(P(text=str(val) if val else ''))
+            tr.addElement(tc)
+        table.addElement(tr)
+
+    doc.spreadsheet.addElement(table)
+    doc.save(fp)

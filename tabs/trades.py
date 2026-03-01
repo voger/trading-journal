@@ -55,7 +55,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
                            ("Delete", self._on_delete), ("Refresh", self.refresh)]:
             b = QPushButton(text); b.clicked.connect(slot); tb.addWidget(b)
         tb.addStretch()
-        b = QPushButton("Export CSV..."); b.clicked.connect(self._on_export); tb.addWidget(b)
+        b = QPushButton("Export..."); b.clicked.connect(self._on_export); tb.addWidget(b)
         b = QPushButton("Import..."); b.clicked.connect(self._on_import); tb.addWidget(b)
         layout.addLayout(tb)
 
