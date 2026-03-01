@@ -69,6 +69,12 @@ New plugins go in `plugins/` and are auto-discovered by `import_manager.py` — 
 
 Each tab is a `QWidget` subclass with a `refresh()` method and receives `(conn, get_account_id_fn, status_fn)` at construction. Tabs communicate via signals on `MainWindow` (`data_changed` → `_on_trades_changed`, `_on_setups_changed`). There is no shared state between tabs other than the SQLite connection.
 
+Top-level tabs: **Trades**, **Watchlist**, **Daily Journal**, **Setups**, **Equity Curve**, **Summary Stats**, **Import History**.
+
+`StatsTab` (`tabs/stats.py`) uses an inner `QTabWidget` with sub-tabs: **Overview** (key metrics + Sharpe/Sortino/Calmar), **By Instrument**, **By Setup**, **By Day**, **By Session**, **By Exit Reason**, **By Direction**, **By Month**, **Calendar** (P&L heatmap), **Setup Stats**, **R Distribution**.
+
+`TradesTab` (`tabs/trades.py`) has SQL-level pagination (`_PAGE_SIZE = 500`, Prev/Next buttons, "Page N of M" label) and a Tag filter combo. Tags are also editable in `TradeDialog` and shown as chips in the preview panel.
+
 ### Intentional design decisions (do not suggest changing these)
 
 - **Equity Curve requires a specific account to be selected.** Showing "Please select an account" when "All Accounts" is active is by design — a combined multi-account equity curve is not a goal. Do not recommend adding one.
@@ -101,43 +107,16 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 
 ## Planned features (roadmap)
 
-These are agreed-upon next steps. Implement them in roughly this order; update this section as work progresses.
+Remaining items — everything else from the original roadmap is shipped.
 
-### Calendar P&L heatmap
-- New panel inside the **Summary Stats** tab (below existing stats, or as a toggle).
-- Monthly grid: one cell per calendar day, coloured by net P&L (green → red gradient), blank for days with no closed trades.
-- Tooltip or status-bar text on hover showing exact P&L and trade count for the day.
-- Uses existing `get_trade_breakdowns()` data; pure Python + matplotlib (no new DB queries needed).
+### Hour-of-day analysis (partial)
+- **Session breakdown** (Asian / London / New York / Off-hours) is already implemented as the "By Session" sub-tab in Stats.
+- What's missing: a finer **hour-of-day bar chart** (0–23 h buckets) showing net P&L per hour.
+- Would sit alongside the existing "By Day" and "By Session" sub-tabs; uses existing `get_trade_breakdowns()` infrastructure.
 
-### Unlimited trade list (remove 2 000-row cap)
-- Current code in `tabs/trades.py` fetches 2 001 rows and shows an amber warning if more than 2 000 exist.
-- Replace with proper pagination: Previous / Next page buttons + "Page N of M" label in the filter bar.
-- Page size configurable (default 500). The existing filter/sort logic must be applied server-side (SQL `LIMIT`/`OFFSET`), not in Python.
-- When a page boundary is crossed, re-select the first row of the new page.
-
-### Tags
-- DB schema already has a `tags` table and `trade_tags` join table.
-- Add a tags field to `TradeDialog` (comma-separated `QLineEdit` or a small tag-chip widget).
-- Add a **Tag** filter combo to the trades tab filter bar.
-- Show tags as small chips in the preview panel.
-
-### Setup performance stats
-- Add a "Setup Breakdown" section to the **Summary Stats** tab.
-- Table columns: Setup name | Trades | Win % | Avg R | Avg P&L | Avg Duration.
-- Data from existing `trades` + `setup_types` tables; no schema changes needed.
-
-### R-multiple distribution histogram
-- Single matplotlib bar chart in the Stats tab showing bucketed R multiples (e.g. < −2, −2→−1, −1→0, 0→1, 1→2, > 2).
-- Requires `risk_percent` and `pnl_account_currency` to be set on each trade (open trades and trades without risk % are excluded with a note).
-
-### Time-of-day / day-of-week analysis
-- Two bar charts in Stats: net P&L by hour-of-day and by weekday.
-- Pure SQL aggregation on `entry_date`; no schema changes.
-
-### CSV / ODS export
-- **File → Export Trades…** menu item.
-- Writes the currently-filtered trade list (respecting account + all active filters) to a `.csv` file.
-- Optionally also offer `.ods` (OpenDocument Spreadsheet) via the `odfpy` library if installed; fall back to CSV only if not.
+### ODS export (partial)
+- **CSV export** (File → Export Trades…) is already implemented.
+- What's missing: optional `.ods` output via the `odfpy` library if installed, falling back to CSV when not present.
 
 ---
 
