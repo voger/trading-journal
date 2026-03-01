@@ -11,8 +11,11 @@ if getattr(_sys, 'frozen', False) and hasattr(_sys, '_MEIPASS'):
 else:
     _RESOURCE_DIR = _os.path.dirname(_os.path.abspath(__file__))
 
-_ARROW_PATH    = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_down.svg').replace('\\', '/')
-_ARROW_UP_PATH = _os.path.join(_RESOURCE_DIR, 'icons', 'arrow_up.svg').replace('\\', '/')
+def _icon_path(name):
+    return _os.path.join(_RESOURCE_DIR, 'icons', name).replace('\\', '/')
+
+_ARROW_PATH    = _icon_path('arrow_down.svg')
+_ARROW_UP_PATH = _icon_path('arrow_up.svg')
 
 # ── Dark state ────────────────────────────────────────────────────────────
 _dark = False
@@ -138,7 +141,7 @@ def get_stylesheet():
         width: 20px;
     }}
     QComboBox::down-arrow {{
-        image: url("{_ARROW_PATH}");
+        image: url({_ARROW_PATH});
         width: 10px;
         height: 6px;
     }}
@@ -293,7 +296,7 @@ def get_stylesheet():
         outline: none;
     }}
     QListWidget::item {{ padding: 8px 12px; border-bottom: 1px solid {BORDER}; }}
-    QListWidget::item:selected {{ background-color: {ACCENT}; color: {TEXT_BRIGHT}; }}
+    QListWidget::item:selected {{ background-color: {BG_HOVER}; color: {TEXT_BRIGHT}; }}
     QListWidget::item:hover:!selected {{ background-color: {BG_HOVER}; }}
 
     /* ── Splitter ── */
@@ -398,10 +401,3 @@ def make_mpf_style():
             gridstyle='-', gridcolor='#e8e8e8',
             y_on_right=True)
 
-
-# ── Colour constants for use in code ─────────────────────────────────────
-PROFIT_COLOR   = GREEN
-LOSS_COLOR     = RED
-PROFIT_BG_COLOR = GREEN_BG
-LOSS_BG_COLOR  = RED_BG
-NEUTRAL_COLOR  = TEXT_DIM

@@ -15,18 +15,18 @@ from PyQt6.QtWidgets import (
     QFileDialog, QStyleFactory, QListWidget, QListWidgetItem, QSplitter,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QIcon, QFont
+from PyQt6.QtGui import QAction, QIcon, QFont, QPalette
 
 
 from database import (
     init_database, get_connection, get_app_data_dir,
     get_accounts, get_account, create_account, update_account, delete_account,
+    get_setting, set_setting,
 )
 from dialogs import AccountDialog
 from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
-from database import get_setting, set_setting
 
 APP_VERSION = "2.5.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
@@ -202,11 +202,16 @@ class MainWindow(QMainWindow):
         if _theme.is_dark():
             self.account_list.setStyleSheet("")  # let global QSS handle it
         else:
-            self.account_list.setStyleSheet("""
-                QListWidget { background: #f5f5f5; border: none; outline: none; }
-                QListWidget::item { padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }
-                QListWidget::item:selected { background: #1565c0; color: white; }
-                QListWidget::item:hover:!selected { background: #dce8f5; }
+            # Read the exact highlight colour Qt Fusion uses for table rows so
+            # the sidebar selection is visually identical.
+            pal = QApplication.instance().palette()
+            h_bg = pal.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight).name()
+            h_fg = pal.color(QPalette.ColorGroup.Active, QPalette.ColorRole.HighlightedText).name()
+            self.account_list.setStyleSheet(f"""
+                QListWidget {{ background: #f5f5f5; border: none; outline: none; }}
+                QListWidget::item {{ padding: 8px 12px; border-bottom: 1px solid #e0e0e0; }}
+                QListWidget::item:selected {{ background: {h_bg}; color: {h_fg}; }}
+                QListWidget::item:hover:!selected {{ background: #dce8f5; }}
             """)
 
     def _apply_theme(self, dark: bool):

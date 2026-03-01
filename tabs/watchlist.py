@@ -1,18 +1,21 @@
 """Watchlist tab — track instruments with bias, key levels, and notes."""
+import json
 import sqlite3
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QTableWidget,
     QTableWidgetItem, QHeaderView, QPushButton, QLabel, QComboBox,
     QPlainTextEdit, QLineEdit, QFormLayout, QGroupBox, QMessageBox,
-    QInputDialog,
+    QInputDialog, QDialog, QDialogButtonBox, QListWidget, QAbstractItemView,
+    QCompleter,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QStringListModel, QEvent
 from PyQt6.QtGui import QColor, QFont
 from tabs import BaseTab
 from database import (
     get_watchlist, get_watchlist_item, add_watchlist_item,
     update_watchlist_item, delete_watchlist_item, reorder_watchlist,
     get_instruments, get_or_create_instrument,
+    get_setting, set_setting,
 )
 
 _BIAS_CHOICES = ['', 'bullish', 'bearish', 'neutral']
@@ -23,6 +26,134 @@ _BIAS_COLORS = {
     'neutral': QColor(120, 120, 120),
     '': QColor(180, 180, 180),
 }
+
+_HISTORY_KEY = 'watchlist_symbol_history'
+_HISTORY_MAX = 100
+
+
+def _load_history(conn):
+    raw = get_setting(conn, _HISTORY_KEY)
+    if not raw:
+        return []
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def _save_history(conn, symbols):
+    set_setting(conn, _HISTORY_KEY, json.dumps(symbols))
+
+
+def _add_to_history(conn, symbol):
+    history = _load_history(conn)
+    symbol = symbol.upper()
+    if symbol in history:
+        history.remove(symbol)
+    history.insert(0, symbol)
+    _save_history(conn, history[:_HISTORY_MAX])
+
+
+class _ManageHistoryDialog(QDialog):
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self._conn = conn
+        self.setWindowTitle("Manage Symbol History")
+        self.resize(280, 360)
+
+        lay = QVBoxLayout(self)
+        self._list = QListWidget()
+        self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._list.addItems(_load_history(conn))
+        lay.addWidget(self._list)
+
+        btn_remove = QPushButton("Remove Selected")
+        btn_remove.clicked.connect(self._remove)
+        lay.addWidget(btn_remove)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Delete:
+            self._remove()
+        else:
+            super().keyPressEvent(event)
+
+    def _remove(self):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        self._list.takeItem(row)
+        symbols = [self._list.item(i).text() for i in range(self._list.count())]
+        _save_history(self._conn, symbols)
+
+
+class _AddSymbolDialog(QDialog):
+    def __init__(self, conn, parent=None):
+        super().__init__(parent)
+        self._conn = conn
+        self.setWindowTitle("Add to Watchlist")
+        self.setMinimumWidth(340)
+
+        lay = QVBoxLayout(self)
+        lay.addWidget(QLabel("Enter instrument symbol (e.g., EURUSD, AAPL):"))
+
+        self._edit = QLineEdit()
+        self._edit.setPlaceholderText("Symbol")
+        # Create completer WITHOUT model first so setFilterMode is applied before
+        # the internal proxy filter is initialised; then set the model.
+        self._completer = QCompleter(self)
+        self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self._completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self._completer.setModel(self._build_model())
+        self._edit.setCompleter(self._completer)
+        self._edit.installEventFilter(self)
+        self._completer.popup().installEventFilter(self)  # catch Esc from popup
+        lay.addWidget(self._edit)
+
+        btn_history = QPushButton("Manage History…")
+        btn_history.clicked.connect(self._on_manage)
+        lay.addWidget(btn_history)
+
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        bb.accepted.connect(self._on_accept)
+        bb.rejected.connect(self.reject)
+        lay.addWidget(bb)
+
+        self._edit.returnPressed.connect(bb.accepted)
+
+    def _build_model(self):
+        """History (MRU) first, then any known instruments not already in history."""
+        history = _load_history(self._conn)
+        seen = {s.upper() for s in history}
+        extras = [
+            i['symbol'].upper() for i in get_instruments(self._conn)
+            if i['symbol'] and i['symbol'].upper() not in seen
+        ]
+        return QStringListModel(history + extras)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            if self._completer.popup().isVisible():
+                self._completer.popup().hide()
+            else:
+                self.reject()
+            return True
+        return super().eventFilter(obj, event)
+
+    def _on_accept(self):
+        if self._edit.text().strip():
+            self.accept()
+
+    def _on_manage(self):
+        _ManageHistoryDialog(self._conn, self).exec()
+        self._completer.setModel(self._build_model())
+
+    def symbol(self):
+        return self._edit.text().strip().upper()
 
 
 class WatchlistTab(BaseTab):
@@ -271,11 +402,12 @@ class WatchlistTab(BaseTab):
         instruments = get_instruments(self.conn)
         existing_symbols = [i['symbol'] for i in instruments]
 
-        symbol, ok = QInputDialog.getText(self, "Add to Watchlist",
-            "Enter instrument symbol (e.g., EURUSD, AAPL):")
-        if not ok or not symbol.strip():
+        dlg = _AddSymbolDialog(self.conn, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-        symbol = symbol.strip().upper()
+        symbol = dlg.symbol()
+        if not symbol:
+            return
 
         # Check if already on watchlist
         aid = self.aid()
@@ -303,6 +435,7 @@ class WatchlistTab(BaseTab):
             max_order = max((w['sort_order'] for w in current), default=-1)
             add_watchlist_item(self.conn, instr_id, account_id=aid,
                               sort_order=max_order + 1)
+            _add_to_history(self.conn, symbol)
             self.refresh()
             # Select the newly added item
             for r in range(self.table.rowCount()):
