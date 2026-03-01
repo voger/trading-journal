@@ -221,25 +221,29 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
 
     def refresh_setup_filter(self):
         self.flt_setup.blockSignals(True)
-        cur = self.flt_setup.currentData()
-        self.flt_setup.clear(); self.flt_setup.addItem("All Setups", None)
-        for s in get_setup_types(self.conn): self.flt_setup.addItem(s['name'], s['id'])
-        if cur is not None:
-            idx = self.flt_setup.findData(cur)
-            if idx >= 0: self.flt_setup.setCurrentIndex(idx)
-        self.flt_setup.blockSignals(False)
+        try:
+            cur = self.flt_setup.currentData()
+            self.flt_setup.clear(); self.flt_setup.addItem("All Setups", None)
+            for s in get_setup_types(self.conn): self.flt_setup.addItem(s['name'], s['id'])
+            if cur is not None:
+                idx = self.flt_setup.findData(cur)
+                if idx >= 0: self.flt_setup.setCurrentIndex(idx)
+        finally:
+            self.flt_setup.blockSignals(False)
 
     def refresh_tag_filter(self):
         self.flt_tag.blockSignals(True)
-        cur = self.flt_tag.currentData()
-        self.flt_tag.clear()
-        self.flt_tag.addItem("All Tags", None)
-        for tag in get_tags(self.conn):
-            self.flt_tag.addItem(tag['name'], tag['id'])
-        idx = self.flt_tag.findData(cur)
-        if idx >= 0:
-            self.flt_tag.setCurrentIndex(idx)
-        self.flt_tag.blockSignals(False)
+        try:
+            cur = self.flt_tag.currentData()
+            self.flt_tag.clear()
+            self.flt_tag.addItem("All Tags", None)
+            for tag in get_tags(self.conn):
+                self.flt_tag.addItem(tag['name'], tag['id'])
+            idx = self.flt_tag.findData(cur)
+            if idx >= 0:
+                self.flt_tag.setCurrentIndex(idx)
+        finally:
+            self.flt_tag.blockSignals(False)
 
     def _on_filter_changed(self):
         """Reset to page 0 and refresh whenever any filter changes."""

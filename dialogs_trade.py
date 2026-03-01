@@ -613,7 +613,8 @@ class TradeDialog(QDialog):
     def _remove_screenshot(self, widget):
         idx = -1
         for i in range(self.screenshot_flow.count()):
-            if self.screenshot_flow.itemAt(i).widget() == widget:
+            it = self.screenshot_flow.itemAt(i)
+            if it and it.widget() == widget:
                 idx = i; break
         if idx < 0: return
         self.screenshot_flow.takeAt(idx); widget.deleteLater()

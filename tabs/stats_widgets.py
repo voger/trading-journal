@@ -100,7 +100,7 @@ class BreakdownTable(QWidget):
                 # Store numeric value for sorting
                 if isinstance(val, (int, float)) and key != 'group_name':
                     item.setData(Qt.ItemDataRole.DisplayRole, text)
-                    item.setData(Qt.ItemDataRole.UserRole, float(val) if val != float('inf') else 1e10)
+                    item.setData(Qt.ItemDataRole.UserRole, float(val))
                 else:
                     item.setText(text)
 

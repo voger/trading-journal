@@ -253,34 +253,35 @@ class MainWindow(QMainWindow):
 
     def _refresh_account_list(self):
         self.account_list.blockSignals(True)
-        cur_id = self._aid()
-        self.account_list.clear()
+        try:
+            cur_id = self._aid()
+            self.account_list.clear()
 
-        all_item = QListWidgetItem("All Accounts")
-        all_item.setData(Qt.ItemDataRole.UserRole, None)
-        f = all_item.font(); f.setBold(True); all_item.setFont(f)
-        self.account_list.addItem(all_item)
+            all_item = QListWidgetItem("All Accounts")
+            all_item.setData(Qt.ItemDataRole.UserRole, None)
+            f = all_item.font(); f.setBold(True); all_item.setFont(f)
+            self.account_list.addItem(all_item)
 
-        for a in get_accounts(self.conn):
-            mod = get_module(a['asset_type'])
-            label = f"{a['name']} ({a['currency']})"
-            if mod: label += f"\n{mod.DISPLAY_NAME}"
-            item = QListWidgetItem(label)
-            item.setData(Qt.ItemDataRole.UserRole, a['id'])
-            self.account_list.addItem(item)
+            for a in get_accounts(self.conn):
+                mod = get_module(a['asset_type'])
+                label = f"{a['name']} ({a['currency']})"
+                if mod: label += f"\n{mod.DISPLAY_NAME}"
+                item = QListWidgetItem(label)
+                item.setData(Qt.ItemDataRole.UserRole, a['id'])
+                self.account_list.addItem(item)
 
-        # Restore prior selection
-        restored = False
-        if cur_id is not None:
-            for i in range(self.account_list.count()):
-                if self.account_list.item(i).data(Qt.ItemDataRole.UserRole) == cur_id:
-                    self.account_list.setCurrentRow(i)
-                    restored = True
-                    break
-        if not restored:
-            self.account_list.setCurrentRow(0)  # default: All Accounts
-
-        self.account_list.blockSignals(False)
+            # Restore prior selection
+            restored = False
+            if cur_id is not None:
+                for i in range(self.account_list.count()):
+                    if self.account_list.item(i).data(Qt.ItemDataRole.UserRole) == cur_id:
+                        self.account_list.setCurrentRow(i)
+                        restored = True
+                        break
+            if not restored:
+                self.account_list.setCurrentRow(0)  # default: All Accounts
+        finally:
+            self.account_list.blockSignals(False)
 
     # ── Account CRUD ──
 
