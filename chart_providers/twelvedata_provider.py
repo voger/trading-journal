@@ -106,7 +106,11 @@ class TwelveDataProvider(ChartProvider):
         try:
             req = urllib.request.Request(url, headers={'User-Agent': 'TradingJournal/1.0'})
             with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
+                raw = resp.read().decode('utf-8')
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as e:
+                raise ConnectionError(f'Twelve Data returned invalid JSON: {e}. Response: {raw[:200]}')
         except urllib.error.HTTPError as e:
             body = e.read().decode('utf-8', errors='replace')
             raise ConnectionError(

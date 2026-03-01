@@ -39,6 +39,14 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
     if not execs:
         return []
 
+    try:
+        return _run_fifo_matching_inner(conn, account_id, instrument_id, execs)
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _run_fifo_matching_inner(conn, account_id, instrument_id, execs):
     # ── Split executions into round trips ──
     # A round trip ends when remaining shares hit 0 after a sell.
     round_trips = []

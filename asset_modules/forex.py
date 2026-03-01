@@ -26,7 +26,7 @@ class ForexModule(AssetModule):
 
     def format_trade_cell(self, trade, column_key):
         if column_key == 'size':
-            return f"{trade['position_size']:.2f}" if trade['position_size'] else ''
+            return f"{trade['position_size']:.2f}" if trade['position_size'] is not None else ''
         elif column_key == 'entry_price':
             return f"{trade['entry_price']:.5f}" if trade['entry_price'] else ''
         elif column_key == 'exit_price':
@@ -38,7 +38,7 @@ class ForexModule(AssetModule):
         elif column_key == 'pips':
             return f"{trade['pnl_pips']:+.1f}" if trade['pnl_pips'] is not None else ''
         elif column_key == 'swap':
-            return f"{trade['swap']:.2f}" if trade['swap'] else ''
+            return f"{trade['swap']:.2f}" if trade['swap'] is not None else ''
         elif column_key == 'exit_reason':
             return trade['exit_reason'] or ''
         return ''

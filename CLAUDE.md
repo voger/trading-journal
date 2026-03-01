@@ -177,6 +177,29 @@ All roadmap items are shipped. No open items.
 - `tests/test_analytics.py` — updated `test_weekday_grouping` and `test_session_grouping` to pass `exit_date` instead of `entry_date`, matching corrected grouping logic.
 - Test baseline: **614 passed, 42 skipped**.
 
+## Recent changes (v2.5.15–v2.5.16)
+
+### Bug fixes — multi-round deep scan (v2.5.15 + v2.5.16)
+**v2.5.15 (round 5 fixes):**
+- `main.py` — `restore_backup()` return value now checked; restore failure raises instead of showing false "success" message.
+- `chart_widget.py` — Fixed key mismatch: `stop_loss`/`take_profit` → `stop_loss_price`/`take_profit_price` so SL/TP lines render on charts.
+- `fifo_engine.py` — Wrapped entire `run_fifo_matching()` body in `try/except rollback` via extracted inner function; partial DB changes no longer left uncommitted on exception.
+- `tabs/trades.py` — `ev['amount'] or 0` null guard prevents TypeError when account event has NULL amount.
+- `tabs/watchlist.py` — Case-insensitive symbol comparison in `_on_add()` prevents duplicate detection miss.
+- `db/queries.py` — LIKE wildcards `%` and `_` now escaped with `!` in symbol search.
+- `tabs/trades_actions.py` — `(acct['name'] or 'account')` null guard in export filename.
+- `plugins/trading212_plugin.py` — Skip rows where `shares <= 0`; clamp `xrate` to 1.0 if zero or negative.
+
+**v2.5.16 (round 6 fixes):**
+- `dialogs_trade.py` — `.lower()` on direction fallback; `setup_combo.blockSignals()` wrapped in `try/finally`; existing screenshot tracking uses chart IDs not enumerate indices; `chart_data` dict uses `stop_loss_price`/`take_profit_price` keys; `t.get('chart_data')` replaces redundant `.keys()` call.
+- `asset_modules/forex.py` — `if … is not None` for `swap` and `position_size` display (zero swap now shows "0.00").
+- `db/analytics.py` — Month grouping key uses `'?'` when both dates are NULL instead of `''`.
+- `db/crud.py` — `delete_trade()`, `set_trade_tags()`, `save_trade_rule_checks()`, `reorder_watchlist()` all wrapped in `try/except rollback` to prevent partial uncommitted state.
+- `tabs/setups.py` — `shutil.copy2()` wrapped in try/except; user warned on chart copy failure instead of silent crash.
+- `import_manager.py` — `result['success']` set to `False` when FIFO matching fails for any instrument.
+- `chart_providers/twelvedata_provider.py` — `json.JSONDecodeError` caught when API returns non-JSON response.
+- Test baseline: **614 passed, 42 skipped**.
+
 ## Recent changes (v2.5.8–v2.5.9)
 
 ### Watchlist symbol autocomplete history (`tabs/watchlist.py`)

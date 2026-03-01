@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "2.5.14"
+APP_VERSION = "2.5.16"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
@@ -327,7 +327,9 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes: return
         try:
             self.conn.close()
-            restore_backup(fp, self.app_dir)
+            result = restore_backup(fp, self.app_dir)
+            if not result.get('success'):
+                raise Exception(result.get('message', 'Restore failed'))
             self.conn = get_connection(self.db_path)
             for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
                         self.equity_tab, self.stats_tab, self.imports_tab,

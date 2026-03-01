@@ -71,8 +71,10 @@ class JournalTab(BaseTab):
             if reply == QMessageBox.StandardButton.Cancel:
                 # Revert the date widget back to the previous date without re-triggering this handler
                 self.journal_date.blockSignals(True)
-                self.journal_date.setDate(self._last_date)
-                self.journal_date.blockSignals(False)
+                try:
+                    self.journal_date.setDate(self._last_date)
+                finally:
+                    self.journal_date.blockSignals(False)
                 return
             if reply == QMessageBox.StandardButton.Save:
                 self._on_save()

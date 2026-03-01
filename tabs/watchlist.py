@@ -418,7 +418,7 @@ class WatchlistTab(BaseTab):
         aid = self.aid()
         current = get_watchlist(self.conn, aid)
         for w in current:
-            if w['symbol'] == symbol:
+            if w['symbol'].upper() == symbol.upper():
                 QMessageBox.information(self, "Already Added",
                     f"{symbol} is already on your watchlist.")
                 return

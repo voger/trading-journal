@@ -404,8 +404,8 @@ class TradeChartWidget(QWidget):
         trade = self.trade or {}
         entry_price = trade.get('entry_price')
         exit_price  = trade.get('exit_price')
-        sl = trade.get('stop_loss')
-        tp = trade.get('take_profit')
+        sl = trade.get('stop_loss_price')
+        tp = trade.get('take_profit_price')
         direction = (trade.get('direction') or '').lower()
         pnl = trade.get('pnl_account_currency', 0) or 0
         is_long = direction == 'long'

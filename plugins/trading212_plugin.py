@@ -167,9 +167,13 @@ def parse(file_path: str) -> tuple:
             name = (row.get('Name') or '').strip()
             isin = (row.get('ISIN') or '').strip()
             shares = _safe_float(row.get('No. of shares'))
+            if not shares or shares <= 0:
+                continue
             price = _safe_float(row.get('Price / share'))
             price_currency = (row.get('Currency (Price / share)') or '').strip()
             xrate = _safe_float(row.get('Exchange rate'), 1.0)
+            if not xrate or xrate <= 0:
+                xrate = 1.0
             total = _safe_float(row.get('Total'))
             conv_fee = _safe_float(row.get('Currency conversion fee'))
             result_str = (row.get('Result') or '').strip()

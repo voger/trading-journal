@@ -312,11 +312,13 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
 
     # Run FIFO matching for each affected instrument
     trades_created = 0
+    fifo_failed = False
     for instrument_id in affected_instruments:
         try:
             trade_ids = run_fifo_matching(conn, account_id, instrument_id)
             trades_created += len(trade_ids) if trade_ids else 0
         except Exception as e:
+            fifo_failed = True
             errors.append(f"FIFO matching error for instrument {instrument_id}: {e}")
 
     # Import balance events (linked to this log so delete_import_log can clean them up)
@@ -330,7 +332,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
     )
     conn.commit()
 
-    result['success'] = True
+    result['success'] = not fifo_failed or trades_created > 0
     result['trades_imported'] = imported
     result['trades_skipped'] = skipped
     result['trades_created'] = trades_created

@@ -71,8 +71,9 @@ def _build_trade_filters(account_id=None, setup_id=None, direction=None,
         params.append(str(date_to)[:10] + 'T23:59:59')
 
     if symbol_search:
-        clauses.append("UPPER(i.symbol) LIKE ?")
-        params.append(f'%{symbol_search.upper()}%')
+        escaped = symbol_search.upper().replace('!', '!!').replace('%', '!%').replace('_', '!_')
+        clauses.append("UPPER(i.symbol) LIKE ? ESCAPE '!'")
+        params.append(f'%{escaped}%')
 
     if tag_id is not None:
         clauses.append(

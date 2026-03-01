@@ -521,7 +521,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
                         item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                     self.table.setItem(row, col, item)
             else:
-                ev = data; amt = ev['amount']
+                ev = data; amt = ev['amount'] or 0
                 bg = dep_bg if amt > 0 else wd_bg
                 etype = (ev['event_type'] or 'UNKNOWN').upper()
                 cells = ['', (ev['event_date'] or '')[:16], f"\U0001f4b0 {etype}", '']

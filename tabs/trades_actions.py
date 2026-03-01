@@ -148,7 +148,7 @@ class TradesActionsMixin:
 
         aid = self.aid()
         acct = get_account(self.conn, aid) if aid else None
-        acct_name = acct['name'].replace(' ', '_') if acct else 'trades'
+        acct_name = (acct['name'] or 'account').replace(' ', '_') if acct else 'trades'
         stem = f"{acct_name}_export_{datetime.now().strftime('%Y%m%d')}"
 
         fp, selected_filter = QFileDialog.getSaveFileName(

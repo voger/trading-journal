@@ -179,13 +179,17 @@ def delete_trade(conn: sqlite3.Connection, trade_id: int):
         if fpath and os.path.exists(fpath):
             try: os.remove(fpath)
             except OSError: pass
-    # Unlink executions (don't delete — they're raw data)
-    conn.execute("UPDATE executions SET trade_id = NULL WHERE trade_id = ?", (trade_id,))
-    # Clean up lot consumptions (CASCADE handles this, but be explicit)
-    conn.execute("DELETE FROM lot_consumptions WHERE trade_id = ?", (trade_id,))
-    # CASCADE will handle trade_charts, trade_tags, trade_rule_checks rows
-    conn.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
-    conn.commit()
+    try:
+        # Unlink executions (don't delete — they're raw data)
+        conn.execute("UPDATE executions SET trade_id = NULL WHERE trade_id = ?", (trade_id,))
+        # Clean up lot consumptions (CASCADE handles this, but be explicit)
+        conn.execute("DELETE FROM lot_consumptions WHERE trade_id = ?", (trade_id,))
+        # CASCADE will handle trade_charts, trade_tags, trade_rule_checks rows
+        conn.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def trade_exists(conn: sqlite3.Connection, account_id: int, broker_ticket_id: str) -> bool:
@@ -277,11 +281,15 @@ def get_trade_tags(conn: sqlite3.Connection, trade_id: int):
 
 
 def set_trade_tags(conn: sqlite3.Connection, trade_id: int, tag_ids: list):
-    conn.execute("DELETE FROM trade_tags WHERE trade_id = ?", (trade_id,))
-    for tag_id in tag_ids:
-        conn.execute("INSERT INTO trade_tags (trade_id, tag_id) VALUES (?, ?)",
-                     (trade_id, tag_id))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM trade_tags WHERE trade_id = ?", (trade_id,))
+        for tag_id in tag_ids:
+            conn.execute("INSERT INTO trade_tags (trade_id, tag_id) VALUES (?, ?)",
+                         (trade_id, tag_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def get_or_create_tag(conn: sqlite3.Connection, name: str) -> int:
@@ -306,12 +314,16 @@ def get_trade_rule_checks(conn: sqlite3.Connection, trade_id: int):
 
 def save_trade_rule_checks(conn: sqlite3.Connection, trade_id: int, checks: dict):
     """checks = {rule_id: was_met_bool, ...}"""
-    conn.execute("DELETE FROM trade_rule_checks WHERE trade_id = ?", (trade_id,))
-    for rule_id, was_met in checks.items():
-        conn.execute(
-            "INSERT INTO trade_rule_checks (trade_id, rule_id, was_met) VALUES (?, ?, ?)",
-            (trade_id, rule_id, 1 if was_met else 0))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM trade_rule_checks WHERE trade_id = ?", (trade_id,))
+        for rule_id, was_met in checks.items():
+            conn.execute(
+                "INSERT INTO trade_rule_checks (trade_id, rule_id, was_met) VALUES (?, ?, ?)",
+                (trade_id, rule_id, 1 if was_met else 0))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Trade charts / screenshots ────────────────────────────────────────────
@@ -621,9 +633,13 @@ def delete_watchlist_item(conn: sqlite3.Connection, item_id: int):
 
 def reorder_watchlist(conn: sqlite3.Connection, item_ids: list):
     """Set sort_order based on position in the list."""
-    for i, item_id in enumerate(item_ids):
-        conn.execute("UPDATE watchlist_items SET sort_order = ? WHERE id = ?", (i, item_id))
-    conn.commit()
+    try:
+        for i, item_id in enumerate(item_ids):
+            conn.execute("UPDATE watchlist_items SET sort_order = ? WHERE id = ?", (i, item_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Formula definitions ───────────────────────────────────────────────────

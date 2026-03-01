@@ -620,9 +620,7 @@ class TradeDialog(QDialog):
         if idx < len(self._screenshot_paths):
             src_type, src_val = self._screenshot_paths.pop(idx)
             if src_type == 'existing' and self.trade:
-                charts = get_trade_charts(self.conn, self.trade['id'])
-                if src_val < len(charts):
-                    self.delete_chart_ids.append(charts[src_val]['id'])
+                self.delete_chart_ids.append(src_val)  # src_val is the chart ID
             elif src_type == 'pending':
                 try:
                     self.pending_screenshots.remove(src_val)
@@ -639,13 +637,15 @@ class TradeDialog(QDialog):
         self.instrument_edit.setText(t['symbol'] or '')
         ii = self.itype_combo.findText(t['instrument_type'] or 'forex')
         if ii >= 0: self.itype_combo.setCurrentIndex(ii)
-        self.dir_combo.setCurrentText(t['direction'] or 'long')
+        self.dir_combo.setCurrentText((t['direction'] or 'long').lower())
 
         self.setup_combo.blockSignals(True)
-        if t['setup_type_id']:
-            si = self.setup_combo.findData(t['setup_type_id'])
-            if si >= 0: self.setup_combo.setCurrentIndex(si)
-        self.setup_combo.blockSignals(False)
+        try:
+            if t['setup_type_id']:
+                si = self.setup_combo.findData(t['setup_type_id'])
+                if si >= 0: self.setup_combo.setCurrentIndex(si)
+        finally:
+            self.setup_combo.blockSignals(False)
         self._on_setup_changed()
 
         if t['entry_date']:
@@ -673,9 +673,9 @@ class TradeDialog(QDialog):
 
         # Screenshots
         charts = get_trade_charts(self.conn, t['id'])
-        for i, c in enumerate(charts):
+        for c in charts:
             if os.path.exists(c['file_path']):
-                self._screenshot_paths.append(('existing', i))
+                self._screenshot_paths.append(('existing', c['id']))
                 self._add_thumbnail(c['file_path'])
 
         # Chart widget
@@ -684,11 +684,11 @@ class TradeDialog(QDialog):
             'symbol': t['symbol'] or '', 'direction': t['direction'],
             'entry_date': t['entry_date'], 'exit_date': t['exit_date'],
             'entry_price': t['entry_price'], 'exit_price': t['exit_price'],
-            'stop_loss': t['stop_loss_price'], 'take_profit': t['take_profit_price'],
+            'stop_loss_price': t['stop_loss_price'], 'take_profit_price': t['take_profit_price'],
             'pnl_account_currency': t['pnl_account_currency'],
         }
         self.chart_widget.set_trade(chart_data)
-        cached = t['chart_data'] if 'chart_data' in t.keys() else None
+        cached = t.get('chart_data')
         self.chart_widget.load_saved_or_cached(cached)
 
         # Tags

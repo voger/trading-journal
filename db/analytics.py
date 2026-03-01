@@ -172,7 +172,8 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
             key = (t['direction'] or 'long').capitalize()
         elif group_by == 'month':
             try:
-                key = (t['exit_date'] or t['entry_date'] or '')[:7]
+                date_str = t['exit_date'] or t['entry_date']
+                key = date_str[:7] if date_str else '?'
             except (TypeError, IndexError):
                 key = '?'
         elif group_by == 'hour_of_day':

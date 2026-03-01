@@ -171,5 +171,11 @@ class SetupsTab(BaseTab):
             ts = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
             ext = os.path.splitext(src_path)[1] or '.png'
             dest = os.path.join(SETUP_CHARTS_DIR, f"setup_{setup_id}_{ts}{ext}")
-            shutil.copy2(src_path, dest)
+            try:
+                shutil.copy2(src_path, dest)
+            except OSError as e:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Chart Save Error",
+                    f"Could not save chart '{os.path.basename(src_path)}':\n{e}")
+                continue
             add_setup_chart(self.conn, setup_id, dest, caption=os.path.basename(src_path), sort_order=i)
