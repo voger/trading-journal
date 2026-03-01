@@ -97,28 +97,11 @@ All icon assets live in `icons/`: `icon.png`, `icon.svg`, and pre-sized PNGs (`i
 - `tests/conftest.py` provides `db_path`, `conn`, `stock_account`, `forex_account`, `sample_t212_csv` fixtures plus the optional `real_csv` / `real_mt4` fixtures (skipped if paths not provided).
 - Integration tests in `test_integration_real_csv.py` and `test_integration_real_mt4.py` pin exact counts from real broker exports and are the main regression guard for the import pipeline.
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
-- Current baseline: **483 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`.
+- Current baseline: **614 passed, 42 skipped** across `test_database.py`, `test_fifo_engine.py`, `test_coverage_gaps.py`, `test_analytics.py`, `test_mt4_plugin.py`.
 
 ## Planned features (roadmap)
 
 These are agreed-upon next steps. Implement them in roughly this order; update this section as work progresses.
-
-### Dark mode toggle
-- `theme.py` already contains a full QSS stylesheet — **but the colour palette needs to be replaced** before shipping.
-- Target palette (from reference screenshot): deep charcoal/purple-tinted backgrounds, **not** ocean-blue. Key colours:
-  - `BG_DARK`  `#13131f` — near-black with slight purple tint
-  - `BG_MID`   `#1c1c2e` — panel / card surface
-  - `BG_LIGHT` `#252538` — input fields, table rows
-  - `BG_HOVER` `#2e2e4a` — hover / highlight
-  - `BORDER`   `#32324e` — subtle borders
-  - `TEXT`     `#e4e4f0` — primary text
-  - `TEXT_DIM` `#7c7c98` — secondary text
-  - `GREEN`    `#4dbb8a` — profit (emerald, not teal)
-  - `RED`      `#e05555` — loss
-  - `ACCENT`   `#5c7cfa` — buttons, links, focus (muted blue-purple)
-- Wire toggle to **View → Dark Mode** menu item in `main.py`.
-- Persist the preference in the `app_settings` DB table.
-- The chart widget (matplotlib) needs its own dark style (`mpf.make_marketcolors` / `mpf.make_mpf_style`) to match.
 
 ### Calendar P&L heatmap
 - New panel inside the **Summary Stats** tab (below existing stats, or as a toggle).
@@ -157,6 +140,36 @@ These are agreed-upon next steps. Implement them in roughly this order; update t
 - Optionally also offer `.ods` (OpenDocument Spreadsheet) via the `odfpy` library if installed; fall back to CSV only if not.
 
 ---
+
+## Recent changes (v2.5.10)
+
+### Code scan fixes (`database.py`, `tests/`)
+- `get_trade_breakdowns()` — `day_of_week` and `session` groupings now use `exit_date` (falling back to `entry_date` for open trades), consistent with the existing `month` grouping.
+- Added `_VALID_GROUP_BY` frozenset and validation at the top of `get_trade_breakdowns()` — invalid `group_by` values now raise `ValueError` immediately.
+- `tests/test_mt4_plugin.py` — new file covering all pure helper functions in `plugins/mt4_plugin.py`: `detect_instrument_type`, `detect_pip_size`, `format_display_name`, `extract_exit_reason`, `parse_mt4_datetime`.
+- `tests/test_coverage_gaps.py` — added `TestUpdateAccount`, `TestDailyJournal`, `TestGetTradeBreakdownsValidation`.
+- `tests/test_analytics.py` — updated `test_weekday_grouping` and `test_session_grouping` to pass `exit_date` instead of `entry_date`, matching corrected grouping logic.
+- Test baseline: **614 passed, 42 skipped**.
+
+## Recent changes (v2.5.8–v2.5.9)
+
+### Watchlist symbol autocomplete history (`tabs/watchlist.py`)
+- Replaced `QInputDialog.getText()` in `_on_add()` with a custom `_AddSymbolDialog` featuring a `QCompleter` with `MatchContains` so typing `USD` suggests `EURUSD`, `USDJPY`, etc.
+- History stored in `app_settings` under key `watchlist_symbol_history` (JSON list, MRU order, capped at 100); no schema changes needed.
+- `_ManageHistoryDialog`: list of stored symbols with Remove Selected button and Delete-key support via event filter on the list widget.
+- QCompleter quirk: model must be set via `setModel()` **after** `setFilterMode()` — passing it to the constructor before configuring filter mode causes `MatchContains` to silently revert to `MatchStartsWith` on first open.
+- Esc behavior: first press collapses the dropdown (hides popup), second press dismisses the dialog — handled via `eventFilter` checking `obj` identity.
+- Fixed post-remove selection: after `refresh()`, calling `setCurrentCell()` alone does not reliably emit `currentItemChanged` if Qt's internal index hasn't changed. Fixed by explicitly calling `self._on_selection_changed()` after `setCurrentCell()`.
+
+### Sidebar account list selection color (`main.py`, `theme.py`)
+- Light mode: reads `QPalette.ColorGroup.Active` highlight/highlightedtext colors from the live application palette and injects them into the sidebar QSS — selection color now matches tables exactly on all platforms.
+- Dark mode (`theme.py`): changed `QListWidget::item:selected` from `ACCENT` (blue) to `BG_HOVER` to match `QTableWidget` selection color.
+
+## Recent changes (v2.5.7)
+
+### Dark mode table column sizing and spinbox arrows (`tabs/trades.py`, `theme.py`)
+- Fixed column widths in dark mode (columns were not resizing correctly after theme switch).
+- Added custom up/down arrow icons to `QSpinBox`, `QDoubleSpinBox`, `QDateTimeEdit` via QSS `::up-arrow` / `::down-arrow` with SVG assets.
 
 ## Recent changes (v2.5.2)
 
