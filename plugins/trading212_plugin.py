@@ -162,6 +162,8 @@ def parse(file_path: str) -> tuple:
         # ── Buy / Sell executions ──
         if action in _BUY_ACTIONS or action in _SELL_ACTIONS:
             ticker = (row.get('Ticker') or '').strip()
+            if not ticker:
+                continue
             name = (row.get('Name') or '').strip()
             isin = (row.get('ISIN') or '').strip()
             shares = _safe_float(row.get('No. of shares'))

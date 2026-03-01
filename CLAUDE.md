@@ -119,6 +119,18 @@ All roadmap items are shipped. No open items.
 
 ---
 
+## Recent changes (v2.5.12)
+
+### Bug fixes — deep codebase scan round 2
+- **`tabs/watchlist.py` `_load_detail()`**: `blockSignals(True)` calls on the three bias combos now wrapped in `try/finally` — signals are always unblocked even if an exception occurs mid-load.
+- **`tabs/watchlist.py` `_on_move()`**: `int(id_item.text())` now wrapped in `try/except ValueError` — a non-integer cell value is skipped instead of crashing the reorder action.
+- **`backup_manager.py`**: path-traversal guard added before `zf.extractall()` — each ZIP member's resolved destination is checked to be inside `app_dir`; a crafted archive with `../../` paths is rejected with an error message.
+- **`plugins/trading212_plugin.py`**: empty `ticker` string now causes an early `continue` — rows with no ticker no longer produce `symbol=''` executions in the DB.
+- **`plugins/mt4_plugin.py`**: empty `symbol` string now causes an early `continue` — blank-symbol trades are no longer appended to parsed results.
+- **`import_manager.py` `_import_trades()`**: second line of defence — empty symbol after dedup check is recorded as an error and skipped.
+- **`import_manager.py` `_import_executions()`**: same empty-symbol guard in the executions path.
+- Test baseline unchanged: **614 passed, 42 skipped**.
+
 ## Recent changes (v2.5.11)
 
 ### ODS export + refactor: split large files into focused modules

@@ -142,6 +142,11 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
                 skipped += 1
                 continue
 
+            if not (trade_data.get('symbol') or '').strip():
+                errors.append(f"Trade {i+1}: missing symbol, skipped.")
+                skipped += 1
+                continue
+
             instrument_id = db.get_or_create_instrument(
                 conn,
                 symbol=trade_data['symbol'],
@@ -266,6 +271,11 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
 
             # Deduplicate by broker order ID
             if db.execution_exists(conn, account_id, str(order_id)):
+                skipped += 1
+                continue
+
+            if not (ex.get('symbol') or '').strip():
+                errors.append(f"Execution {i+1}: missing symbol, skipped.")
                 skipped += 1
                 continue
 

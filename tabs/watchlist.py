@@ -330,7 +330,10 @@ class WatchlistTab(BaseTab):
         id_text = self.table.item(r, 0)
         if not id_text or not id_text.text():
             self._clear_detail(); return
-        item_id = int(id_text.text())
+        try:
+            item_id = int(id_text.text())
+        except ValueError:
+            self._clear_detail(); return
         self._current_item_id = item_id
         self._load_detail(item_id)
 
@@ -344,21 +347,21 @@ class WatchlistTab(BaseTab):
         # Block signals while loading to prevent accidental saves
         for combo in [self.bias_weekly, self.bias_daily, self.bias_h4]:
             combo.blockSignals(True)
+        try:
+            idx = self.bias_weekly.findText(w['bias_weekly'] or '')
+            if idx >= 0: self.bias_weekly.setCurrentIndex(idx)
+            else: self.bias_weekly.setCurrentIndex(0)
 
-        idx = self.bias_weekly.findText(w['bias_weekly'] or '')
-        if idx >= 0: self.bias_weekly.setCurrentIndex(idx)
-        else: self.bias_weekly.setCurrentIndex(0)
+            idx = self.bias_daily.findText(w['bias_daily'] or '')
+            if idx >= 0: self.bias_daily.setCurrentIndex(idx)
+            else: self.bias_daily.setCurrentIndex(0)
 
-        idx = self.bias_daily.findText(w['bias_daily'] or '')
-        if idx >= 0: self.bias_daily.setCurrentIndex(idx)
-        else: self.bias_daily.setCurrentIndex(0)
-
-        idx = self.bias_h4.findText(w['bias_h4'] or '')
-        if idx >= 0: self.bias_h4.setCurrentIndex(idx)
-        else: self.bias_h4.setCurrentIndex(0)
-
-        for combo in [self.bias_weekly, self.bias_daily, self.bias_h4]:
-            combo.blockSignals(False)
+            idx = self.bias_h4.findText(w['bias_h4'] or '')
+            if idx >= 0: self.bias_h4.setCurrentIndex(idx)
+            else: self.bias_h4.setCurrentIndex(0)
+        finally:
+            for combo in [self.bias_weekly, self.bias_daily, self.bias_h4]:
+                combo.blockSignals(False)
 
         self.levels_edit.setPlainText(w['key_levels'] or '')
         self.notes_edit.setPlainText(w['notes'] or '')
@@ -486,7 +489,10 @@ class WatchlistTab(BaseTab):
         for row in range(self.table.rowCount()):
             id_item = self.table.item(row, 0)
             if id_item and id_item.text():
-                ids.append(int(id_item.text()))
+                try:
+                    ids.append(int(id_item.text()))
+                except ValueError:
+                    continue
 
         # Swap
         ids[r], ids[target] = ids[target], ids[r]

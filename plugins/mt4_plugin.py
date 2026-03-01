@@ -182,6 +182,8 @@ def parse(file_path: str) -> list:
                 continue
 
             symbol = cells[4].get_text(strip=True).upper()
+            if not symbol:
+                continue
             size = float(cells[3].get_text(strip=True))
             open_time = parse_mt4_datetime(cells[1].get_text(strip=True))
             open_price = float(cells[5].get_text(strip=True))

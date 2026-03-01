@@ -94,6 +94,14 @@ def restore_backup(backup_path: str, app_dir: str) -> dict:
                 result['message'] = "Backup does not contain a database file."
                 return result
 
+            # Validate member paths to prevent path traversal attacks
+            app_dir_real = os.path.realpath(app_dir)
+            for member in zf.infolist():
+                dest = os.path.realpath(os.path.join(app_dir, member.filename))
+                if not dest.startswith(app_dir_real + os.sep) and dest != app_dir_real:
+                    result['message'] = f"Backup contains unsafe path: {member.filename}"
+                    return result
+
             # Extract everything to app_dir
             zf.extractall(app_dir)
 
