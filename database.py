@@ -7,7 +7,6 @@ import sqlite3
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 
 DB_NAME = "trading_journal.db"
 
@@ -905,6 +904,12 @@ def _get_session(hour):
 _DOW_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 
+_VALID_GROUP_BY = frozenset({
+    'instrument', 'setup', 'day_of_week', 'session',
+    'exit_reason', 'direction', 'month',
+})
+
+
 def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: str,
                          date_from=None, date_to=None):
     """Get per-group performance stats for closed trades.
@@ -915,6 +920,8 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
     Returns: list of dicts, each with 'group_name' + all stats keys,
              sorted by net_pnl descending.
     """
+    if group_by not in _VALID_GROUP_BY:
+        raise ValueError(f"group_by must be one of {sorted(_VALID_GROUP_BY)}, got {group_by!r}")
     sql = """SELECT t.*, i.symbol, i.display_name as instrument_name,
                     st.name as setup_name
              FROM trades t
@@ -935,7 +942,6 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
 
     # Group trades by the requested dimension
     from collections import defaultdict
-    from datetime import datetime as _dt
     groups = defaultdict(list)
 
     for t in trades:
@@ -945,13 +951,15 @@ def get_trade_breakdowns(conn: sqlite3.Connection, account_id: int, group_by: st
             key = t['setup_name'] or '(no setup)'
         elif group_by == 'day_of_week':
             try:
-                dt = _dt.fromisoformat(t['entry_date'][:19])
+                date_str = t['exit_date'] or t['entry_date']
+                dt = datetime.fromisoformat(date_str[:19])
                 key = _DOW_NAMES[dt.weekday()]
             except (ValueError, TypeError):
                 key = '?'
         elif group_by == 'session':
             try:
-                dt = _dt.fromisoformat(t['entry_date'][:19])
+                date_str = t['exit_date'] or t['entry_date']
+                dt = datetime.fromisoformat(date_str[:19])
                 key = _get_session(dt.hour)
             except (ValueError, TypeError):
                 key = '?'
@@ -1134,12 +1142,8 @@ def get_advanced_stats(conn: sqlite3.Connection, account_id=None,
     for t, p in zip(trades, pnls):
         if t['entry_date'] and t['exit_date']:
             try:
-                # Handle both datetime and date-only formats
-                entry_str = t['entry_date'][:10]  # YYYY-MM-DD
-                exit_str = t['exit_date'][:10]
-                from datetime import datetime as dt
-                entry_d = dt.strptime(entry_str, '%Y-%m-%d')
-                exit_d = dt.strptime(exit_str, '%Y-%m-%d')
+                entry_d = datetime.strptime(t['entry_date'][:10], '%Y-%m-%d')
+                exit_d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
                 days = (exit_d - entry_d).days
                 if days >= 0:
                     durations.append(days)
@@ -1540,7 +1544,6 @@ def get_setup_performance(conn: sqlite3.Connection, account_id: int,
         avg_r (None if no r_multiple recorded), avg_duration (None if no dates)
     """
     from collections import defaultdict
-    from datetime import datetime as _dt
 
     sql = """SELECT t.*, st.name as setup_name
              FROM trades t
@@ -1579,8 +1582,8 @@ def get_setup_performance(conn: sqlite3.Connection, account_id: int,
         for t in group_trades:
             if t['entry_date'] and t['exit_date']:
                 try:
-                    ed = _dt.strptime(t['entry_date'][:10], '%Y-%m-%d')
-                    xd = _dt.strptime(t['exit_date'][:10], '%Y-%m-%d')
+                    ed = datetime.strptime(t['entry_date'][:10], '%Y-%m-%d')
+                    xd = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
                     days = (xd - ed).days
                     if days >= 0:
                         durations.append(days)

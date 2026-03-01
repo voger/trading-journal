@@ -897,3 +897,117 @@ class TestNormalizeSymbol:
 
     def test_yf_stock_passthrough(self):
         assert self._yf().normalize_symbol('AAPL', asset_type='stocks') == 'AAPL'
+
+# ── Account CRUD ─────────────────────────────────────────────────────────
+
+class TestUpdateAccount:
+
+    def test_update_single_field(self, conn, forex_account):
+        db.update_account(conn, forex_account, name='Renamed Account')
+        acct = db.get_account(conn, forex_account)
+        assert acct['name'] == 'Renamed Account'
+
+    def test_update_multiple_fields(self, conn, forex_account):
+        db.update_account(conn, forex_account, name='FX Pro', broker='FXCM', currency='USD')
+        acct = db.get_account(conn, forex_account)
+        assert acct['name'] == 'FX Pro'
+        assert acct['broker'] == 'FXCM'
+        assert acct['currency'] == 'USD'
+
+    def test_update_sets_updated_at(self, conn, forex_account):
+        before = db.get_account(conn, forex_account)['updated_at']
+        import time; time.sleep(0.01)
+        db.update_account(conn, forex_account, name='Changed')
+        after = db.get_account(conn, forex_account)['updated_at']
+        assert after != before
+
+    def test_update_empty_kwargs_is_noop(self, conn, forex_account):
+        orig = db.get_account(conn, forex_account)['name']
+        db.update_account(conn, forex_account)
+        assert db.get_account(conn, forex_account)['name'] == orig
+
+    def test_update_ignores_disallowed_fields(self, conn, forex_account):
+        orig_id = db.get_account(conn, forex_account)['id']
+        # 'id' and 'created_at' are not in the allowed set — should be silently ignored
+        db.update_account(conn, forex_account, id=9999, created_at='2000-01-01', name='Safe')
+        acct = db.get_account(conn, forex_account)
+        assert acct['id'] == orig_id
+        assert acct['name'] == 'Safe'
+
+    def test_update_initial_balance(self, conn, forex_account):
+        db.update_account(conn, forex_account, initial_balance=5000.0)
+        assert db.get_account(conn, forex_account)['initial_balance'] == 5000.0
+
+
+# ── Daily Journal ────────────────────────────────────────────────────────
+
+class TestDailyJournal:
+
+    def test_save_creates_new_entry(self, conn, forex_account):
+        db.save_journal_entry(conn, '2025-06-01', account_id=forex_account, observations='Day 1 notes')
+        entry = db.get_journal_entry(conn, '2025-06-01', account_id=forex_account)
+        assert entry is not None
+        assert entry['observations'] == 'Day 1 notes'
+
+    def test_save_updates_existing_entry(self, conn, forex_account):
+        db.save_journal_entry(conn, '2025-06-01', account_id=forex_account, observations='First')
+        db.save_journal_entry(conn, '2025-06-01', account_id=forex_account, observations='Updated')
+        entry = db.get_journal_entry(conn, '2025-06-01', account_id=forex_account)
+        assert entry['observations'] == 'Updated'
+        # Only one row should exist
+        count = conn.execute(
+            "SELECT COUNT(*) FROM daily_journal WHERE journal_date = ? AND account_id = ?",
+            ('2025-06-01', forex_account)).fetchone()[0]
+        assert count == 1
+
+    def test_get_returns_none_for_missing(self, conn, forex_account):
+        assert db.get_journal_entry(conn, '2099-01-01', account_id=forex_account) is None
+
+    def test_account_isolation(self, conn, forex_account, stock_account):
+        db.save_journal_entry(conn, '2025-06-01', account_id=forex_account, observations='Forex note')
+        db.save_journal_entry(conn, '2025-06-01', account_id=stock_account, observations='Stock note')
+        fx = db.get_journal_entry(conn, '2025-06-01', account_id=forex_account)
+        st = db.get_journal_entry(conn, '2025-06-01', account_id=stock_account)
+        assert fx['observations'] == 'Forex note'
+        assert st['observations'] == 'Stock note'
+
+    def test_global_entry_account_id_none(self, conn):
+        db.save_journal_entry(conn, '2025-06-01', account_id=None, observations='Global note')
+        entry = db.get_journal_entry(conn, '2025-06-01', account_id=None)
+        assert entry is not None
+        assert entry['observations'] == 'Global note'
+
+    def test_global_entry_not_returned_for_account(self, conn, forex_account):
+        db.save_journal_entry(conn, '2025-06-01', account_id=None, observations='Global note')
+        entry = db.get_journal_entry(conn, '2025-06-01', account_id=forex_account)
+        assert entry is None
+
+
+# ── get_trade_breakdowns validation ─────────────────────────────────────
+
+class TestGetTradeBreakdownsValidation:
+
+    def test_invalid_group_by_raises(self, conn, forex_account):
+        with pytest.raises(ValueError, match="group_by"):
+            db.get_trade_breakdowns(conn, forex_account, group_by='nonsense')
+
+    def test_valid_group_by_values_accepted(self, conn, forex_account):
+        for valid in ('instrument', 'setup', 'day_of_week', 'session',
+                      'exit_reason', 'direction', 'month'):
+            # Should not raise (empty result is fine)
+            db.get_trade_breakdowns(conn, forex_account, group_by=valid)
+
+    def test_day_of_week_uses_exit_date(self, conn, forex_account):
+        """Trades grouped by the weekday of exit_date, not entry_date."""
+        # Trade entered Monday 2025-06-02, closed Friday 2025-06-06
+        iid = db.get_or_create_instrument(conn, 'EURUSD')
+        conn.execute("""INSERT INTO trades
+            (account_id, instrument_id, direction, entry_date, entry_price,
+             position_size, exit_date, status, pnl_account_currency)
+            VALUES (?, ?, 'long', '2025-06-02 09:00:00', 1.1000, 1.0,
+                    '2025-06-06 17:00:00', 'closed', 100.0)""", (forex_account, iid))
+        conn.commit()
+        results = db.get_trade_breakdowns(conn, forex_account, group_by='day_of_week')
+        groups = {r['group_name'] for r in results}
+        assert 'Friday' in groups    # exit day
+        assert 'Monday' not in groups  # entry day should not appear

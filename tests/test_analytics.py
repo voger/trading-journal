@@ -192,13 +192,13 @@ class TestBreakdownBySetup:
 class TestBreakdownByDayOfWeek:
 
     def test_weekday_grouping(self, conn, forex_account):
-        # 2025-01-13 = Monday, 2025-01-14 = Tuesday, 2025-01-15 = Wednesday
+        # 2025-01-13 = Monday, 2025-01-14 = Tuesday (exit_date used for grouping)
         _make_trade(conn, forex_account, 'EURUSD', 50,
-                    entry_date='2025-01-13 10:00:00')
+                    exit_date='2025-01-13 10:00:00')
         _make_trade(conn, forex_account, 'GBPUSD', -20,
-                    entry_date='2025-01-14 14:00:00')
+                    exit_date='2025-01-14 14:00:00')
         _make_trade(conn, forex_account, 'AUDUSD', 30,
-                    entry_date='2025-01-13 15:00:00')
+                    exit_date='2025-01-13 15:00:00')
         result = get_trade_breakdowns(conn, forex_account, 'day_of_week')
         assert len(result) == 2
         # Should be sorted by weekday order: Monday first, then Tuesday
@@ -219,13 +219,13 @@ class TestBreakdownByDayOfWeek:
 class TestBreakdownBySession:
 
     def test_session_grouping(self, conn, forex_account):
-        # 03:00 = Asian, 10:00 = London, 15:00 = New York
+        # 03:00 = Asian, 10:00 = London, 15:00 = New York (exit_date used for grouping)
         _make_trade(conn, forex_account, 'USDJPY', 40,
-                    entry_date='2025-01-15 03:00:00')
+                    exit_date='2025-01-15 03:00:00')
         _make_trade(conn, forex_account, 'EURUSD', -10,
-                    entry_date='2025-01-15 10:00:00')
+                    exit_date='2025-01-15 10:00:00')
         _make_trade(conn, forex_account, 'GBPUSD', 20,
-                    entry_date='2025-01-15 15:00:00')
+                    exit_date='2025-01-15 15:00:00')
         result = get_trade_breakdowns(conn, forex_account, 'session')
         names = {r['group_name'] for r in result}
         assert 'Asian' in names

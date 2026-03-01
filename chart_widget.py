@@ -35,11 +35,6 @@ def _cal_days_for_bars(tf, n):
     return n + 5
 
 
-def _make_style():
-    import theme as _theme
-    return _theme.make_mpf_style()
-
-
 def _fmt_price(price):
     """Format price with appropriate decimal places for chart labels."""
     if price is None:
@@ -146,7 +141,6 @@ class TradeChartWidget(QWidget):
             self.tf_combo.addItem("Daily", "1d")
 
     def _show_placeholder(self):
-        from PyQt6.QtWidgets import QLabel
         lbl = QLabel('Click "Fetch Chart" to load price data')
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl.setStyleSheet(
@@ -407,9 +401,6 @@ class TradeChartWidget(QWidget):
             'Volume': [b.volume for b in bars],
         }, index=pd.DatetimeIndex([b.timestamp for b in bars], name='Date'))
 
-        bar_highs = [b.high for b in bars]
-        bar_lows  = [b.low  for b in bars]
-
         trade = self.trade or {}
         entry_price = trade.get('entry_price')
         exit_price  = trade.get('exit_price')
@@ -423,7 +414,6 @@ class TradeChartWidget(QWidget):
         xi = self._find_idx(bar_dates, entry_dt)
         xo = self._find_idx(bar_dates, exit_dt)
         n = len(bars)
-        is_win = pnl >= 0
 
         # ── hlines: SL and TP only — thin and subtle ──
         hl, hc, hs, hw = [], [], [], []
@@ -439,7 +429,7 @@ class TradeChartWidget(QWidget):
         }
 
         # ── mplfinance kwargs ──
-        style = _make_style()
+        style = _theme.make_mpf_style()
         tf_labels = {'1h': '1H', '4h': '4H', '1d': 'Daily', '1wk': 'Weekly'}
 
         # ylabel='' suppresses mplfinance's default 'Price' axis label.

@@ -461,9 +461,8 @@ class TradesTab(BaseTab):
         # Holding duration
         if t['entry_date'] and t['exit_date']:
             try:
-                from datetime import datetime as _dt
-                ed = _dt.strptime(t['entry_date'][:10], '%Y-%m-%d')
-                xd = _dt.strptime(t['exit_date'][:10], '%Y-%m-%d')
+                ed = datetime.strptime(t['entry_date'][:10], '%Y-%m-%d')
+                xd = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
                 days = (xd - ed).days
                 if days >= 0:
                     lines.append(f"<b>Duration:</b> {days} day{'s' if days != 1 else ''}")
@@ -618,7 +617,7 @@ class TradesTab(BaseTab):
         elif flt_status == 'Closed':
             kwargs['status'] = 'closed'
         grade = self.flt_grade.currentText()
-        if grade not in ('All Grades',):
+        if grade != 'All Grades':
             kwargs['grade'] = grade
         exit_reason = self.flt_exit.currentData()
         if exit_reason is not None:
@@ -747,8 +746,6 @@ class TradesTab(BaseTab):
         # Column layout: ID(hidden) | Date | Instrument | Dir | <mod_cols> | P&L | Setup | Pics | Status
         instr_idx  = 2
         pnl_idx    = _N_PREFIX + len(mod_cols)
-        setup_idx  = pnl_idx + 1  # noqa: F841
-        pics_idx   = pnl_idx + 2  # noqa: F841
         status_idx = pnl_idx + 3
         self._pnl_col_idx = pnl_idx  # stored for use in _show_event_preview
 
@@ -817,7 +814,12 @@ class TradesTab(BaseTab):
                     status_text, status_key = 'OPEN', 'open'
 
                 dir_val = t['direction'] or ''
-                dir_text = 'Long' if dir_val == 'long' else 'Short' if dir_val == 'short' else dir_val.capitalize()
+                if dir_val == 'long':
+                    dir_text = 'Long'
+                elif dir_val == 'short':
+                    dir_text = 'Short'
+                else:
+                    dir_text = dir_val.capitalize()
                 cells = [str(t['id']), (t['entry_date'] or '')[:16], t['symbol'] or '', dir_text]
                 for c in mod_cols:
                     cells.append(mod.format_trade_cell(t, c['key']) if mod else '')

@@ -10,8 +10,8 @@ Designed for stocks only — forex trades bypass this entirely.
 """
 
 import sqlite3
+import warnings
 from collections import deque
-from datetime import datetime
 
 
 def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: int):
@@ -164,7 +164,6 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
                     lot_queue.popleft()
 
             if shares_to_sell > 1e-10:
-                import warnings
                 warnings.warn(
                     f"FIFO oversell: {shares_to_sell:.6f} shares unmatched after exhausting lot queue",
                     stacklevel=2,
@@ -523,8 +522,6 @@ def audit_trade_integrity(conn: sqlite3.Connection, trade_id: int):
 
     # ── Invariant 10: Lot P&L sign consistency ──
     for lc in lots:
-        price_diff = lc['sell_price'] - lc['buy_price']
-        # Adjust for exchange rates
         buy_xrate = lc['buy_exchange_rate'] or 1.0
         sell_xrate = lc['sell_exchange_rate'] or 1.0
         expected_sign = (lc['sell_price'] / sell_xrate) - (lc['buy_price'] / buy_xrate)

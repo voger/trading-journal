@@ -101,20 +101,25 @@ class EquityTab(BaseTab):
         self._dirty = False
         self._render()
 
+    def _show_empty_chart(self, message):
+        """Show a centered message on an empty chart axes."""
+        ax = self.fig.add_subplot(111)
+        if _theme.is_dark():
+            _theme.apply_mpl_dark(self.fig, ax)
+        text_color = _theme.TEXT_DIM if _theme.is_dark() else 'gray'
+        ax.text(0.5, 0.5, message, ha='center', va='center',
+                fontsize=14, color=text_color)
+        ax.set_axis_off()
+        self.canvas.draw()
+
     def _render(self):
         if self.canvas is None: return
         self.fig.clear()
-        # Reset figure patch so switching dark↔light doesn't leave a stale background
         self.fig.patch.set_facecolor(_theme.BG_MID if _theme.is_dark() else 'white')
         aid = self.aid()
 
         if aid is None:
-            ax = self.fig.add_subplot(111)
-            if _theme.is_dark():
-                _theme.apply_mpl_dark(self.fig, ax)
-            ax.text(0.5, 0.5, 'Please select an account', ha='center', va='center',
-                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
-            ax.set_axis_off(); self.canvas.draw()
+            self._show_empty_chart('Please select an account')
             self.deposits_table.setRowCount(0)
             self.account_label.setText(""); self.info_label.setText(""); return
 
@@ -126,12 +131,7 @@ class EquityTab(BaseTab):
         events = get_equity_events(self.conn, aid)
 
         if not data and not events:
-            ax = self.fig.add_subplot(111)
-            if _theme.is_dark():
-                _theme.apply_mpl_dark(self.fig, ax)
-            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
-                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
-            ax.set_axis_off(); self.canvas.draw()
+            self._show_empty_chart('No closed trades yet')
             self.deposits_table.setRowCount(0); self.info_label.setText(""); return
 
         initial = acct['initial_balance'] if acct else 0
@@ -162,12 +162,7 @@ class EquityTab(BaseTab):
                     continue
 
             if not dates:
-                ax = self.fig.add_subplot(111)
-                if _theme.is_dark():
-                    _theme.apply_mpl_dark(self.fig, ax)
-                ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
-                        fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
-                ax.set_axis_off(); self.canvas.draw()
+                self._show_empty_chart('No closed trades yet')
                 self._populate_deposits_table(events, currency)
                 self.info_label.setText(""); return
 
@@ -219,12 +214,7 @@ class EquityTab(BaseTab):
         timeline.sort(key=lambda x: x[0])
 
         if not timeline:
-            ax = self.fig.add_subplot(111)
-            if _theme.is_dark():
-                _theme.apply_mpl_dark(self.fig, ax)
-            ax.text(0.5, 0.5, 'No closed trades yet', ha='center', va='center',
-                    fontsize=14, color=_theme.TEXT_DIM if _theme.is_dark() else 'gray')
-            ax.set_axis_off(); self.canvas.draw()
+            self._show_empty_chart('No closed trades yet')
             self._populate_deposits_table(events, currency)
             self.info_label.setText(""); return
 

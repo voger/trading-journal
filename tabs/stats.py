@@ -1041,12 +1041,20 @@ class StatsTab(BaseTab):
             else:
                 streak_txt = "—"
 
-            sharpe_c = '#008200' if adv['sharpe_ratio'] > 1 else '#c80000' if adv['sharpe_ratio'] < 0 else '#666'
-            sharpe_s = f"{adv['sharpe_ratio']:.2f}" if adv['sharpe_ratio'] != float('inf') else "∞"
-            sortino_c = '#008200' if adv['sortino_ratio'] > 1 else '#c80000' if adv['sortino_ratio'] < 0 else '#666'
-            sortino_s = f"{adv['sortino_ratio']:.2f}" if adv['sortino_ratio'] != float('inf') else "∞"
-            calmar_c  = '#008200' if adv['calmar_ratio'] > 0 else '#c80000'
-            calmar_s  = f"{adv['calmar_ratio']:.2f}" if adv['calmar_ratio'] != float('inf') else "∞"
+            def _ratio_fmt(val, threshold=1):
+                """Format a ratio value and pick its color."""
+                text = f"{val:.2f}" if val != float('inf') else "∞"
+                if val > threshold:
+                    color = '#008200'
+                elif val < 0:
+                    color = '#c80000'
+                else:
+                    color = '#666'
+                return text, color
+
+            sharpe_s, sharpe_c = _ratio_fmt(adv['sharpe_ratio'])
+            sortino_s, sortino_c = _ratio_fmt(adv['sortino_ratio'])
+            calmar_s, calmar_c = _ratio_fmt(adv['calmar_ratio'], threshold=0)
 
             html += f"""
             <hr>
