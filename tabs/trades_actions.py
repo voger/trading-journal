@@ -5,7 +5,7 @@ import shutil
 from datetime import datetime
 
 from PyQt6.QtWidgets import (
-    QMessageBox, QApplication, QDialog,
+    QMessageBox, QApplication, QDialog, QMenu,
     QDialogButtonBox, QFileDialog,
     QComboBox, QLabel, QPushButton, QProgressDialog,
     QVBoxLayout as _VL,
@@ -18,9 +18,9 @@ from database import (
     update_trade, delete_trade,
     add_trade_chart, delete_trade_chart,
     save_trade_rule_checks, create_account,
-    get_trades_for_export, EXPORT_COLUMNS,
+    EXPORT_COLUMNS,
     get_app_data_dir, effective_pnl,
-    get_or_create_tag, set_trade_tags,
+    get_or_create_tag, set_trade_tags, get_trade_tags,
 )
 
 SCREENSHOTS_DIR = os.path.join(get_app_data_dir(), 'screenshots')
@@ -128,6 +128,120 @@ class TradesActionsMixin:
         if QMessageBox.question(self, "Delete", f"Delete trade #{tid}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             delete_trade(self.conn, tid); self.data_changed.emit()
+
+    # ── Context menu ──
+
+    def _on_context_menu(self, pos):
+        row = self.table.rowAt(pos.y())
+        if row < 0:
+            return
+        col = self.table.columnAt(pos.x())
+        self.table.selectRow(row)
+
+        menu = QMenu(self)
+        menu.addAction("Copy Cell",        lambda: self._copy_cell(row, col))
+        menu.addAction("Copy Row",         lambda: self._copy_row(row))
+        menu.addSeparator()
+        menu.addAction("Edit",             self._on_edit)
+        menu.addAction("Delete",           self._on_delete)
+        menu.addAction("Duplicate",        self._on_duplicate)
+        menu.addSeparator()
+        menu.addAction("Jump to Journal",  lambda: self._jump_to_journal(row))
+        menu.addAction("Add / View Chart", lambda: self._on_add_view_chart(row))
+        menu.addAction("Export Row",       lambda: self._export_row(row))
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def _copy_cell(self, row, col):
+        item = self.table.item(row, col)
+        QApplication.clipboard().setText(item.text() if item else "")
+
+    def _copy_row(self, row):
+        parts = []
+        for c in range(self.table.columnCount()):
+            if self.table.isColumnHidden(c):
+                continue
+            item = self.table.item(row, c)
+            parts.append(item.text() if item else "")
+        QApplication.clipboard().setText("\t".join(parts))
+
+    def _on_duplicate(self):
+        r = self.table.currentRow()
+        if r < 0:
+            return
+        id_item = self.table.item(r, 0)
+        if not id_item or not id_item.text():
+            return
+        try:
+            tid = int(id_item.text())
+        except ValueError:
+            return
+        trade = get_trade(self.conn, tid)
+        if not trade:
+            return
+        dlg = TradeDialog(self, self.conn, trade=dict(trade),
+                          default_account_id=self.aid())
+        dlg.setWindowTitle("Duplicate Trade")
+        if dlg.exec():
+            vals = dlg.get_values()
+            vals.pop('broker_ticket_id', None)
+            try:
+                new_id = create_trade(self.conn, **vals)
+                tags = get_trade_tags(self.conn, tid)
+                if tags:
+                    set_trade_tags(self.conn, new_id, [t['id'] for t in tags])
+                self.data_changed.emit()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _jump_to_journal(self, row):
+        id_item = self.table.item(row, 0)
+        if not id_item or not id_item.text():
+            return
+        try:
+            tid = int(id_item.text())
+        except ValueError:
+            return
+        trade = get_trade(self.conn, tid)
+        if not trade:
+            return
+        date = (trade['entry_date'] or '')[:10]
+        if date:
+            self.jump_to_journal.emit(date)
+
+    def _on_add_view_chart(self, row):
+        id_item = self.table.item(row, 0)
+        if not id_item or not id_item.text():
+            return
+        try:
+            trade_id = int(id_item.text())
+        except ValueError:
+            return
+        from dialogs import TradeChartsDialog
+        dlg = TradeChartsDialog(self, self.conn, trade_id)
+        dlg.exec()
+
+    def _export_row(self, row):
+        id_item = self.table.item(row, 0)
+        if not id_item or not id_item.text():
+            return
+        try:
+            tid = int(id_item.text())
+        except ValueError:
+            return
+        trade = get_trade(self.conn, tid)
+        if not trade:
+            return
+        trade_dict = dict(trade)
+        fp, _ = QFileDialog.getSaveFileName(self, "Export Trade", "", "CSV (*.csv)")
+        if not fp:
+            return
+        with open(fp, 'w', newline='', encoding='utf-8') as f:
+            w = csv.writer(f)
+            w.writerow([label for _, label in EXPORT_COLUMNS] + ['Net P&L'])
+            row_vals = [trade_dict.get(key, '') for key, _ in EXPORT_COLUMNS]
+            row_vals.append(round(effective_pnl(trade), 8))
+            w.writerow(row_vals)
+        self._status(f"Exported to {fp}")
 
     def _save_screenshots(self, trade_id, dlg):
         for src_type, src_path in dlg.get_pending_screenshots():

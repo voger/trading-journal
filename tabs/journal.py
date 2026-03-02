@@ -115,6 +115,12 @@ class JournalTab(BaseTab):
         self._loading = False
         self._dirty = False
 
+    def go_to_date(self, date_str: str):
+        """Switch the journal to the given date (called from cross-tab navigation)."""
+        qd = QDate.fromString(date_str[:10], "yyyy-MM-dd")
+        if qd.isValid():
+            self.journal_date.setDate(qd)
+
     def _on_save(self):
         if self.aid() is None:
             self._status("Select an account before saving a journal entry.")

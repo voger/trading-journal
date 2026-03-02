@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QApplication, QFrame, QSplitter,
     QLineEdit,
 )
-from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QShortcut, QKeySequence, QPalette
 
 from tabs import BaseTab
@@ -36,6 +36,8 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 # ── Main TradesTab ────────────────────────────────────────────────────────
 
 class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
+    jump_to_journal = pyqtSignal(str)   # emits YYYY-MM-DD date string
+
     def __init__(self, conn, get_aid_fn, status_bar_fn):
         super().__init__(conn, get_aid_fn)
         self._status = status_bar_fn
@@ -184,6 +186,8 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         self.table.setPalette(_pal)
         self.table.doubleClicked.connect(self._on_edit)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_context_menu)
         self.splitter.addWidget(self.table)
 
         # Right: preview panel

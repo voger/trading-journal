@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "2.5.20"
+APP_VERSION = "3.0.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
@@ -158,6 +158,7 @@ class MainWindow(QMainWindow):
         self.trades_tab.data_changed.connect(self._on_trades_changed)
         self.setups_tab.data_changed.connect(self._on_setups_changed)
         self.imports_tab.data_changed.connect(self._on_trades_changed)
+        self.trades_tab.jump_to_journal.connect(self._on_jump_to_journal)
 
     # ── Helpers ──
 
@@ -179,6 +180,11 @@ class MainWindow(QMainWindow):
         self.equity_tab.refresh()
         self.imports_tab.refresh()
         self._refresh_account_list()
+
+    def _on_jump_to_journal(self, date_str: str):
+        """Switch to Daily Journal tab and navigate to the given date."""
+        self.tabs.setCurrentWidget(self.journal_tab)
+        self.journal_tab.go_to_date(date_str)
 
     def _on_setups_changed(self):
         """Setups were added/edited/deleted."""
