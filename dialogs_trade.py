@@ -604,7 +604,9 @@ class TradeDialog(QDialog):
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         fname = f"clipboard_{ts}.png"
         temp_path = os.path.join(SCREENSHOTS_DIR, fname)
-        img.save(temp_path, "PNG")
+        if not img.save(temp_path, "PNG"):
+            QMessageBox.warning(self, "Clipboard", f"Could not save clipboard image to:\n{temp_path}")
+            return
         item = ('clipboard', temp_path)
         self.pending_screenshots.append(item)
         self._screenshot_paths.append(('pending', item))

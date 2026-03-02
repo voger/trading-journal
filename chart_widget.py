@@ -353,12 +353,12 @@ class TradeChartWidget(QWidget):
             # Save to temp file and open
             tmp = tempfile.NamedTemporaryFile(suffix='.png', prefix='chart_',
                                               delete=False)
+            self._tmp_files.append(tmp.name)  # track before savefig so it's cleaned up on exception
             fig.savefig(tmp.name, dpi=150, bbox_inches='tight',
                         facecolor='#fafafa', edgecolor='none')
             tmp.close()
             import matplotlib.pyplot as plt
             plt.close(fig)
-            self._tmp_files.append(tmp.name)
             QDesktopServices.openUrl(QUrl.fromLocalFile(
                 os.path.abspath(tmp.name)))
         except Exception as e:

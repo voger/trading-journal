@@ -74,7 +74,10 @@ class ImportsTab(BaseTab):
         id_item = self.table.item(row, 0)
         if not id_item or not id_item.text():
             return
-        log_id = int(id_item.text())
+        try:
+            log_id = int(id_item.text())
+        except ValueError:
+            return
         file_col = self.table.item(row, 4)
         file_name = file_col.text() if file_col else ''
         reply = QMessageBox.question(

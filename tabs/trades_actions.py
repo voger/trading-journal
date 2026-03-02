@@ -77,7 +77,10 @@ class TradesActionsMixin:
         if not id_item: return
         id_text = id_item.text()
         if not id_text: return
-        tid = int(id_text)
+        try:
+            tid = int(id_text)
+        except ValueError:
+            return
         trade = get_trade(self.conn, tid)
         if not trade: return
         dlg = TradeDialog(self, self.conn, trade=trade)
@@ -118,7 +121,10 @@ class TradesActionsMixin:
         if not id_item: return
         id_text = id_item.text()
         if not id_text: return
-        tid = int(id_text)
+        try:
+            tid = int(id_text)
+        except ValueError:
+            return
         if QMessageBox.question(self, "Delete", f"Delete trade #{tid}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             delete_trade(self.conn, tid); self.data_changed.emit()
