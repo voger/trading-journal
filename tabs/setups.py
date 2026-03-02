@@ -67,7 +67,9 @@ class SetupsTab(BaseTab):
     def _on_selected(self, row):
         self._clear_thumbs()
         if row < 0: self.detail.clear(); return
-        sid = self.setup_list.item(row).data(Qt.ItemDataRole.UserRole)
+        item = self.setup_list.item(row)
+        if not item: self.detail.clear(); return
+        sid = item.data(Qt.ItemDataRole.UserRole)
         s = get_setup_type(self.conn, sid)
         if not s: return
         rules = get_setup_rules(self.conn, sid)
@@ -137,7 +139,9 @@ class SetupsTab(BaseTab):
     def _on_edit(self):
         row = self.setup_list.currentRow()
         if row < 0: return
-        sid = self.setup_list.item(row).data(Qt.ItemDataRole.UserRole)
+        item = self.setup_list.item(row)
+        if not item: return
+        sid = item.data(Qt.ItemDataRole.UserRole)
         s = get_setup_type(self.conn, sid)
         if not s: return
         dlg = SetupDialog(self, self.conn, setup=s)
@@ -160,8 +164,10 @@ class SetupsTab(BaseTab):
     def _on_delete(self):
         row = self.setup_list.currentRow()
         if row < 0: return
-        sid = self.setup_list.item(row).data(Qt.ItemDataRole.UserRole)
-        name = self.setup_list.item(row).text()
+        item = self.setup_list.item(row)
+        if not item: return
+        sid = item.data(Qt.ItemDataRole.UserRole)
+        name = item.text()
         if QMessageBox.question(self, "Delete Setup", f"Delete '{name}'?\nTrades using it will be unlinked.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             delete_setup_type(self.conn, sid); self.data_changed.emit()

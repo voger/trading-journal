@@ -9,6 +9,17 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 
+def _safe_float(text: str, default: float = 0.0) -> float:
+    """Parse a float from cell text, returning default on empty or malformed input."""
+    t = text.strip().replace(' ', '') if text else ''
+    if not t:
+        return default
+    try:
+        return float(t)
+    except ValueError:
+        return default
+
+
 PLUGIN_NAME = "mt4_detailed_statement"
 DISPLAY_NAME = "MT4 Detailed Statement (HTML)"
 SUPPORTED_EXTENSIONS = [".htm", ".html"]
@@ -191,9 +202,9 @@ def parse(file_path: str) -> tuple:
             tp_price = float(cells[7].get_text(strip=True))
             close_time = cells[8].get_text(strip=True)
             close_price = float(cells[9].get_text(strip=True))
-            commission = float(cells[10].get_text(strip=True))
-            taxes = float(cells[11].get_text(strip=True))
-            swap = float(cells[12].get_text(strip=True))
+            commission = _safe_float(cells[10].get_text(strip=True))
+            taxes = _safe_float(cells[11].get_text(strip=True))
+            swap = _safe_float(cells[12].get_text(strip=True))
             profit = float(cells[13].get_text(strip=True).replace(' ', ''))
 
             # Determine direction

@@ -133,7 +133,10 @@ class SetupDialog(QDialog):
         if img.isNull():
             QMessageBox.information(self, "Clipboard", "No image in clipboard."); return
         fname = f"setup_clip_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        tp = os.path.join(SETUP_CHARTS_DIR, fname); img.save(tp, "PNG")
+        tp = os.path.join(SETUP_CHARTS_DIR, fname)
+        if not img.save(tp, "PNG"):
+            QMessageBox.warning(self, "Clipboard", f"Could not save clipboard image to:\n{tp}")
+            return
         self.pending_charts.append(tp)
         item = QListWidgetItem(f"[Pasted] {fname}")
         item.setData(Qt.ItemDataRole.UserRole, ('pending', tp))

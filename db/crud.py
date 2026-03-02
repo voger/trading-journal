@@ -170,15 +170,16 @@ def update_trade(conn: sqlite3.Connection, trade_id: int, **kwargs):
 
 
 def delete_trade(conn: sqlite3.Connection, trade_id: int):
-    # Collect file paths of attached screenshots/charts before deleting rows
+    # Collect file paths before the transaction; delete files only after commit
+    # so that a failed transaction never leaves orphaned-but-deleted files.
     charts = conn.execute(
         "SELECT file_path FROM trade_charts WHERE trade_id = ?", (trade_id,)
     ).fetchall()
+    chart_paths = []
     for c in charts:
         fpath = c['file_path'] if isinstance(c, sqlite3.Row) else c[0]
-        if fpath and os.path.exists(fpath):
-            try: os.remove(fpath)
-            except OSError: pass
+        if fpath:
+            chart_paths.append(fpath)
     try:
         # Unlink executions (don't delete — they're raw data)
         conn.execute("UPDATE executions SET trade_id = NULL WHERE trade_id = ?", (trade_id,))
@@ -190,6 +191,11 @@ def delete_trade(conn: sqlite3.Connection, trade_id: int):
     except Exception:
         conn.rollback()
         raise
+    # Delete files only after the DB transaction has committed successfully
+    for fpath in chart_paths:
+        if os.path.exists(fpath):
+            try: os.remove(fpath)
+            except OSError: pass
 
 
 def trade_exists(conn: sqlite3.Connection, account_id: int, broker_ticket_id: str) -> bool:
