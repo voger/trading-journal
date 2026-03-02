@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "2.5.16"
+APP_VERSION = "2.5.20"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 
@@ -352,7 +352,11 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def closeEvent(self, event):
-        self.conn.close(); event.accept()
+        try:
+            self.conn.close()
+        except Exception:
+            pass
+        event.accept()
 
 
 def main():

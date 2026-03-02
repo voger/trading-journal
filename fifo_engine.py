@@ -495,7 +495,7 @@ def audit_trade_integrity(conn: sqlite3.Connection, trade_id: int):
     # ── Invariant 7: Weighted avg entry price ──
     if buys and total_bought:
         expected_entry = sum(b['shares'] * b['price'] for b in buys) / total_bought
-        if abs(trade['entry_price'] - round(expected_entry, 6)) > 1e-4:
+        if trade['entry_price'] is not None and abs(trade['entry_price'] - round(expected_entry, 6)) > 1e-4:
             errors.append(
                 f"INV7: Entry price mismatch — trade has {trade['entry_price']}, "
                 f"expected {expected_entry:.6f}"

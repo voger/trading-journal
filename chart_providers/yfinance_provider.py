@@ -85,7 +85,9 @@ class YFinanceProvider(ChartProvider):
         # Check MINI before M so a symbol ending in 'MINI' isn't partially matched by 'M'.
         for suffix in ['.RAW', '.ECN', '.PRO', '.STD', 'MINI', 'M']:
             if s.endswith(suffix):
-                s = s[:-len(suffix)]
+                candidate = s[:-len(suffix)]
+                if candidate:  # only strip if result is non-empty
+                    s = candidate
                 break  # only one suffix at a time
 
         # Remove dots now (e.g. 'EUR.USD' → 'EURUSD')

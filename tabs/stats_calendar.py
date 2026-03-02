@@ -131,7 +131,10 @@ class DayDetailDialog(QDialog):
     def _on_row_double_clicked(self, index):
         from dialogs import TradeDialog
         from database import get_trade
-        id_item = self.sender().item(index.row(), 0)
+        sender = self.sender()
+        if sender is None:
+            return
+        id_item = sender.item(index.row(), 0)
         if id_item is None:
             return
         tid = id_item.data(Qt.ItemDataRole.UserRole)

@@ -8,7 +8,7 @@ import sqlite3
 import os
 from datetime import datetime
 
-from db.schema import SEED_SQL
+from db.schema import SEED_SQL, FORMULA_SEED_SQL
 
 _VALID_ORDER_BY = frozenset({
     'entry_date DESC', 'entry_date ASC',
@@ -239,9 +239,13 @@ def update_setup_type(conn: sqlite3.Connection, setup_id: int, **kwargs):
 
 
 def delete_setup_type(conn: sqlite3.Connection, setup_id: int):
-    conn.execute("UPDATE trades SET setup_type_id = NULL WHERE setup_type_id = ?", (setup_id,))
-    conn.execute("DELETE FROM setup_types WHERE id = ?", (setup_id,))
-    conn.commit()
+    try:
+        conn.execute("UPDATE trades SET setup_type_id = NULL WHERE setup_type_id = ?", (setup_id,))
+        conn.execute("DELETE FROM setup_types WHERE id = ?", (setup_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Setup rules (checklists) ──────────────────────────────────────────────
@@ -270,8 +274,12 @@ def update_setup_rule(conn: sqlite3.Connection, rule_id: int, rule_text: str):
 
 
 def delete_setup_rule(conn: sqlite3.Connection, rule_id: int):
-    conn.execute("DELETE FROM setup_rules WHERE id = ?", (rule_id,))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM setup_rules WHERE id = ?", (rule_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Tags ──────────────────────────────────────────────────────────────────
@@ -364,10 +372,14 @@ def get_trade_chart_counts(conn: sqlite3.Connection, account_id=None):
 
 
 def delete_trade_chart(conn: sqlite3.Connection, chart_id: int):
-    chart = conn.execute("SELECT file_path FROM trade_charts WHERE id = ?", (chart_id,)).fetchone()
-    conn.execute("DELETE FROM trade_charts WHERE id = ?", (chart_id,))
-    conn.commit()
-    return chart['file_path'] if chart else None
+    try:
+        chart = conn.execute("SELECT file_path FROM trade_charts WHERE id = ?", (chart_id,)).fetchone()
+        conn.execute("DELETE FROM trade_charts WHERE id = ?", (chart_id,))
+        conn.commit()
+        return chart['file_path'] if chart else None
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Setup charts (example images) ────────────────────────────────────────
@@ -388,10 +400,14 @@ def get_setup_charts(conn: sqlite3.Connection, setup_id: int):
 
 
 def delete_setup_chart(conn: sqlite3.Connection, chart_id: int):
-    chart = conn.execute("SELECT file_path FROM setup_charts WHERE id = ?", (chart_id,)).fetchone()
-    conn.execute("DELETE FROM setup_charts WHERE id = ?", (chart_id,))
-    conn.commit()
-    return chart['file_path'] if chart else None
+    try:
+        chart = conn.execute("SELECT file_path FROM setup_charts WHERE id = ?", (chart_id,)).fetchone()
+        conn.execute("DELETE FROM setup_charts WHERE id = ?", (chart_id,))
+        conn.commit()
+        return chart['file_path'] if chart else None
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Import logs ───────────────────────────────────────────────────────────
@@ -458,32 +474,36 @@ def delete_import_log(conn: sqlite3.Connection, log_id: int):
     account_id = log['account_id']
     affected_instruments = set()
 
-    if _plugin_is_executions_mode(plugin_name):
-        rows = conn.execute(
-            "SELECT DISTINCT instrument_id FROM executions WHERE import_log_id = ?",
-            (log_id,)
-        ).fetchall()
-        affected_instruments = {r['instrument_id'] for r in rows}
+    try:
+        if _plugin_is_executions_mode(plugin_name):
+            rows = conn.execute(
+                "SELECT DISTINCT instrument_id FROM executions WHERE import_log_id = ?",
+                (log_id,)
+            ).fetchall()
+            affected_instruments = {r['instrument_id'] for r in rows}
 
-        # Delete FIFO-generated trades for affected instruments; the caller will
-        # re-run FIFO on the remaining executions to rebuild correct trades.
-        # Cascades: lot_consumptions, trade_tags, trade_charts, trade_rule_checks.
-        for inst_id in affected_instruments:
-            conn.execute(
-                "DELETE FROM trades WHERE account_id = ? AND instrument_id = ?",
-                (account_id, inst_id)
-            )
+            # Delete FIFO-generated trades for affected instruments; the caller will
+            # re-run FIFO on the remaining executions to rebuild correct trades.
+            # Cascades: lot_consumptions, trade_tags, trade_charts, trade_rule_checks.
+            for inst_id in affected_instruments:
+                conn.execute(
+                    "DELETE FROM trades WHERE account_id = ? AND instrument_id = ?",
+                    (account_id, inst_id)
+                )
 
-        # Delete the raw executions for this log
-        conn.execute("DELETE FROM executions WHERE import_log_id = ?", (log_id,))
-    else:
-        # Trades mode — delete trades directly (cascades to related rows)
-        conn.execute("DELETE FROM trades WHERE import_log_id = ?", (log_id,))
+            # Delete the raw executions for this log
+            conn.execute("DELETE FROM executions WHERE import_log_id = ?", (log_id,))
+        else:
+            # Trades mode — delete trades directly (cascades to related rows)
+            conn.execute("DELETE FROM trades WHERE import_log_id = ?", (log_id,))
 
-    # Remove any balance events (deposits/withdrawals) tagged with this log
-    conn.execute("DELETE FROM account_events WHERE import_log_id = ?", (log_id,))
-    conn.execute("DELETE FROM import_logs WHERE id = ?", (log_id,))
-    conn.commit()
+        # Remove any balance events (deposits/withdrawals) tagged with this log
+        conn.execute("DELETE FROM account_events WHERE import_log_id = ?", (log_id,))
+        conn.execute("DELETE FROM import_logs WHERE id = ?", (log_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
     return plugin_name, account_id, affected_instruments
 
@@ -510,18 +530,22 @@ def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=N
     fields = {k: v for k, v in kwargs.items() if k in _JOURNAL_ALLOWED}
     existing = get_journal_entry(conn, journal_date, account_id)
     fields['updated_at'] = datetime.now().isoformat()
-    if existing:
-        set_clause = ', '.join(f"{k} = ?" for k in fields)
-        values = list(fields.values()) + [existing['id']]
-        conn.execute(f"UPDATE daily_journal SET {set_clause} WHERE id = ?", values)
-    else:
-        fields['journal_date'] = journal_date
-        fields['account_id'] = account_id
-        columns = ', '.join(fields.keys())
-        placeholders = ', '.join('?' * len(fields))
-        conn.execute(f"INSERT INTO daily_journal ({columns}) VALUES ({placeholders})",
-                     list(fields.values()))
-    conn.commit()
+    try:
+        if existing:
+            set_clause = ', '.join(f"{k} = ?" for k in fields)
+            values = list(fields.values()) + [existing['id']]
+            conn.execute(f"UPDATE daily_journal SET {set_clause} WHERE id = ?", values)
+        else:
+            fields['journal_date'] = journal_date
+            fields['account_id'] = account_id
+            columns = ', '.join(fields.keys())
+            placeholders = ', '.join('?' * len(fields))
+            conn.execute(f"INSERT INTO daily_journal ({columns}) VALUES ({placeholders})",
+                         list(fields.values()))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # ── Account events (deposits/withdrawals) ─────────────────────────────────
@@ -529,12 +553,16 @@ def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=N
 def add_account_event(conn: sqlite3.Connection, account_id: int, event_type: str,
                       amount: float, event_date: str, description: str = None,
                       broker_ticket_id: str = None, import_log_id: int = None):
-    cur = conn.execute(
-        """INSERT OR IGNORE INTO account_events
-           (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id))
-    conn.commit()
+    try:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO account_events
+               (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     return cur.lastrowid if cur.rowcount else None
 
 
@@ -636,8 +664,12 @@ def update_watchlist_item(conn: sqlite3.Connection, item_id: int, **kwargs):
 
 
 def delete_watchlist_item(conn: sqlite3.Connection, item_id: int):
-    conn.execute("DELETE FROM watchlist_items WHERE id = ?", (item_id,))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM watchlist_items WHERE id = ?", (item_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def reorder_watchlist(conn: sqlite3.Connection, item_ids: list):
@@ -677,8 +709,7 @@ def update_formula(conn: sqlite3.Connection, metric_key: str, **kwargs):
 def reset_formulas_to_defaults(conn: sqlite3.Connection):
     """Delete all formula definitions and re-insert defaults from SEED_SQL."""
     conn.execute("DELETE FROM formula_definitions")
-    # Re-run only the formula INSERT part of seed data
-    conn.executescript(SEED_SQL)
+    conn.executescript(FORMULA_SEED_SQL)
     conn.commit()
 
 

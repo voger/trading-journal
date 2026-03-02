@@ -364,6 +364,47 @@ INSERT OR IGNORE INTO formula_definitions (metric_key, display_name, formula_tex
      'consistency');
 """
 
+# Only the formula INSERT — used by reset_formulas_to_defaults so it does not
+# accidentally re-seed setup_types or app_settings that the user may have modified.
+FORMULA_SEED_SQL = """
+INSERT OR IGNORE INTO formula_definitions (metric_key, display_name, formula_text, description, interpretation, category) VALUES
+    ('win_rate', 'Win Rate',
+     '(Winning Trades ÷ Total Closed Trades) × 100',
+     'Percentage of trades that were profitable.',
+     'Above 50% is good for most strategies, but win rate alone is meaningless without considering risk:reward. A 30% win rate with 3:1 R:R is very profitable.',
+     'performance'),
+    ('expectancy', 'Expectancy (per trade)',
+     '(Win Rate × Avg Win) − (Loss Rate × Avg Loss)',
+     'The average amount you expect to gain or lose per trade over time.',
+     'Must be positive for a profitable system. Higher is better. A negative expectancy means the system loses money long-term regardless of luck.',
+     'performance'),
+    ('profit_factor', 'Profit Factor',
+     'Gross Profit ÷ Gross Loss',
+     'Ratio of total money won to total money lost.',
+     'Above 1.0 = profitable. Above 1.5 = good. Above 2.0 = excellent. Below 1.0 = losing system.',
+     'performance'),
+    ('avg_r_multiple', 'Average R-Multiple',
+     'Sum of all R-multiples ÷ Number of trades',
+     'Average return per trade expressed as a multiple of risk.',
+     'Positive = profitable system. Above 0.5R is solid.',
+     'performance'),
+    ('risk_of_ruin', 'Risk of Ruin',
+     '((1 − Edge) ÷ (1 + Edge)) ^ Capital_Units',
+     'Probability of losing your entire account given your current stats and risk per trade.',
+     'Below 1% is the goal. Above 5% means reduce position size or improve edge.',
+     'risk'),
+    ('max_drawdown', 'Maximum Drawdown',
+     '(Peak Balance − Trough Balance) ÷ Peak Balance × 100',
+     'The largest peak-to-trough decline in your account.',
+     'Under 20% is manageable. Over 30% is psychologically very difficult to recover from.',
+     'risk'),
+    ('sharpe_ratio', 'Sharpe Ratio (simplified)',
+     'Average Return ÷ Standard Deviation of Returns',
+     'Measures risk-adjusted return.',
+     'Above 1.0 is acceptable. Above 2.0 is very good.',
+     'consistency');
+"""
+
 
 def init_database(db_path: str = None) -> str:
     """Initialize the database with schema and seed data. Returns the db_path used."""

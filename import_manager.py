@@ -181,29 +181,36 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
         except Exception as e:
             errors.append(f"Trade {i+1} (ticket {trade_data.get('broker_ticket_id', '?')}): {e}")
 
-    # Create import log first so balance events can be linked to it
-    log_id = db.create_import_log(conn,
-        account_id=account_id,
-        plugin_name=plugin.PLUGIN_NAME,
-        file_name=os.path.basename(file_path),
-        file_hash=fhash,
-        trades_found=len(raw_trades),
-        trades_imported=0,
-        trades_skipped=0,
-        trades_updated=0,
-        errors=None,
-    )
+    # Create import log, import balance events, and commit — wrapped so that any
+    # DB error here rolls back the uncommitted trade inserts above.
+    try:
+        log_id = db.create_import_log(conn,
+            account_id=account_id,
+            plugin_name=plugin.PLUGIN_NAME,
+            file_name=os.path.basename(file_path),
+            file_hash=fhash,
+            trades_found=len(raw_trades),
+            trades_imported=0,
+            trades_skipped=0,
+            trades_updated=0,
+            errors=None,
+        )
 
-    # Import balance events (linked to this log so delete_import_log can clean them up)
-    events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
+        # Import balance events (linked to this log so delete_import_log can clean them up)
+        events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
 
-    # Update log with final counts
-    conn.execute(
-        """UPDATE import_logs SET trades_imported = ?, trades_skipped = ?, errors = ?
-           WHERE id = ?""",
-        (imported, skipped, json.dumps(errors) if errors else None, log_id)
-    )
-    conn.commit()
+        # Update log with final counts
+        conn.execute(
+            """UPDATE import_logs SET trades_imported = ?, trades_skipped = ?, errors = ?
+               WHERE id = ?""",
+            (imported, skipped, json.dumps(errors) if errors else None, log_id)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        result['success'] = False
+        result['message'] = f"Import failed while saving results: {e}"
+        return result
 
     result['success'] = True
     result['trades_imported'] = imported
@@ -321,16 +328,23 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
             fifo_failed = True
             errors.append(f"FIFO matching error for instrument {instrument_id}: {e}")
 
-    # Import balance events (linked to this log so delete_import_log can clean them up)
-    events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
+    # Import balance events and commit — wrapped so that any DB error here
+    # rolls back the uncommitted execution/trade inserts above.
+    try:
+        events_imported = _import_balance_events(conn, account_id, balance_events, errors, log_id)
 
-    # Update import log with final counts
-    conn.execute(
-        """UPDATE import_logs SET trades_imported = ?, trades_skipped = ?, errors = ?
-           WHERE id = ?""",
-        (imported, skipped, json.dumps(errors) if errors else None, log_id)
-    )
-    conn.commit()
+        # Update import log with final counts
+        conn.execute(
+            """UPDATE import_logs SET trades_imported = ?, trades_skipped = ?, errors = ?
+               WHERE id = ?""",
+            (imported, skipped, json.dumps(errors) if errors else None, log_id)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        result['success'] = False
+        result['message'] = f"Import failed while saving results: {e}"
+        return result
 
     result['success'] = not fifo_failed
     result['trades_imported'] = imported

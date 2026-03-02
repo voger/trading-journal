@@ -198,8 +198,8 @@ def parse(file_path: str) -> tuple:
             size = float(cells[3].get_text(strip=True))
             open_time = parse_mt4_datetime(cells[1].get_text(strip=True))
             open_price = float(cells[5].get_text(strip=True))
-            sl_price = float(cells[6].get_text(strip=True))
-            tp_price = float(cells[7].get_text(strip=True))
+            sl_price = _safe_float(cells[6].get_text(strip=True))
+            tp_price = _safe_float(cells[7].get_text(strip=True))
             close_time = cells[8].get_text(strip=True)
             close_price = float(cells[9].get_text(strip=True))
             commission = _safe_float(cells[10].get_text(strip=True))
@@ -257,7 +257,7 @@ def parse(file_path: str) -> tuple:
                 'swap': swap,
                 'pip_size': pip_size,
                 'status': status,
-                'source_ea': (title_attr.split(']')[-1].strip() if ']' in title_attr
+                'source_ea': (title_attr.split(']', 1)[-1].strip() if ']' in title_attr
                              else title_attr.strip() if title_attr else None) or None,
             }
             trades.append(trade)
