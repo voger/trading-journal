@@ -297,7 +297,10 @@ def get_or_create_tag(conn: sqlite3.Connection, name: str) -> int:
     name = name.strip()
     conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (name,))
     conn.commit()
-    return conn.execute("SELECT id FROM tags WHERE name = ?", (name,)).fetchone()['id']
+    row = conn.execute("SELECT id FROM tags WHERE name = ?", (name,)).fetchone()
+    if row is None:
+        raise RuntimeError(f"Failed to create or find tag: {name!r}")
+    return row['id']
 
 
 # ── Trade rule checks ─────────────────────────────────────────────────────

@@ -102,7 +102,7 @@ def validate(file_path: str) -> tuple:
         return False, f"Error reading file: {e}"
 
 
-def parse(file_path: str) -> list:
+def parse(file_path: str) -> tuple:
     """
     Parse an MT4 detailed statement HTML file.
     Returns a list of standardized trade dictionaries.
