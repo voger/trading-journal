@@ -14,8 +14,10 @@ else:
 def _icon_path(name):
     return _os.path.join(_RESOURCE_DIR, 'icons', name).replace('\\', '/')
 
-_ARROW_PATH    = _icon_path('arrow_down.svg')
-_ARROW_UP_PATH = _icon_path('arrow_up.svg')
+_ARROW_PATH       = _icon_path('arrow_down.svg')
+_ARROW_UP_PATH    = _icon_path('arrow_up.svg')
+_ARROW_LEFT_PATH  = _icon_path('arrow_left.svg')
+_ARROW_RIGHT_PATH = _icon_path('arrow_right.svg')
 
 # ── Dark state ────────────────────────────────────────────────────────────
 _dark = False

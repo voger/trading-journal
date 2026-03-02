@@ -8,8 +8,8 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QApplication, QFrame, QSplitter,
     QLineEdit,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QShortcut, QKeySequence, QPalette
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QColor, QFont, QIcon, QShortcut, QKeySequence, QPalette
 
 from tabs import BaseTab
 import theme as _theme
@@ -83,7 +83,9 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         filt.setSpacing(4)
 
         # Pagination group at the left
-        self.btn_prev = QPushButton("◀")
+        self.btn_prev = QPushButton()
+        self.btn_prev.setIcon(QIcon(_theme._ARROW_LEFT_PATH))
+        self.btn_prev.setIconSize(QSize(8, 12))
         self.btn_prev.setFixedSize(28, 24)
         self.btn_prev.setEnabled(False)
         self.btn_prev.setToolTip("Previous page")
@@ -92,7 +94,9 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         self.lbl_page.setStyleSheet(
             "font-size: 11px; font-weight: bold; padding: 0 4px;"
         )
-        self.btn_next = QPushButton("▶")
+        self.btn_next = QPushButton()
+        self.btn_next.setIcon(QIcon(_theme._ARROW_RIGHT_PATH))
+        self.btn_next.setIconSize(QSize(8, 12))
         self.btn_next.setFixedSize(28, 24)
         self.btn_next.setEnabled(False)
         self.btn_next.setToolTip("Next page")
