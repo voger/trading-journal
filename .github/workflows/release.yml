@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # needed to create releases and upload assets
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: TradingJournal_linux.tar.gz
+          - os: windows-latest
+            asset_name: TradingJournal_windows.zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: bash build_app.sh
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: build_app.bat
+
+      - name: Upload asset to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset_name }}
+          generate_release_notes: true
