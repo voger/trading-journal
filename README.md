@@ -2,7 +2,41 @@
 
 A desktop trading journal application for stock and forex traders. Track your trades, analyse performance with FIFO lot matching, and review your strategy with detailed statistics.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-483-brightgreen) ![Version](https://img.shields.io/badge/Version-2.5.2-blue)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-614-brightgreen) ![Version](https://img.shields.io/badge/Version-3.0.0-blue)
+
+## Download
+
+Pre-built binaries are available on the [Releases page](https://github.com/voger/trading-journal/releases) — no Python required.
+
+| Platform | File |
+|----------|------|
+| Linux (x86_64) | `TradingJournal_linux.tar.gz` |
+| Windows (x64) | `TradingJournal_windows.zip` |
+
+### Linux
+
+```bash
+tar -xzf TradingJournal_linux.tar.gz
+cd TradingJournal
+
+# Optional: register a desktop launcher and icon
+bash install.sh
+# To remove:
+bash install.sh uninstall
+```
+
+### Windows
+
+Extract `TradingJournal_windows.zip` and run `TradingJournal.exe`.
+
+```powershell
+# Optional: add a Start Menu shortcut and desktop icon
+.\install.ps1
+# To remove:
+.\install.ps1 -Uninstall
+```
+
+---
 
 ## Features
 
@@ -16,11 +50,12 @@ A desktop trading journal application for stock and forex traders. Track your tr
 - **Setup Management** — Define and track your trading setups with example charts and entry/exit rule checklists
 - **Watchlist** — Monitor instruments with weekly/daily bias notes and price levels
 - **Equity Curve** — Visual equity progression with two modes: Balance (includes deposits/withdrawals) and Cumulative P&L (trade-only, starts at 0)
+- **Calendar Heatmap** — Monthly P&L grid; click any day to see the trades behind it
+- **Tags & Pagination** — Tag trades for quick filtering; paginated trade list handles large accounts
+- **Dark Mode** — Toggle from the View menu
+- **ODS / CSV Export** — Export the current filtered view to a spreadsheet
+- **Right-click Context Menu** — Copy cell, copy row, edit, delete, duplicate, jump to journal, add/view chart, export row
 - **Backup / Restore** — Full database backup to ZIP with one-click restore
-
-## Screenshots
-
-_Coming soon_
 
 ---
 
@@ -32,7 +67,7 @@ _Coming soon_
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/trading-journal.git
+git clone https://github.com/voger/trading-journal.git
 cd trading-journal
 ```
 
@@ -68,7 +103,7 @@ Your database is created automatically in the platform data directory:
 
 You can build a self-contained executable that doesn't require Python installed.
 
-### Linux / macOS
+### Linux
 
 ```bash
 source venv/bin/activate
@@ -79,13 +114,6 @@ This creates:
 - `dist/TradingJournal/TradingJournal` — the executable
 - `dist/TradingJournal_linux.tar.gz` — portable archive
 
-To install a `.desktop` launcher and hicolor icon:
-```bash
-bash dist/TradingJournal/install.sh
-# Uninstall:
-bash dist/TradingJournal/install.sh uninstall
-```
-
 ### Windows
 
 ```cmd
@@ -95,14 +123,7 @@ build_app.bat
 
 This creates:
 - `dist\TradingJournal\TradingJournal.exe` — the executable
-- `dist\TradingJournal_windows.zip` — portable archive (if 7-Zip is installed)
-
-To add a Start Menu shortcut and desktop icon:
-```powershell
-.\dist\TradingJournal\install.ps1
-# Uninstall:
-.\dist\TradingJournal\install.ps1 -Uninstall
-```
+- `dist\TradingJournal_windows.zip` — portable archive (requires 7-Zip)
 
 ### Build Troubleshooting
 
@@ -125,7 +146,7 @@ To add a Start Menu shortcut and desktop icon:
 ### Supported Brokers
 - **Trading212** — Full support for detailed statements (stocks & ETFs)
 - **MT4** — Detailed statement HTML (forex)
-- Additional plugins can be added in the `plugins/` directory — see the plugin system docs in `CLAUDE.md`
+- Additional plugins can be added in the `plugins/` directory — see `CLAUDE.md`
 
 ---
 
@@ -136,7 +157,7 @@ source venv/bin/activate
 python -m pytest tests/ -q
 ```
 
-Current: **483 passed, 42 skipped** (integration tests require real broker CSV / HTM files and are skipped by default).
+Current: **614 passed, 42 skipped** (integration tests require real broker files and are skipped by default).
 
 ```bash
 # Integration tests (provide your own files)
@@ -150,24 +171,30 @@ python -m pytest tests/ -q --real-mt4=/path/to/DetailedStatement.htm
 
 ```
 trading-journal/
-├── main.py              # Application entry point, font & style setup
-├── database.py          # SQLite schema, CRUD, analytics queries
+├── main.py              # Application entry point
+├── database.py          # Star-import shim (real code in db/)
+├── db/
+│   ├── connection.py    # DB path, get_connection()
+│   ├── schema.py        # Schema, migrations
+│   ├── crud.py          # All entity CRUD
+│   ├── analytics.py     # Stats, P&L, breakdowns
+│   └── queries.py       # Paged/filtered trade queries, EXPORT_COLUMNS
 ├── fifo_engine.py       # FIFO lot matching engine
 ├── chart_widget.py      # Candlestick chart widget (mplfinance)
-├── dialogs.py           # Trade edit dialog, account dialog, image viewer
 ├── import_manager.py    # Plugin-based import orchestration
 ├── backup_manager.py    # Backup / restore to ZIP
 ├── executions_dialog.py # Execution detail viewer (T212 lot breakdown)
-├── theme.py             # Dark theme QSS stylesheet (opt-in)
+├── theme.py             # Dark theme QSS stylesheet
 ├── tabs/                # UI tabs: trades, journal, stats, equity, watchlist…
 ├── plugins/             # Broker import plugins (Trading212, MT4)
 ├── asset_modules/       # Per-asset-type behaviour (forex, stocks)
 ├── chart_providers/     # OHLC data providers (TwelveData, Yahoo Finance)
-├── tests/               # Pytest test suite (483 tests)
-├── build_app.sh         # Linux / macOS PyInstaller build
+├── tests/               # Pytest test suite (614 tests)
+├── build_app.sh         # Linux PyInstaller build
 ├── build_app.bat        # Windows PyInstaller build
 ├── requirements.txt     # Python dependencies
-├── icons/               # Application icons (PNG sizes + SVG)
+├── icons/               # Application icons
+├── install.sh           # Linux desktop integration script
 └── install.ps1          # Windows desktop integration script
 ```
 
@@ -181,18 +208,9 @@ trading-journal/
 
 ---
 
-## Roadmap
+## Changelog
 
-Planned features (not yet implemented):
-
-- **Dark mode toggle** — A revised dark palette (deep charcoal / purple-tinted, inspired by modern trading UIs) selectable from the View menu; `theme.py` already contains the stylesheet skeleton
-- **Calendar heatmap** — Monthly P&L grid view (green / red cells per day) in the Stats tab; at-a-glance view of trading consistency
-- **Unlimited trade list** — Remove the current 2 000-row soft cap; replace with a proper paginator or virtual/lazy row loading so very large accounts are fully browsable
-- **Tags** — Surface the existing DB tags structure in the UI: tag trades from the edit dialog, filter by tag in the trades table
-- **Setup performance stats** — Per-setup breakdown in the Stats tab: win rate, avg R-multiple, avg duration, number of trades per setup
-- **R-multiple distribution** — Histogram of R multiples across all closed trades
-- **Time-of-day / day-of-week heatmap** — Bar charts showing performance by session and weekday
-- **CSV / ODS export** — Export the visible trade list to a comma-separated or OpenDocument Spreadsheet file
+See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

@@ -38,3 +38,7 @@ Thumbs.db
 
 # Generated during Windows build
 icons/icon.ico
+
+# User-generated exports
+trades_export_*.ods
+trades_export_*.csv
