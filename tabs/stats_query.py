@@ -71,7 +71,7 @@ class SqlHighlighter(QSyntaxHighlighter):
             f = QTextCharFormat()
             f.setForeground(QColor(color))
             if bold:
-                f.setFontWeight(QFont.Weight.Bold)
+                f.setFontWeight(700)  # explicit int — enum value silently fails in PyQt6
             if italic:
                 f.setFontItalic(True)
             return f
@@ -82,7 +82,7 @@ class SqlHighlighter(QSyntaxHighlighter):
         dark = _theme.is_dark()
 
         if dark:
-            kw  = _fmt('#f92672', bold=True)   # Monokai pink/red
+            kw  = _fmt('#d9607a', bold=True)   # Monokai pink, desaturated
             fn  = _fmt('#a6e22e')               # Monokai green
             num = _fmt('#ae81ff')               # Monokai purple
             st  = _fmt('#e6db74')               # Monokai yellow
