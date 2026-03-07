@@ -15,6 +15,7 @@ from database import (
 from tabs.stats_widgets import BreakdownTable, SetupPerformanceWidget, RMultipleHistogramWidget, HourOfDayWidget
 from tabs.stats_formula import FormulaEditorWidget
 from tabs.stats_calendar import CalendarHeatmapWidget
+from tabs.stats_query import SqlQueryWidget
 
 
 class StatsTab(BaseTab):
@@ -89,6 +90,10 @@ class StatsTab(BaseTab):
         # Formula editor sub-tab
         self.formula_editor = FormulaEditorWidget(self.conn)
         self.tabs.addTab(self.formula_editor, "Formulas")
+
+        # Custom SQL analytics console sub-tab
+        self.sql_console = SqlQueryWidget(self.conn)
+        self.tabs.addTab(self.sql_console, "Custom Query")
 
 
     def _get_date_range(self):

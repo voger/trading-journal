@@ -713,6 +713,111 @@ def reset_formulas_to_defaults(conn: sqlite3.Connection):
     conn.commit()
 
 
+# ── Custom queries ────────────────────────────────────────────────────────
+
+_DEFAULT_QUERIES = [
+    (
+        "Avg holding time by instrument",
+        "SELECT i.symbol,\n"
+        "       ROUND(AVG(julianday(t.exit_date) - julianday(t.entry_date)), 1) AS avg_days,\n"
+        "       COUNT(*) AS trades\n"
+        "FROM trades t\n"
+        "JOIN instruments i ON t.instrument_id = i.id\n"
+        "WHERE t.status = 'closed'\n"
+        "GROUP BY i.symbol\n"
+        "ORDER BY avg_days DESC",
+    ),
+    (
+        "Win rate by setup",
+        "SELECT s.name AS setup,\n"
+        "       COUNT(*) AS trades,\n"
+        "       ROUND(100.0 * SUM(t.pnl_account_currency > 0) / COUNT(*), 1) AS win_pct,\n"
+        "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
+        "FROM trades t\n"
+        "JOIN setup_types s ON t.setup_type_id = s.id\n"
+        "WHERE t.status = 'closed'\n"
+        "GROUP BY s.name\n"
+        "ORDER BY net_pnl DESC",
+    ),
+    (
+        "Monthly net P&L",
+        "SELECT strftime('%Y-%m', t.exit_date) AS month,\n"
+        "       COUNT(*) AS trades,\n"
+        "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
+        "FROM trades t\n"
+        "WHERE t.status = 'closed'\n"
+        "GROUP BY month\n"
+        "ORDER BY month DESC",
+    ),
+    (
+        "Worst losing instruments",
+        "SELECT i.symbol,\n"
+        "       COUNT(*) AS trades,\n"
+        "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
+        "FROM trades t\n"
+        "JOIN instruments i ON t.instrument_id = i.id\n"
+        "WHERE t.status = 'closed'\n"
+        "GROUP BY i.symbol\n"
+        "ORDER BY net_pnl ASC\n"
+        "LIMIT 10",
+    ),
+    (
+        "Largest trades by absolute P&L",
+        "SELECT i.symbol, t.entry_date, t.exit_date, t.direction,\n"
+        "       ROUND(t.pnl_account_currency + t.commission + t.swap, 2) AS net_pnl\n"
+        "FROM trades t\n"
+        "JOIN instruments i ON t.instrument_id = i.id\n"
+        "WHERE t.status = 'closed'\n"
+        "ORDER BY ABS(net_pnl) DESC\n"
+        "LIMIT 20",
+    ),
+    (
+        "Trade count and net P&L by direction",
+        "SELECT t.direction,\n"
+        "       COUNT(*) AS trades,\n"
+        "       ROUND(100.0 * SUM(t.pnl_account_currency > 0) / COUNT(*), 1) AS win_pct,\n"
+        "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
+        "FROM trades t\n"
+        "WHERE t.status = 'closed'\n"
+        "GROUP BY t.direction",
+    ),
+]
+
+
+def get_custom_queries(conn: sqlite3.Connection):
+    return conn.execute(
+        "SELECT id, name, sql_text FROM custom_queries ORDER BY name"
+    ).fetchall()
+
+
+def save_custom_query(conn: sqlite3.Connection, name: str, sql_text: str) -> int:
+    cur = conn.execute(
+        "INSERT INTO custom_queries (name, sql_text) VALUES (?, ?)"
+        " ON CONFLICT(name) DO UPDATE SET sql_text = excluded.sql_text",
+        (name, sql_text),
+    )
+    conn.commit()
+    return cur.lastrowid
+
+
+def delete_custom_query(conn: sqlite3.Connection, query_id: int):
+    conn.execute("DELETE FROM custom_queries WHERE id = ?", (query_id,))
+    conn.commit()
+
+
+def seed_default_queries(conn: sqlite3.Connection):
+    """Insert the built-in example queries the first time the table is empty."""
+    count = conn.execute("SELECT COUNT(*) FROM custom_queries").fetchone()[0]
+    if count > 0:
+        return
+    for name, sql in _DEFAULT_QUERIES:
+        conn.execute(
+            "INSERT OR IGNORE INTO custom_queries (name, sql_text) VALUES (?, ?)",
+            (name, sql),
+        )
+    conn.commit()
+
+
 # ── App settings ──────────────────────────────────────────────────────────
 
 def get_setting(conn: sqlite3.Connection, key: str, default=None):
