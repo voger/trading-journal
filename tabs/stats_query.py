@@ -12,8 +12,26 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import (
     QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QKeySequence,
+    QFontDatabase,
 )
 from PyQt6.QtCore import Qt, QSize
+
+def _code_font(size=11) -> QFont:
+    """Pick the best available monospace coding font."""
+    preferred = [
+        "JetBrains Mono", "Cascadia Code", "Fira Code",
+        "Source Code Pro", "Consolas", "DejaVu Sans Mono",
+        "Courier New", "Monospace",
+    ]
+    available = QFontDatabase.families()
+    for name in preferred:
+        if name in available:
+            return QFont(name, size)
+    f = QFont()
+    f.setStyleHint(QFont.StyleHint.Monospace)
+    f.setPointSize(size)
+    return f
+
 
 from database import (
     get_custom_queries, save_custom_query, delete_custom_query,
@@ -306,7 +324,7 @@ class SqlQueryWidget(QWidget):
         ec_lay.setSpacing(2)
         ec_lay.addWidget(QLabel("SQL:"))
         self.editor = QPlainTextEdit()
-        self.editor.setFont(QFont("Courier New", 10))
+        self.editor.setFont(_code_font(11))
         self.editor.setTabStopDistance(28)
         self.editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.editor.setPlaceholderText(
