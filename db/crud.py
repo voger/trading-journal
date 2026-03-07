@@ -812,13 +812,15 @@ def delete_custom_query(conn: sqlite3.Connection, query_id: int):
 
 
 def seed_default_queries(conn: sqlite3.Connection):
-    """Insert the built-in example queries the first time the table is empty."""
-    count = conn.execute("SELECT COUNT(*) FROM custom_queries").fetchone()[0]
-    if count > 0:
-        return
+    """Upsert the built-in example queries by name.
+
+    Always updates the SQL for known default queries so fixes are applied
+    on next launch. User-created queries (different names) are never touched.
+    """
     for name, sql in _DEFAULT_QUERIES:
         conn.execute(
-            "INSERT OR IGNORE INTO custom_queries (name, sql_text) VALUES (?, ?)",
+            "INSERT INTO custom_queries (name, sql_text) VALUES (?, ?)"
+            " ON CONFLICT(name) DO UPDATE SET sql_text = excluded.sql_text",
             (name, sql),
         )
     conn.commit()
