@@ -10,9 +10,10 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QSplitter, QTabWidget, QTextBrowser,
     QComboBox, QInputDialog, QMessageBox, QFileDialog, QFrame,
 )
+from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import (
     QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QKeySequence,
-    QFontDatabase,
+    QFontDatabase, QPalette,
 )
 from PyQt6.QtCore import Qt, QSize
 
@@ -32,7 +33,7 @@ def _code_font(size=11) -> QFont:
 
 from database import (
     get_custom_queries, save_custom_query, delete_custom_query,
-    seed_default_queries,
+    seed_default_queries, get_setting, set_setting,
 )
 
 
@@ -74,23 +75,30 @@ class SqlHighlighter(QSyntaxHighlighter):
                 f.setFontItalic(True)
             return f
 
-        # Colors chosen to be legible on both light and dark backgrounds
+        # Pick a color palette that suits the current light/dark theme
+        app = QApplication.instance()
+        bg = app.palette().color(QPalette.ColorRole.Base) if app else None
+        dark = bg is not None and bg.lightness() < 128
+
+        if dark:
+            kw  = _fmt('#569cd6', bold=True)   # VS Code blue
+            fn  = _fmt('#dcdcaa')               # VS Code yellow — pops on dark
+            num = _fmt('#b5cea8')               # VS Code light green
+            st  = _fmt('#ce9178')               # VS Code orange
+            cmt = _fmt('#6a9955', italic=True)  # VS Code comment green
+        else:
+            kw  = _fmt('#0055dd', bold=True)    # strong blue
+            fn  = _fmt('#7b3fa0')               # purple
+            num = _fmt('#0a7a4c')               # teal green
+            st  = _fmt('#b5200d')               # dark red
+            cmt = _fmt('#5a8a5a', italic=True)  # muted green
+
         self._rules = [
-            # Keywords — blue, bold
-            (re.compile(r'\b(' + '|'.join(self._KEYWORDS) + r')\b', re.IGNORECASE),
-             _fmt('#0055dd', bold=True)),
-            # Functions — purple
-            (re.compile(r'\b(' + '|'.join(self._FUNCTIONS) + r')\b', re.IGNORECASE),
-             _fmt('#7b3fa0')),
-            # Numbers
-            (re.compile(r'\b\d+\.?\d*\b'),
-             _fmt('#0a7a4c')),
-            # Single-quoted strings (handles '' escapes inside)
-            (re.compile(r"'[^']*(?:''[^']*)*'"),
-             _fmt('#b5200d')),
-            # Line comments — must be last so they override everything
-            (re.compile(r'--[^\n]*'),
-             _fmt('#5a8a5a', italic=True)),
+            (re.compile(r'\b(' + '|'.join(self._KEYWORDS)  + r')\b', re.IGNORECASE), kw),
+            (re.compile(r'\b(' + '|'.join(self._FUNCTIONS) + r')\b', re.IGNORECASE), fn),
+            (re.compile(r'\b\d+\.?\d*\b'),           num),
+            (re.compile(r"'[^']*(?:''[^']*)*'"),     st),
+            (re.compile(r'--[^\n]*'),                 cmt),  # must be last
         ]
 
     def highlightBlock(self, text):
@@ -251,6 +259,8 @@ class SqlQueryWidget(QWidget):
         self._loading = False    # guard against combo signal during rebuild
 
         seed_default_queries(conn)
+        saved = get_setting(conn, 'sql_console_font_size')
+        self._font_size = int(saved) if saved else 10
         self._build_ui()
         self._refresh_combo()
 
@@ -296,6 +306,23 @@ class SqlQueryWidget(QWidget):
         self.btn_run.setFont(run_font)
         toolbar.addWidget(self.btn_run)
 
+        sep2 = QFrame()
+        sep2.setFrameShape(QFrame.Shape.VLine)
+        sep2.setFrameShadow(QFrame.Shadow.Sunken)
+        toolbar.addWidget(sep2)
+
+        btn_smaller = QPushButton("A−")
+        btn_smaller.setToolTip("Decrease font size")
+        btn_smaller.setFixedWidth(32)
+        btn_smaller.clicked.connect(self._font_decrease)
+        toolbar.addWidget(btn_smaller)
+
+        btn_larger = QPushButton("A+")
+        btn_larger.setToolTip("Increase font size")
+        btn_larger.setFixedWidth(32)
+        btn_larger.clicked.connect(self._font_increase)
+        toolbar.addWidget(btn_larger)
+
         toolbar.addStretch()
 
         self.account_label = QLabel("No account selected")
@@ -321,7 +348,7 @@ class SqlQueryWidget(QWidget):
         ec_lay.setSpacing(2)
         ec_lay.addWidget(QLabel("SQL:"))
         self.editor = QPlainTextEdit()
-        self.editor.setFont(_code_font(11))
+        self.editor.setFont(_code_font(self._font_size))
         self.editor.setTabStopDistance(28)
         self.editor.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.editor.setPlaceholderText(
@@ -447,6 +474,24 @@ class SqlQueryWidget(QWidget):
             self._refresh_combo()
 
     # ── Running queries ──────────────────────────────────────────────────
+
+    def _font_increase(self):
+        if self._font_size < 24:
+            self._font_size += 1
+            self._apply_font_size()
+
+    def _font_decrease(self):
+        if self._font_size > 7:
+            self._font_size -= 1
+            self._apply_font_size()
+
+    def _apply_font_size(self):
+        self.editor.setFont(_code_font(self._font_size))
+        set_setting(self.conn, 'sql_console_font_size', self._font_size)
+
+    def rebuild_highlighter(self):
+        """Recreate the highlighter with colours matching the current theme."""
+        self._highlighter = SqlHighlighter(self.editor.document())
 
     def refresh_account(self, account_name: str):
         """Called by StatsTab when the active account changes."""
