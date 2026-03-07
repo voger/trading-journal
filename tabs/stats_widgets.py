@@ -56,10 +56,9 @@ class BreakdownTable(QWidget):
         self.table.setHorizontalHeaderLabels(labels)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setStretchLastSection(False)
         for i, (_, _, width) in enumerate(_BD_COLUMNS):
-            if i > 0:
-                self.table.setColumnWidth(i, width)
+            self.table.setColumnWidth(i, width)
         lay.addWidget(self.table)
 
     def populate(self, breakdowns, currency=''):
@@ -182,10 +181,9 @@ class SetupPerformanceWidget(QWidget):
         self.table.setHorizontalHeaderLabels([c[1] for c in self._COLS])
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        h.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h.setStretchLastSection(False)
         for i, (_, _, w) in enumerate(self._COLS):
-            if i > 0:
-                self.table.setColumnWidth(i, w)
+            self.table.setColumnWidth(i, w)
         lay.addWidget(self.table)
 
     def populate(self, rows, currency=''):
