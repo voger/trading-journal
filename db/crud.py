@@ -723,7 +723,8 @@ _DEFAULT_QUERIES = [
         "       COUNT(*) AS trades\n"
         "FROM trades t\n"
         "JOIN instruments i ON t.instrument_id = i.id\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "GROUP BY i.symbol\n"
         "ORDER BY avg_days DESC",
     ),
@@ -735,7 +736,8 @@ _DEFAULT_QUERIES = [
         "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
         "FROM trades t\n"
         "JOIN setup_types s ON t.setup_type_id = s.id\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "GROUP BY s.name\n"
         "ORDER BY net_pnl DESC",
     ),
@@ -745,7 +747,8 @@ _DEFAULT_QUERIES = [
         "       COUNT(*) AS trades,\n"
         "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
         "FROM trades t\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "GROUP BY month\n"
         "ORDER BY month DESC",
     ),
@@ -756,7 +759,8 @@ _DEFAULT_QUERIES = [
         "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
         "FROM trades t\n"
         "JOIN instruments i ON t.instrument_id = i.id\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "GROUP BY i.symbol\n"
         "ORDER BY net_pnl ASC\n"
         "LIMIT 10",
@@ -767,7 +771,8 @@ _DEFAULT_QUERIES = [
         "       ROUND(t.pnl_account_currency + t.commission + t.swap, 2) AS net_pnl\n"
         "FROM trades t\n"
         "JOIN instruments i ON t.instrument_id = i.id\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "ORDER BY ABS(net_pnl) DESC\n"
         "LIMIT 20",
     ),
@@ -778,7 +783,8 @@ _DEFAULT_QUERIES = [
         "       ROUND(100.0 * SUM(t.pnl_account_currency > 0) / COUNT(*), 1) AS win_pct,\n"
         "       ROUND(SUM(t.pnl_account_currency + t.commission + t.swap), 2) AS net_pnl\n"
         "FROM trades t\n"
-        "WHERE t.status = 'closed'\n"
+        "WHERE t.account_id = :account_id\n"
+        "  AND t.status = 'closed'\n"
         "GROUP BY t.direction",
     ),
 ]

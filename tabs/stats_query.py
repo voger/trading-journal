@@ -138,11 +138,16 @@ JOIN setup_types s ON t.setup_type_id = s.id
 -- use: s.name</pre>
 
 <h3>Common WHERE clauses</h3>
-<pre>WHERE t.status = 'closed'
+<pre>WHERE t.account_id = :account_id   ← current account
+WHERE t.status = 'closed'
 WHERE t.is_excluded = 0
-WHERE t.account_id = 1
 WHERE t.exit_date IS NOT NULL
 WHERE t.direction = 'buy'</pre>
+
+<p style="background:#fff8dc;padding:4px 6px;border-left:3px solid #e6b800;font-size:11px;">
+<b>:account_id</b> is automatically set to the currently selected
+account. Use it in any query to restrict results to that account.
+</p>
 
 <h3>Date functions</h3>
 <pre>-- Days held:
@@ -173,7 +178,8 @@ ROUND(100.0 * SUM(pnl_account_currency > 0)
 FROM trades t
   [JOIN instruments i ON t.instrument_id = i.id]
   [JOIN setup_types s ON t.setup_type_id = s.id]
-WHERE t.status = 'closed'
+WHERE t.account_id = :account_id
+  AND t.status = 'closed'
   [AND ...]
 GROUP BY ...
 ORDER BY ... DESC
@@ -222,9 +228,10 @@ def _build_schema_html(conn) -> str:
 class SqlQueryWidget(QWidget):
     """Custom SQL analytics console."""
 
-    def __init__(self, conn, parent=None):
+    def __init__(self, conn, get_aid_fn, parent=None):
         super().__init__(parent)
         self.conn = conn
+        self._get_aid = get_aid_fn
         self._queries = []       # list of sqlite3.Row: id, name, sql_text
         self._loading = False    # guard against combo signal during rebuild
 
@@ -275,6 +282,11 @@ class SqlQueryWidget(QWidget):
         toolbar.addWidget(self.btn_run)
 
         toolbar.addStretch()
+
+        self.account_label = QLabel("No account selected")
+        self.account_label.setStyleSheet("font-size:11px; color:#555; padding-right:4px;")
+        toolbar.addWidget(self.account_label)
+
         root.addLayout(toolbar)
 
         # ── Main splitter (editor+ref  /  results) ──
@@ -412,7 +424,7 @@ class SqlQueryWidget(QWidget):
         q = self._queries[idx - 1]
         reply = QMessageBox.question(
             self, "Delete Query",
-            f"Delete saved query "{q['name']}"?",
+            f"Delete saved query \"{q['name']}\"?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
@@ -421,9 +433,22 @@ class SqlQueryWidget(QWidget):
 
     # ── Running queries ──────────────────────────────────────────────────
 
+    def refresh_account(self, account_name: str):
+        """Called by StatsTab when the active account changes."""
+        if account_name:
+            self.account_label.setText(f"Account: {account_name}")
+        else:
+            self.account_label.setText("No account selected")
+
     def _on_run(self):
         sql = self.editor.toPlainText().strip()
         if not sql:
+            return
+
+        aid = self._get_aid()
+        if aid is None:
+            self.status_label.setText("No account selected — please select an account first.")
+            self.status_label.setStyleSheet("font-size:11px; color:#c80000;")
             return
 
         # Warn if the query may modify data
@@ -439,7 +464,8 @@ class SqlQueryWidget(QWidget):
                 return
 
         try:
-            cur = self.conn.execute(sql)
+            # :account_id is available as a named parameter in every query
+            cur = self.conn.execute(sql, {"account_id": aid})
             rows = cur.fetchall()
             col_names = [d[0] for d in cur.description] if cur.description else []
         except Exception as exc:

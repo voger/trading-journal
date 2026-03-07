@@ -92,7 +92,7 @@ class StatsTab(BaseTab):
         self.tabs.addTab(self.formula_editor, "Formulas")
 
         # Custom SQL analytics console sub-tab
-        self.sql_console = SqlQueryWidget(self.conn)
+        self.sql_console = SqlQueryWidget(self.conn, self.aid)
         self.tabs.addTab(self.sql_console, "Custom Query")
 
 
@@ -260,6 +260,10 @@ class StatsTab(BaseTab):
 
         # Calendar heatmap (pass conn so it stays current after a restore)
         self.calendar_heatmap.refresh(self.conn)
+
+        # Update account label in SQL console
+        acct_name = acct['name'] if acct else None
+        self.sql_console.refresh_account(acct_name)
 
     def _on_info_clicked(self, url):
         """Handle clicks on ⓘ info icons in the overview."""
