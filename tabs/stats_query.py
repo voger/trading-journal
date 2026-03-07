@@ -317,7 +317,7 @@ class SqlQueryWidget(QWidget):
             "GROUP BY i.symbol\n"
             "ORDER BY trades DESC"
         )
-        SqlHighlighter(self.editor.document())
+        self._highlighter = SqlHighlighter(self.editor.document())
         ec_lay.addWidget(self.editor)
         h_split.addWidget(editor_container)
 
