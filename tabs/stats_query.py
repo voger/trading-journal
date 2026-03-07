@@ -17,15 +17,12 @@ from PyQt6.QtGui import (
 from PyQt6.QtCore import Qt, QSize
 
 def _code_font(size=11) -> QFont:
-    """Pick the best available monospace coding font."""
-    preferred = [
-        "JetBrains Mono", "Cascadia Code", "Fira Code",
-        "Source Code Pro", "Consolas", "DejaVu Sans Mono",
-        "Courier New", "Monospace",
-    ]
-    available = QFontDatabase.families()
-    for name in preferred:
-        if name in available:
+    """Return JetBrains Mono if available (bundled), otherwise best system monospace."""
+    if "JetBrains Mono" in QFontDatabase.families():
+        return QFont("JetBrains Mono", size)
+    for name in ("Cascadia Code", "Fira Code", "Source Code Pro",
+                 "Consolas", "DejaVu Sans Mono", "Courier New"):
+        if name in QFontDatabase.families():
             return QFont(name, size)
     f = QFont()
     f.setStyleHint(QFont.StyleHint.Monospace)

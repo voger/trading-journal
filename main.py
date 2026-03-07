@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QStyleFactory, QListWidget, QListWidgetItem, QSplitter,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QIcon, QFont, QPalette
+from PyQt6.QtGui import QAction, QIcon, QFont, QPalette, QFontDatabase
 
 
 from database import (
@@ -30,6 +30,19 @@ import theme as _theme
 
 APP_VERSION = "3.0.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
+
+# Register bundled JetBrains Mono fonts (Apache 2.0) so they are available
+# on every platform regardless of whether the font is installed system-wide.
+_fonts_dir = os.path.join(_resource_dir, 'fonts')
+for _fname in (
+    'JetBrainsMono-Regular.ttf',
+    'JetBrainsMono-Bold.ttf',
+    'JetBrainsMono-Italic.ttf',
+    'JetBrainsMono-BoldItalic.ttf',
+):
+    _fp = os.path.join(_fonts_dir, _fname)
+    if os.path.exists(_fp):
+        QFontDatabase.addApplicationFont(_fp)
 
 
 class MainWindow(QMainWindow):
