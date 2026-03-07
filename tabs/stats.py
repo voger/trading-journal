@@ -123,6 +123,7 @@ class StatsTab(BaseTab):
             self.r_hist.populate([], 0)
             self.hour_hist.populate([])
             self.calendar_heatmap.refresh(self.conn)
+            self.sql_console.refresh_account(None)
             return
 
         date_from, date_to = self._get_date_range()
@@ -264,7 +265,6 @@ class StatsTab(BaseTab):
         # Update account label in SQL console
         acct_name = acct['name'] if acct else None
         self.sql_console.refresh_account(acct_name)
-        self.sql_console.rebuild_highlighter()
 
     def _on_info_clicked(self, url):
         """Handle clicks on ⓘ info icons in the overview."""

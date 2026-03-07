@@ -11,9 +11,10 @@ from PyQt6.QtWidgets import (
     QComboBox, QInputDialog, QMessageBox, QFileDialog, QFrame,
 )
 from PyQt6.QtWidgets import QApplication
+import theme as _theme
 from PyQt6.QtGui import (
     QSyntaxHighlighter, QTextCharFormat, QColor, QFont, QKeySequence,
-    QFontDatabase, QPalette,
+    QFontDatabase,
 )
 from PyQt6.QtCore import Qt, QSize
 
@@ -75,10 +76,10 @@ class SqlHighlighter(QSyntaxHighlighter):
                 f.setFontItalic(True)
             return f
 
-        # Pick a color palette that suits the current light/dark theme
-        app = QApplication.instance()
-        bg = app.palette().color(QPalette.ColorRole.Base) if app else None
-        dark = bg is not None and bg.lightness() < 128
+        # Pick a color palette that suits the current light/dark theme.
+        # Use _theme.is_dark() — dark mode is applied via QSS, not QPalette,
+        # so palette().color(Base).lightness() always returns the system value.
+        dark = _theme.is_dark()
 
         if dark:
             kw  = _fmt('#f92672', bold=True)   # Monokai pink/red
@@ -494,11 +495,11 @@ class SqlQueryWidget(QWidget):
         self._highlighter = SqlHighlighter(self.editor.document())
 
     def refresh_account(self, account_name: str):
-        """Called by StatsTab when the active account changes."""
-        if account_name:
-            self.account_label.setText(f"Account: {account_name}")
-        else:
-            self.account_label.setText("No account selected")
+        """Called by StatsTab when the active account changes or theme toggles."""
+        self.account_label.setText(
+            f"Account: {account_name}" if account_name else "No account selected"
+        )
+        self.rebuild_highlighter()
 
     def _on_run(self):
         sql = self.editor.toPlainText().strip()
