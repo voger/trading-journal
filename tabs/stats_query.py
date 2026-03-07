@@ -81,11 +81,11 @@ class SqlHighlighter(QSyntaxHighlighter):
         dark = bg is not None and bg.lightness() < 128
 
         if dark:
-            kw  = _fmt('#569cd6', bold=True)   # VS Code blue
-            fn  = _fmt('#dcdcaa')               # VS Code yellow — pops on dark
-            num = _fmt('#b5cea8')               # VS Code light green
-            st  = _fmt('#ce9178')               # VS Code orange
-            cmt = _fmt('#6a9955', italic=True)  # VS Code comment green
+            kw  = _fmt('#f92672', bold=True)   # Monokai pink/red
+            fn  = _fmt('#a6e22e')               # Monokai green
+            num = _fmt('#ae81ff')               # Monokai purple
+            st  = _fmt('#e6db74')               # Monokai yellow
+            cmt = _fmt('#75715e', italic=True)  # Monokai warm grey
         else:
             kw  = _fmt('#0055dd', bold=True)    # strong blue
             fn  = _fmt('#7b3fa0')               # purple
