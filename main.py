@@ -31,18 +31,7 @@ import theme as _theme
 APP_VERSION = "3.0.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
-# Register bundled JetBrains Mono fonts (Apache 2.0) so they are available
-# on every platform regardless of whether the font is installed system-wide.
 _fonts_dir = os.path.join(_resource_dir, 'fonts')
-for _fname in (
-    'JetBrainsMono-Regular.ttf',
-    'JetBrainsMono-Bold.ttf',
-    'JetBrainsMono-Italic.ttf',
-    'JetBrainsMono-BoldItalic.ttf',
-):
-    _fp = os.path.join(_fonts_dir, _fname)
-    if os.path.exists(_fp):
-        QFontDatabase.addApplicationFont(_fp)
 
 
 class MainWindow(QMainWindow):
@@ -383,6 +372,12 @@ def main():
     app.setStyle(QStyleFactory.create('Fusion'))  # Fusion respects QSS fully on all platforms
     if os.path.exists(ICON_PATH):
         app.setWindowIcon(QIcon(ICON_PATH))
+    # Register bundled JetBrains Mono (OFL 1.1) — must be after QApplication
+    for _fname in ('JetBrainsMono-Regular.ttf', 'JetBrainsMono-Bold.ttf',
+                   'JetBrainsMono-Italic.ttf', 'JetBrainsMono-BoldItalic.ttf'):
+        _fp = os.path.join(_fonts_dir, _fname)
+        if os.path.exists(_fp):
+            QFontDatabase.addApplicationFont(_fp)
     w = MainWindow(); w.showMaximized(); sys.exit(app.exec())
 
 if __name__ == '__main__':
