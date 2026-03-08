@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.1.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 _fonts_dir = os.path.join(_resource_dir, 'fonts')

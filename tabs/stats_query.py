@@ -113,25 +113,27 @@ class SqlHighlighter(QSyntaxHighlighter):
 def _cheatsheet_html(dark: bool) -> str:
     if dark:
         css = """
-  body  { font-size: 12px; margin: 6px; color: #d4d4d4; }
-  h3    { color: #729fcf; margin: 10px 0 4px 0; border-bottom: 1px solid #444; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
-  td    { padding: 2px 6px; vertical-align: top; color: #d4d4d4; }
+  body         { font-size: 12px; margin: 6px; color: #f8f8f2; }
+  h3           { color: #66d9ef; margin: 10px 0 4px 0; border-bottom: 1px solid #49483e; }
+  table        { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+  td           { padding: 2px 6px; vertical-align: top; color: #f8f8f2; }
   td:first-child { white-space: nowrap; font-family: monospace; color: #a6e22e; }
-  pre, code { font-size: 11px; background: #1e1e1e; color: #d4d4d4;
-               padding: 4px 6px; border-radius: 3px; display: block;
-               white-space: pre-wrap; border: 1px solid #444; }"""
-        note_style = "background:#3a3520;padding:4px 6px;border-left:3px solid #c4a000;font-size:11px;"
+  pre, code    { font-size: 11px; background: #272822; color: #f8f8f2;
+                 padding: 4px 6px; border-radius: 3px; display: block;
+                 white-space: pre-wrap; border: 1px solid #49483e; }
+  .note        { background: #3a3520; padding: 4px 6px;
+                 border-left: 3px solid #e6db74; font-size: 11px; }"""
     else:
         css = """
-  body  { font-size: 12px; margin: 6px; }
-  h3    { color: #0055dd; margin: 10px 0 4px 0; border-bottom: 1px solid #ccc; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
-  td    { padding: 2px 6px; vertical-align: top; }
+  body         { font-size: 12px; margin: 6px; }
+  h3           { color: #0055dd; margin: 10px 0 4px 0; border-bottom: 1px solid #ccc; }
+  table        { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+  td           { padding: 2px 6px; vertical-align: top; }
   td:first-child { white-space: nowrap; font-family: monospace; color: #333; }
-  pre, code { font-size: 11px; background: #f0f0f0; padding: 4px 6px;
-               border-radius: 3px; display: block; white-space: pre-wrap; }"""
-        note_style = "background:#fff8dc;padding:4px 6px;border-left:3px solid #e6b800;font-size:11px;"
+  pre, code    { font-size: 11px; background: #f0f0f0; padding: 4px 6px;
+                 border-radius: 3px; display: block; white-space: pre-wrap; }
+  .note        { background: #fff8dc; padding: 4px 6px;
+                 border-left: 3px solid #e6b800; font-size: 11px; }"""
 
     return f"""<style>{css}</style>
 
@@ -182,7 +184,7 @@ WHERE t.is_excluded = 0
 WHERE t.exit_date IS NOT NULL
 WHERE t.direction = 'buy'</pre>
 
-<p style="{note_style}">
+<p class="note">
 <b>:account_id</b> is automatically set to the currently selected
 account. Use it in any query to restrict results to that account.
 </p>
@@ -228,29 +230,29 @@ LIMIT 20</pre>
 def _build_schema_html(conn, dark: bool) -> str:
     """Dynamically generate schema reference from the live database."""
     if dark:
-        css = (
-            'body{font-size:12px;margin:6px;color:#d4d4d4}'
-            'h3{color:#729fcf;margin:10px 0 3px 0;border-bottom:1px solid #444}'
-            'table{border-collapse:collapse;width:100%;margin-bottom:6px}'
-            'td{padding:2px 5px;font-family:monospace;font-size:11px;vertical-align:top;color:#d4d4d4}'
-            'td:first-child{color:#a6e22e;white-space:nowrap}'
-            'td:last-child{color:#aaa}'
-        )
-        pk_color  = '#729fcf'
-        nn_color  = '#ef6666'
-        typ_color = '#ae81ff'
+        css = """
+            body { font-size: 12px; margin: 6px; color: #f8f8f2; }
+            h3 { color: #66d9ef; margin: 10px 0 3px 0; border-bottom: 1px solid #49483e; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+            td { padding: 2px 5px; font-family: monospace; font-size: 11px;
+                 vertical-align: top; color: #f8f8f2; }
+            td:first-child { color: #a6e22e; white-space: nowrap; }
+            td.typ { color: #ae81ff; }
+            td.flags { color: #75715e; }
+            .pk { color: #66d9ef; }
+            .nn { color: #d9607a; }"""
     else:
-        css = (
-            'body{font-size:12px;margin:6px}'
-            'h3{color:#0055dd;margin:10px 0 3px 0;border-bottom:1px solid #ccc}'
-            'table{border-collapse:collapse;width:100%;margin-bottom:6px}'
-            'td{padding:2px 5px;font-family:monospace;font-size:11px;vertical-align:top}'
-            'td:first-child{color:#333;white-space:nowrap}'
-            'td:last-child{color:#666}'
-        )
-        pk_color  = '#0055dd'
-        nn_color  = '#b5200d'
-        typ_color = '#7b3fa0'
+        css = """
+            body { font-size: 12px; margin: 6px; }
+            h3 { color: #0055dd; margin: 10px 0 3px 0; border-bottom: 1px solid #ccc; }
+            table { border-collapse: collapse; width: 100%; margin-bottom: 6px; }
+            td { padding: 2px 5px; font-family: monospace; font-size: 11px;
+                 vertical-align: top; }
+            td:first-child { color: #333; white-space: nowrap; }
+            td.typ { color: #7b3fa0; }
+            td.flags { color: #666; }
+            .pk { color: #0055dd; }
+            .nn { color: #b5200d; }"""
 
     SHOW_TABLES = [
         'trades', 'instruments', 'setup_types', 'accounts',
@@ -266,12 +268,12 @@ def _build_schema_html(conn, dark: bool) -> str:
             continue
         parts.append(f'<h3>{tbl}</h3><table>')
         for col in cols:
-            pk = f' <span style="color:{pk_color}">PK</span>' if col['pk'] else ''
-            nn = f' <span style="color:{nn_color}">NOT NULL</span>' if col['notnull'] and not col['pk'] else ''
+            pk = ' <span class="pk">PK</span>' if col['pk'] else ''
+            nn = ' <span class="nn">NOT NULL</span>' if col['notnull'] and not col['pk'] else ''
             parts.append(
                 f'<tr><td>{col["name"]}</td>'
-                f'<td style="color:{typ_color}">{col["type"]}</td>'
-                f'<td>{pk}{nn}</td></tr>'
+                f'<td class="typ">{col["type"]}</td>'
+                f'<td class="flags">{pk}{nn}</td></tr>'
             )
         parts.append('</table>')
     return ''.join(parts)
@@ -342,15 +344,18 @@ class SqlQueryWidget(QWidget):
         sep2.setFrameShadow(QFrame.Shadow.Sunken)
         toolbar.addWidget(sep2)
 
+        font_btn_style = "padding: 3px 4px; font-weight: bold;"
         btn_smaller = QPushButton("A-")
         btn_smaller.setToolTip("Decrease font size")
-        btn_smaller.setFixedWidth(32)
+        btn_smaller.setFixedWidth(36)
+        btn_smaller.setStyleSheet(font_btn_style)
         btn_smaller.clicked.connect(self._font_decrease)
         toolbar.addWidget(btn_smaller)
 
         btn_larger = QPushButton("A+")
         btn_larger.setToolTip("Increase font size")
-        btn_larger.setFixedWidth(32)
+        btn_larger.setFixedWidth(36)
+        btn_larger.setStyleSheet(font_btn_style)
         btn_larger.clicked.connect(self._font_increase)
         toolbar.addWidget(btn_larger)
 
