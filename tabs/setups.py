@@ -12,15 +12,12 @@ from PyQt6.QtGui import QColor, QPixmap, QIcon
 
 from tabs import BaseTab
 from dialogs import SetupDialog, ImageViewer
+from dialogs_widgets import SETUP_CHARTS_DIR
 from database import (
     get_setup_types, get_setup_type, create_setup_type, update_setup_type,
     delete_setup_type, get_setup_rules, add_setup_rule, delete_setup_rule,
     get_setup_charts, add_setup_chart, delete_setup_chart, get_setup_stats,
 )
-
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SETUP_CHARTS_DIR = os.path.join(PROJECT_DIR, 'setup_charts')
-os.makedirs(SETUP_CHARTS_DIR, exist_ok=True)
 
 
 class SetupsTab(BaseTab):

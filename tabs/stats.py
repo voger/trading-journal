@@ -15,6 +15,34 @@ from database import (
 from tabs.stats_widgets import BreakdownTable, SetupPerformanceWidget, RMultipleHistogramWidget, HourOfDayWidget
 from tabs.stats_formula import FormulaEditorWidget
 from tabs.stats_calendar import CalendarHeatmapWidget
+from tabs.stats_query import SqlQueryWidget
+
+_OVERVIEW_CSS = """<style>
+body  { font-size: 11pt; }
+.pos  { color: #008200; }
+.neg  { color: #c80000; }
+.neu  { color: #666666; }
+.open { color: #3b82f6; }
+a.info-icon { color: #4a90d9; text-decoration: none; font-size: 14px; }
+table { font-size: 11pt; }
+</style>"""
+
+
+def _pc(val, threshold=0):
+    """Return 'pos' or 'neg' CSS class based on value vs threshold."""
+    return 'pos' if val > threshold else 'neg'
+
+
+def _ratio_cls(val, threshold=1):
+    """Format a ratio value and return (text, css_class)."""
+    text = f"{val:.2f}" if val != float('inf') else "∞"
+    if val > threshold:
+        cls = 'pos'
+    elif val < 0:
+        cls = 'neg'
+    else:
+        cls = 'neu'
+    return text, cls
 
 
 class StatsTab(BaseTab):
@@ -90,6 +118,10 @@ class StatsTab(BaseTab):
         self.formula_editor = FormulaEditorWidget(self.conn)
         self.tabs.addTab(self.formula_editor, "Formulas")
 
+        # Custom SQL analytics console sub-tab
+        self.sql_console = SqlQueryWidget(self.conn, self.aid)
+        self.tabs.addTab(self.sql_console, "Custom Query")
+
 
     def _get_date_range(self):
         """Return (date_from, date_to) based on the period filter, or (None, None)."""
@@ -118,6 +150,7 @@ class StatsTab(BaseTab):
             self.r_hist.populate([], 0)
             self.hour_hist.populate([])
             self.calendar_heatmap.refresh(self.conn)
+            self.sql_console.refresh_account(None)
             return
 
         date_from, date_to = self._get_date_range()
@@ -140,30 +173,32 @@ class StatsTab(BaseTab):
         acct = get_account(self.conn, aid)
         acct_label = f"{acct['name']} ({acct['currency']})" if acct else "?"
 
+        formulas = self._formulas
+
         def info_icon(key):
-            f = self._formulas.get(key)
-            if not f: return ''
-            return (f' <a href="info://{key}" style="color:#4a90d9;'
-                    f'text-decoration:none;font-size:14px;">ⓘ</a>')
+            f = formulas.get(key)
+            if not f:
+                return ''
+            return f' <a href="info://{key}" class="info-icon">ⓘ</a>'
 
         pf = stats['profit_factor']
         pfs = f"{pf:.2f}" if pf != float('inf') else "∞"
         open_trades = stats.get('open_trades', 0)
-        open_txt = (f" &nbsp;<span style='color:#3b82f6'>+{open_trades} open</span>"
+        open_txt = (f" &nbsp;<span class='open'>+{open_trades} open</span>"
                     if open_trades else "")
-        html = f"""<h2>Performance Summary — {acct_label}</h2>
-        <table cellpadding="6" style="font-size:11pt;">
+        html = _OVERVIEW_CSS + f"""<h2>Performance Summary — {acct_label}</h2>
+        <table cellpadding="6">
         <tr><td><b>Closed:</b> {stats['total_trades']}{open_txt}</td>
-        <td style="color:#008200"><b>Won:</b> {stats['winners']}</td>
-        <td style="color:#c80000"><b>Lost:</b> {stats['losers']}</td>
+        <td class="pos"><b>Won:</b> {stats['winners']}</td>
+        <td class="neg"><b>Lost:</b> {stats['losers']}</td>
         <td><b>BE:</b> {stats['breakeven']}</td></tr></table>
-        <h3>Win Rate{info_icon('win_rate')}: <span style="color:{'#008200' if stats['win_rate']>50 else '#c80000'}">{stats['win_rate']:.1f}%</span></h3>
-        <h3>Profit Factor{info_icon('profit_factor')}: <span style="color:{'#008200' if pf>1 else '#c80000'}">{pfs}</span></h3>
-        <h3>Expectancy{info_icon('expectancy')}: <span style="color:{'#008200' if stats['expectancy']>0 else '#c80000'}">{stats['expectancy']:+.2f}</span> per trade</h3>
-        <h3>Net P&L: <span style="color:{'#008200' if stats['net_pnl']>0 else '#c80000'}">{stats['net_pnl']:+.2f}</span></h3>
-        <table cellpadding="4" style="font-size:11pt;">
-        <tr><td><b>Gross Profit:</b></td><td style="color:#008200">{stats['gross_profit']:+.2f}</td></tr>
-        <tr><td><b>Gross Loss:</b></td><td style="color:#c80000">{-stats['gross_loss']:+.2f}</td></tr>
+        <h3>Win Rate{info_icon('win_rate')}: <span class="{_pc(stats['win_rate']-50)}">{stats['win_rate']:.1f}%</span></h3>
+        <h3>Profit Factor{info_icon('profit_factor')}: <span class="{_pc(pf-1)}">{pfs}</span></h3>
+        <h3>Expectancy{info_icon('expectancy')}: <span class="{_pc(stats['expectancy'])}">{stats['expectancy']:+.2f}</span> per trade</h3>
+        <h3>Net P&L: <span class="{_pc(stats['net_pnl'])}">{stats['net_pnl']:+.2f}</span></h3>
+        <table cellpadding="4">
+        <tr><td><b>Gross Profit:</b></td><td class="pos">{stats['gross_profit']:+.2f}</td></tr>
+        <tr><td><b>Gross Loss:</b></td><td class="neg">{-stats['gross_loss']:+.2f}</td></tr>
         <tr><td><b>Avg Win:</b></td><td>{stats['avg_win']:.2f}</td><td><b>Avg Loss:</b></td><td>{stats['avg_loss']:.2f}</td></tr></table>"""
 
         # Advanced stats section
@@ -172,61 +207,50 @@ class StatsTab(BaseTab):
         if adv:
             streak_val = adv['current_streak']
             if streak_val > 0:
-                streak_txt = f"<span style='color:#008200'>W{streak_val}</span>"
+                streak_txt = f"<span class='pos'>W{streak_val}</span>"
             elif streak_val < 0:
-                streak_txt = f"<span style='color:#c80000'>L{abs(streak_val)}</span>"
+                streak_txt = f"<span class='neg'>L{abs(streak_val)}</span>"
             else:
                 streak_txt = "—"
 
-            def _ratio_fmt(val, threshold=1):
-                """Format a ratio value and pick its color."""
-                text = f"{val:.2f}" if val != float('inf') else "∞"
-                if val > threshold:
-                    color = '#008200'
-                elif val < 0:
-                    color = '#c80000'
-                else:
-                    color = '#666'
-                return text, color
-
-            sharpe_s, sharpe_c = _ratio_fmt(adv['sharpe_ratio'])
-            sortino_s, sortino_c = _ratio_fmt(adv['sortino_ratio'])
-            calmar_s, calmar_c = _ratio_fmt(adv['calmar_ratio'], threshold=0)
+            sharpe_s, sharpe_c = _ratio_cls(adv['sharpe_ratio'])
+            sortino_s, sortino_c = _ratio_cls(adv['sortino_ratio'])
+            calmar_s, calmar_c = _ratio_cls(adv['calmar_ratio'], threshold=0)
 
             html += f"""
             <hr>
             <h3>Risk & Consistency</h3>
-            <table cellpadding="4" style="font-size:11pt;">
+            <table cellpadding="4">
             <tr><td><b>Max Drawdown{info_icon('max_drawdown')}:</b></td>
-                <td style="color:#c80000">{adv['max_drawdown_pct']:.1f}%</td>
+                <td class="neg">{adv['max_drawdown_pct']:.1f}%</td>
                 <td>({adv['max_drawdown_abs']:.2f} {acct['currency'] if acct else ''} peak-to-trough)</td></tr>
             <tr><td><b>Sharpe Ratio{info_icon('sharpe_ratio')}:</b></td>
-                <td style="color:{sharpe_c}">{sharpe_s}</td></tr>
+                <td class="{sharpe_c}">{sharpe_s}</td></tr>
             <tr><td><b>Sortino Ratio:</b></td>
-                <td style="color:{sortino_c}">{sortino_s}</td></tr>
+                <td class="{sortino_c}">{sortino_s}</td></tr>
             <tr><td><b>Calmar Ratio:</b></td>
-                <td style="color:{calmar_c}">{calmar_s}</td></tr>
+                <td class="{calmar_c}">{calmar_s}</td></tr>
             <tr><td><b>Avg Duration:</b></td>
                 <td>{adv['avg_trade_duration_days']:.0f} days</td></tr>
             <tr><td><b>&nbsp;&nbsp;Winners:</b></td>
-                <td style="color:#008200">{adv['avg_winner_duration']:.0f} days</td></tr>
+                <td class="pos">{adv['avg_winner_duration']:.0f} days</td></tr>
             <tr><td><b>&nbsp;&nbsp;Losers:</b></td>
-                <td style="color:#c80000">{adv['avg_loser_duration']:.0f} days</td></tr>
+                <td class="neg">{adv['avg_loser_duration']:.0f} days</td></tr>
             </table>
             <h3>Streaks</h3>
-            <table cellpadding="4" style="font-size:11pt;">
+            <table cellpadding="4">
             <tr><td><b>Max Wins in a Row:</b></td>
-                <td style="color:#008200">{adv['max_consecutive_wins']}</td>
+                <td class="pos">{adv['max_consecutive_wins']}</td>
                 <td><b>Max Losses in a Row:</b></td>
-                <td style="color:#c80000">{adv['max_consecutive_losses']}</td></tr>
+                <td class="neg">{adv['max_consecutive_losses']}</td></tr>
             <tr><td><b>Current Streak:</b></td><td>{streak_txt}</td></tr>
             </table>
             <h3>Extremes</h3>
-            <table cellpadding="4" style="font-size:11pt;">
+            <table cellpadding="4">
             <tr><td><b>Best Trade:</b></td>
-                <td style="color:#008200">{adv['best_trade_pnl']:+.2f}</td>
+                <td class="pos">{adv['best_trade_pnl']:+.2f}</td>
                 <td><b>Worst Trade:</b></td>
-                <td style="color:#c80000">{adv['worst_trade_pnl']:+.2f}</td></tr>
+                <td class="neg">{adv['worst_trade_pnl']:+.2f}</td></tr>
             </table>"""
 
         self.stats_text.setHtml(html)
@@ -255,6 +279,10 @@ class StatsTab(BaseTab):
 
         # Calendar heatmap (pass conn so it stays current after a restore)
         self.calendar_heatmap.refresh(self.conn)
+
+        # Update account label in SQL console
+        acct_name = acct['name'] if acct else None
+        self.sql_console.refresh_account(acct_name)
 
     def _on_info_clicked(self, url):
         """Handle clicks on ⓘ info icons in the overview."""

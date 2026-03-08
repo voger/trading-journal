@@ -182,6 +182,14 @@ CREATE TABLE IF NOT EXISTS formula_definitions (
     category TEXT NOT NULL
 );
 
+-- Custom SQL analytics queries (user-saved)
+CREATE TABLE IF NOT EXISTS custom_queries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    sql_text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- App settings
 CREATE TABLE IF NOT EXISTS app_settings (
     key TEXT PRIMARY KEY,
@@ -502,3 +510,14 @@ def _migrate(conn):
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_trades_account_exit_date ON trades(account_id, exit_date)"
     )
+
+    # custom_queries table (added for custom analytics console)
+    if 'custom_queries' not in tables:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS custom_queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                sql_text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
