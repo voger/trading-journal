@@ -787,6 +787,43 @@ _DEFAULT_QUERIES = [
         "  AND t.status = 'closed'\n"
         "GROUP BY t.direction",
     ),
+    (
+        "Profit factor and expectancy by instrument",
+        "-- Demonstrates inline calculations: profit factor, expectancy, avg win/loss\n"
+        "WITH base AS (\n"
+        "    SELECT i.symbol,\n"
+        "           t.pnl_account_currency + t.commission + t.swap AS net\n"
+        "    FROM trades t\n"
+        "    JOIN instruments i ON t.instrument_id = i.id\n"
+        "    WHERE t.account_id = :account_id\n"
+        "      AND t.status = 'closed'\n"
+        "),\n"
+        "agg AS (\n"
+        "    SELECT symbol,\n"
+        "           COUNT(*)                                          AS trades,\n"
+        "           SUM(net > 0)                                      AS wins,\n"
+        "           SUM(CASE WHEN net > 0 THEN net  ELSE 0   END)    AS gross_profit,\n"
+        "           SUM(CASE WHEN net < 0 THEN -net ELSE 0   END)    AS gross_loss,\n"
+        "           AVG(CASE WHEN net > 0 THEN net  ELSE NULL END)   AS avg_win,\n"
+        "           AVG(CASE WHEN net < 0 THEN -net ELSE NULL END)   AS avg_loss\n"
+        "    FROM base\n"
+        "    GROUP BY symbol\n"
+        ")\n"
+        "SELECT symbol,\n"
+        "       trades,\n"
+        "       ROUND(100.0 * wins / trades, 1)                           AS win_pct,\n"
+        "       ROUND(CASE WHEN gross_loss > 0\n"
+        "                  THEN gross_profit / gross_loss\n"
+        "                  ELSE NULL END, 2)                               AS profit_factor,\n"
+        "       ROUND(avg_win,  2)                                         AS avg_win,\n"
+        "       ROUND(avg_loss, 2)                                         AS avg_loss,\n"
+        "       -- expectancy = win_rate * avg_win - loss_rate * avg_loss\n"
+        "       ROUND((1.0 * wins / trades) * avg_win\n"
+        "           - (1.0 - 1.0 * wins / trades) * COALESCE(avg_loss, 0), 2) AS expectancy\n"
+        "FROM agg\n"
+        "WHERE trades >= 3\n"
+        "ORDER BY expectancy DESC NULLS LAST",
+    ),
 ]
 
 

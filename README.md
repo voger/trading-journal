@@ -2,7 +2,7 @@
 
 A desktop trading journal application for stock and forex traders. Track your trades, analyse performance with FIFO lot matching, and review your strategy with detailed statistics.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-614-brightgreen) ![Version](https://img.shields.io/badge/Version-3.0.0-blue)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-614-brightgreen) ![Version](https://img.shields.io/badge/Version-3.1.0-blue)
 
 ## Download
 
@@ -44,15 +44,16 @@ Extract `TradingJournal_windows.zip` and run `TradingJournal.exe`.
 - **Multi-Account Sidebar** — Left-panel account switcher; manage separate accounts (stocks, forex) across different brokers and currencies
 - **Broker Import** — Import trades from broker statements (Trading212, MT4 supported; extensible plugin system)
 - **Analytics Dashboard** — Win rate, profit factor, expectancy, Sharpe / Sortino / Calmar ratios, max drawdown, consecutive win/loss streaks, and breakdowns by instrument, setup, day of week, session, exit reason, direction, and month
+- **Custom SQL Console** — Write and save any SELECT query against your live data; syntax-highlighted editor (JetBrains Mono, Monokai palette), cheat sheet, schema browser, and CSV export
 - **Accurate Metrics** — All calculations include swap and commission (not just raw profit), matching broker statement totals. Drawdown % anchored to account initial balance.
 - **Chart Integration** — Fetch candlestick charts from TwelveData or Yahoo Finance with trade entry/exit markers; supports broker symbol suffixes (`.raw`, `.ecn`, `mini`, etc.)
 - **Trade Journal** — Daily journal entries linked to your trades
 - **Setup Management** — Define and track your trading setups with example charts and entry/exit rule checklists
 - **Watchlist** — Monitor instruments with weekly/daily bias notes and price levels
 - **Equity Curve** — Visual equity progression with two modes: Balance (includes deposits/withdrawals) and Cumulative P&L (trade-only, starts at 0)
-- **Calendar Heatmap** — Monthly P&L grid; click any day to see the trades behind it
+- **Calendar Heatmap** — Monthly P&L grid; click any day to see the trades behind it; full dark-mode support
 - **Tags & Pagination** — Tag trades for quick filtering; paginated trade list handles large accounts
-- **Dark Mode** — Toggle from the View menu
+- **Dark Mode** — Toggle from the View menu; consistent muted P&L colour palette across all panels (matches TradingView / Webull conventions)
 - **ODS / CSV Export** — Export the current filtered view to a spreadsheet
 - **Right-click Context Menu** — Copy cell, copy row, edit, delete, duplicate, jump to journal, add/view chart, export row
 - **Backup / Restore** — Full database backup to ZIP with one-click restore
@@ -184,7 +185,8 @@ trading-journal/
 ├── import_manager.py    # Plugin-based import orchestration
 ├── backup_manager.py    # Backup / restore to ZIP
 ├── executions_dialog.py # Execution detail viewer (T212 lot breakdown)
-├── theme.py             # Dark theme QSS stylesheet
+├── theme.py             # Dark theme QSS + P&L colour palette (pos/neg/neu helpers)
+├── fonts/               # Bundled JetBrains Mono (OFL 1.1) for the SQL console
 ├── tabs/                # UI tabs: trades, journal, stats, equity, watchlist…
 ├── plugins/             # Broker import plugins (Trading212, MT4)
 ├── asset_modules/       # Per-asset-type behaviour (forex, stocks)

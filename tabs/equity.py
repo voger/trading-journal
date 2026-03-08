@@ -71,7 +71,7 @@ class EquityTab(BaseTab):
     def _populate_deposits_table(self, events, currency):
         self.deposits_table.setRowCount(len(events))
         for row, ev in enumerate(events):
-            color = QColor(0, 130, 0) if ev['amount'] > 0 else QColor(200, 0, 0)
+            color = QColor(_theme.pos_color()) if ev['amount'] > 0 else QColor(_theme.neg_color())
             items = [ev['event_date'][:16], ev['event_type'].title(),
                      f"{ev['amount']:+.2f} {currency}", ev['description'] or '']
             for col, val in enumerate(items):
@@ -184,7 +184,7 @@ class EquityTab(BaseTab):
             self.fig.autofmt_xdate(); self.fig.tight_layout(); self.canvas.draw()
 
             net_pnl = balances[-1]
-            pnl_color = '#008200' if net_pnl >= 0 else '#c80000'
+            pnl_color = _theme.pnl_color(net_pnl)
             sign = '+' if net_pnl >= 0 else ''
             self.info_label.setTextFormat(Qt.TextFormat.RichText)
             self.info_label.setText(
@@ -269,7 +269,7 @@ class EquityTab(BaseTab):
         current_balance = balances[-1]
         gain_abs = current_balance - initial
         gain_pct = (gain_abs / initial * 100) if initial else 0
-        gain_color = '#008200' if gain_abs >= 0 else '#c80000'
+        gain_color = _theme.pnl_color(gain_abs)
         sign = '+' if gain_abs >= 0 else ''
         self.info_label.setTextFormat(Qt.TextFormat.RichText)
         self.info_label.setText(

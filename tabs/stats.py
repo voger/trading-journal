@@ -16,15 +16,19 @@ from tabs.stats_widgets import BreakdownTable, SetupPerformanceWidget, RMultiple
 from tabs.stats_formula import FormulaEditorWidget
 from tabs.stats_calendar import CalendarHeatmapWidget
 from tabs.stats_query import SqlQueryWidget
+import theme as _theme_mod
 
-_OVERVIEW_CSS = """<style>
-body  { font-size: 11pt; }
-.pos  { color: #008200; }
-.neg  { color: #c80000; }
-.neu  { color: #666666; }
-.open { color: #3b82f6; }
-a.info-icon { color: #4a90d9; text-decoration: none; font-size: 14px; }
-table { font-size: 11pt; }
+
+def _overview_css() -> str:
+    """Build the stats overview stylesheet using the current theme's P&L palette."""
+    return f"""<style>
+body  {{ font-size: 11pt; }}
+.pos  {{ color: {_theme_mod.pos_color()}; }}
+.neg  {{ color: {_theme_mod.neg_color()}; }}
+.neu  {{ color: {_theme_mod.neu_color()}; }}
+.open {{ color: #3b82f6; }}
+a.info-icon {{ color: #4a90d9; text-decoration: none; font-size: 14px; }}
+table {{ font-size: 11pt; }}
 </style>"""
 
 
@@ -186,7 +190,7 @@ class StatsTab(BaseTab):
         open_trades = stats.get('open_trades', 0)
         open_txt = (f" &nbsp;<span class='open'>+{open_trades} open</span>"
                     if open_trades else "")
-        html = _OVERVIEW_CSS + f"""<h2>Performance Summary — {acct_label}</h2>
+        html = _overview_css() + f"""<h2>Performance Summary — {acct_label}</h2>
         <table cellpadding="6">
         <tr><td><b>Closed:</b> {stats['total_trades']}{open_txt}</td>
         <td class="pos"><b>Won:</b> {stats['winners']}</td>

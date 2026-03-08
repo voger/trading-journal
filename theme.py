@@ -51,6 +51,42 @@ RED_VIV  = "#ff4757"   # loss   — vivid red          (for chart candles)
 ACCENT   = "#3d7cf4"   # buttons, links, focus — medium blue
 ACCENT_HOVER = "#5d96f6"
 
+# ── Semantic P&L palette ───────────────────────────────────────────────────
+# Dark: soft/muted — match the badge colors already used in the Trades tab.
+# Light: darker for contrast on a white background.
+# Used by HTML panels (QTextBrowser, QLabel rich text) and table cell colors,
+# which cannot inherit from QSS.
+_POS_DARK  = GREEN      # "#6bbc9a"
+_NEG_DARK  = RED        # "#d97580"
+_NEU_DARK  = "#888888"
+_POS_LIGHT = "#1e7a4c"  # dark readable green on white
+_NEG_LIGHT = "#b53b3b"  # dark readable red on white
+_NEU_LIGHT = "#666666"
+
+
+def pos_color() -> str:
+    """Profit hex color for the current theme."""
+    return _POS_DARK if _dark else _POS_LIGHT
+
+
+def neg_color() -> str:
+    """Loss hex color for the current theme."""
+    return _NEG_DARK if _dark else _NEG_LIGHT
+
+
+def neu_color() -> str:
+    """Neutral/breakeven hex color for the current theme."""
+    return _NEU_DARK if _dark else _NEU_LIGHT
+
+
+def pnl_color(val, threshold=0) -> str:
+    """Return pos/neg/neu color based on sign of val vs threshold."""
+    if val > threshold:
+        return pos_color()
+    if val < threshold:
+        return neg_color()
+    return neu_color()
+
 
 # ── QSS stylesheet ────────────────────────────────────────────────────────
 

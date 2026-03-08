@@ -1,4 +1,5 @@
 """Stocks & ETFs asset module — shares, dividends, interest."""
+import theme as _theme
 from .base import AssetModule
 
 
@@ -90,13 +91,13 @@ class StocksModule(AssetModule):
         parts = []
         if stats.get('total_dividends'):
             parts.append(f"<tr><td><b>Total Dividends:</b></td>"
-                        f"<td style='color:#008200'>{stats['total_dividends']:+.2f} {currency}</td></tr>")
+                        f"<td style='color:{_theme.pos_color()}'>{stats['total_dividends']:+.2f} {currency}</td></tr>")
         if stats.get('total_interest'):
             parts.append(f"<tr><td><b>Total Interest:</b></td>"
-                        f"<td style='color:#008200'>{stats['total_interest']:+.2f} {currency}</td></tr>")
+                        f"<td style='color:{_theme.pos_color()}'>{stats['total_interest']:+.2f} {currency}</td></tr>")
         if stats.get('total_commission'):
             parts.append(f"<tr><td><b>Total Commissions:</b></td>"
-                        f"<td style='color:#c80000'>{stats['total_commission']:+.2f} {currency}</td></tr>")
+                        f"<td style='color:{_theme.neg_color()}'>{stats['total_commission']:+.2f} {currency}</td></tr>")
         if not parts:
             return ""
         return "<h3>Stocks Stats</h3><table cellpadding='4' style='font-size:11pt;'>" + "".join(parts) + "</table>"

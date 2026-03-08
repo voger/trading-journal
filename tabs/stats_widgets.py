@@ -68,9 +68,9 @@ class BreakdownTable(QWidget):
         for col, (key, label, _) in enumerate(_BD_COLUMNS):
             suffix = cur if key in ('net_pnl', 'avg_win', 'avg_loss', 'expectancy') else ''
             self.table.setHorizontalHeaderItem(col, QTableWidgetItem(label + suffix))
-        profit_fg = QColor(0, 130, 0)
-        loss_fg = QColor(200, 0, 0)
-        neutral_fg = QColor(100, 100, 100)
+        profit_fg = QColor(_theme.pos_color())
+        loss_fg = QColor(_theme.neg_color())
+        neutral_fg = QColor(_theme.neu_color())
         bold = QFont("", -1, QFont.Weight.Bold)
 
         self.table.setSortingEnabled(False)
@@ -133,7 +133,7 @@ class BreakdownTable(QWidget):
             total_pnl = sum(b['net_pnl'] for b in breakdowns)
             best = max(breakdowns, key=lambda b: b['net_pnl'])
             worst = min(breakdowns, key=lambda b: b['net_pnl'])
-            pc = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
+            pc = _theme.pnl_color(total_pnl)
             self.summary_label.setTextFormat(Qt.TextFormat.RichText)
             parts = [
                 f"<b>{len(breakdowns)}</b> {self.group_label}s",
@@ -141,9 +141,9 @@ class BreakdownTable(QWidget):
                 f"Net P&L: <b style='color:{pc}'>{total_pnl:+.2f}</b>",
             ]
             if best['net_pnl'] > 0:
-                parts.append(f"Best: <b style='color:#008200'>{best['group_name']}</b> ({best['net_pnl']:+.2f})")
+                parts.append(f"Best: <b style='color:{_theme.pos_color()}'>{best['group_name']}</b> ({best['net_pnl']:+.2f})")
             if worst['net_pnl'] < 0:
-                parts.append(f"Worst: <b style='color:#c80000'>{worst['group_name']}</b> ({worst['net_pnl']:+.2f})")
+                parts.append(f"Worst: <b style='color:{_theme.neg_color()}'>{worst['group_name']}</b> ({worst['net_pnl']:+.2f})")
             self.summary_label.setText(" &nbsp;|&nbsp; ".join(parts))
         else:
             self.summary_label.setText("No data for this breakdown.")
@@ -192,9 +192,9 @@ class SetupPerformanceWidget(QWidget):
             suffix = cur if key in ('avg_pnl', 'net_pnl') else ''
             self.table.setHorizontalHeaderItem(col, QTableWidgetItem(label + suffix))
 
-        profit_fg = QColor(0, 130, 0)
-        loss_fg   = QColor(200, 0, 0)
-        neutral_fg = QColor(100, 100, 100)
+        profit_fg = QColor(_theme.pos_color())
+        loss_fg   = QColor(_theme.neg_color())
+        neutral_fg = QColor(_theme.neu_color())
         bold = QFont("", -1, QFont.Weight.Bold)
 
         self.table.setSortingEnabled(False)
@@ -238,12 +238,11 @@ class SetupPerformanceWidget(QWidget):
         if rows:
             n = sum(r['total_trades'] for r in rows)
             net = sum(r['net_pnl'] for r in rows)
-            pc = '#008200' if net > 0 else '#c80000' if net < 0 else '#666'
             self.summary_label.setTextFormat(Qt.TextFormat.RichText)
             self.summary_label.setText(
                 f"<b>{len(rows)}</b> setups &nbsp;|&nbsp; "
                 f"<b>{n}</b> trades &nbsp;|&nbsp; "
-                f"Net P&L: <b style='color:{pc}'>{net:+.2f}</b>"
+                f"Net P&L: <b style='color:{_theme.pnl_color(net)}'>{net:+.2f}</b>"
             )
         else:
             self.summary_label.setText(

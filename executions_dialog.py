@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
+import theme as _theme
 
 
 def _get_trade_currency(conn, trade_id):
@@ -83,8 +84,8 @@ class ExecutionsDialog(QDialog):
             get_open_lots_for_trade,
         )
 
-        buy_color = QColor(0, 130, 0)
-        sell_color = QColor(200, 0, 0)
+        buy_color  = QColor(_theme.pos_color())
+        sell_color = QColor(_theme.neg_color())
 
         # ── Executions ──
         execs = get_executions_for_trade(self.conn, self.trade_id)
@@ -134,7 +135,7 @@ class ExecutionsDialog(QDialog):
 
             for row, l in enumerate(lots):
                 pnl = l['pnl_computed'] or 0
-                pnl_color = buy_color if pnl > 0 else sell_color if pnl < 0 else QColor(100, 100, 100)
+                pnl_color = buy_color if pnl > 0 else sell_color if pnl < 0 else QColor(_theme.neu_color())
                 cells = [
                     (l['buy_date'] or '')[:10],
                     f"{l['buy_price']:.4f}",

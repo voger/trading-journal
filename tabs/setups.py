@@ -1,6 +1,7 @@
 """Setups tab — setup types, rules, example charts."""
 import os, shutil
 from datetime import datetime
+import theme as _theme
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -90,7 +91,7 @@ class SetupsTab(BaseTab):
             for r in exit_rules: html += f"<li>{r['rule_text']}</li>"
             html += "</ul>"
         if stats:
-            wr_c = '#008200' if stats['win_rate'] > 50 else '#c80000'
+            wr_c = _theme.pnl_color(stats['win_rate'] - 50)
             pf = stats['profit_factor']; pfs = f"{pf:.2f}" if pf != float('inf') else "Inf"
             html += f"""<h3>Performance</h3>
             <table cellpadding='4' style='font-size:10pt;'>

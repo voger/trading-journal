@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDateTime
 from PyQt6.QtGui import QPixmap, QIcon
 
+import theme as _theme
 from database import (
     get_accounts, get_setup_types, get_setup_rules,
     get_trade_charts, get_trade_rule_checks,
@@ -82,7 +83,7 @@ class TradeDialog(QDialog):
 
         # ── Populate ──
         if trade:
-            self._populate(trade)
+            self._populate(dict(trade))
         elif default_account_id:
             idx = self.account_combo.findData(default_account_id)
             if idx >= 0:
@@ -468,8 +469,7 @@ class TradeDialog(QDialog):
             risk = abs(entry - sl)
             actual = (exit_p - entry) if is_long else (entry - exit_p)
             r_mult = actual / risk if risk > 0 else 0
-            color = "#16a34a" if r_mult > 0 else "#dc2626" if r_mult < 0 else "#6b7280"
-            self.metric_r.set_value(f"{r_mult:+.2f}R", color)
+            self.metric_r.set_value(f"{r_mult:+.2f}R", _theme.pnl_color(r_mult))
         else:
             self.metric_r.set_value("—")
 
@@ -493,11 +493,7 @@ class TradeDialog(QDialog):
         # P&L
         pnl = self.pnl_spin.value()
         currency = self._get_account_currency()
-        if pnl != 0:
-            color = "#16a34a" if pnl > 0 else "#dc2626"
-            self.metric_pnl.set_value(f"{currency}{pnl:+.2f}", color)
-        else:
-            self.metric_pnl.set_value(f"{currency}0.00", "#6b7280")
+        self.metric_pnl.set_value(f"{currency}{pnl:+.2f}", _theme.pnl_color(pnl))
 
         self._update_header()
 

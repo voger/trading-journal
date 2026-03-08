@@ -6,6 +6,7 @@ TradeChartsDialog.
 import os
 import shutil
 
+import theme as _theme
 from PyQt6.QtWidgets import (
     QDialog, QFrame, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy,
     QListWidget, QListWidgetItem, QPushButton, QDialogButtonBox,
@@ -51,7 +52,7 @@ class MetricCard(QFrame):
         lay.addWidget(self._value)
 
     def set_value(self, text, color=None):
-        c = color or "#333"
+        c = color or _theme.neu_color()
         self._value.setText(text)
         self._value.setStyleSheet(f"color: {c}; font-size: 18px; font-weight: bold;")
 

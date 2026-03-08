@@ -1,6 +1,7 @@
 """Summary Stats tab — calendar heatmap and day detail dialog."""
 import calendar as _calendar
 from datetime import date as _date
+import theme as _theme
 
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QPushButton, QWidget, QLabel,
@@ -37,7 +38,7 @@ class DayDetailDialog(QDialog):
         # Summary line
         total_pnl = sum(effective_pnl(t) for t in trades)
         cur = f" {currency}" if currency else ''
-        color = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
+        color = _theme.pnl_color(total_pnl)
         n = len(trades)
         summary = QLabel(
             f"<b>{n}</b> closed trade{'s' if n != 1 else ''} &nbsp;|&nbsp; "
@@ -64,8 +65,8 @@ class DayDetailDialog(QDialog):
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
 
-        profit_fg = QColor(0, 130, 0)
-        loss_fg   = QColor(200, 0, 0)
+        profit_fg = QColor(_theme.pos_color())
+        loss_fg   = QColor(_theme.neg_color())
         bold = QFont("", -1, QFont.Weight.Bold)
 
         tbl.setSortingEnabled(False)
@@ -113,7 +114,7 @@ class DayDetailDialog(QDialog):
                 if col == 0:  # store trade ID for double-click lookup
                     item.setData(Qt.ItemDataRole.UserRole, t['id'])
                 if col == len(cells) - 1:  # P&L column
-                    item.setForeground(profit_fg if pnl > 0 else loss_fg if pnl < 0 else QColor(100, 100, 100))
+                    item.setForeground(profit_fg if pnl > 0 else loss_fg if pnl < 0 else QColor(_theme.neu_color()))
                     item.setFont(bold)
                 tbl.setItem(row, col, item)
 
@@ -143,7 +144,7 @@ class DayDetailDialog(QDialog):
         trade = get_trade(self._conn, tid)
         if trade is None:
             return
-        dlg = TradeDialog(self, self._conn, trade=trade)
+        dlg = TradeDialog(self, self._conn, trade=dict(trade))
         dlg.exec()
 
 
@@ -252,7 +253,7 @@ class CalendarHeatmapWidget(QWidget):
         if daily:
             total_pnl = sum(d['net_pnl'] for d in daily.values())
             total_trades = sum(d['trade_count'] for d in daily.values())
-            color = '#008200' if total_pnl > 0 else '#c80000' if total_pnl < 0 else '#666'
+            color = _theme.pnl_color(total_pnl)
             closed_word = 'closed trade' if total_trades == 1 else 'closed trades'
             self._lbl_summary.setText(
                 f"Month total: <b style='color:{color}'>{total_pnl:+.2f}</b>"
@@ -262,12 +263,13 @@ class CalendarHeatmapWidget(QWidget):
             self._lbl_summary.setText("No closed trades this month.")
 
         # Day-of-week headers (Monday-first)
+        hdr_color = _theme.TEXT_DIM if _theme.is_dark() else '#555'
         day_headers = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         for col, name in enumerate(day_headers):
             lbl = QLabel(name)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.setFont(QFont("", -1, QFont.Weight.Bold))
-            lbl.setStyleSheet("color: #555; padding-bottom: 4px;")
+            lbl.setStyleSheet(f"color: {hdr_color}; padding-bottom: 4px;")
             self._grid.addWidget(lbl, 0, col)
 
         # Color scale: intensity relative to the month's max |P&L|
@@ -322,7 +324,9 @@ class CalendarHeatmapWidget(QWidget):
         dlg.exec()
 
     def _make_cell(self, day, day_data, max_abs, is_today, date_str):
-        """Build a single day cell."""
+        """Build a single day cell, fully theme-aware."""
+        dark = _theme.is_dark()
+
         cell = QFrame()
         cell.setFrameShape(QFrame.Shape.StyledPanel)
         cell.setMinimumSize(70, 60)
@@ -331,15 +335,17 @@ class CalendarHeatmapWidget(QWidget):
         lay.setContentsMargins(5, 4, 5, 4)
         lay.setSpacing(1)
 
-        # Day number
+        # Day number label
         day_lbl = QLabel(str(day))
         day_weight = QFont.Weight.Bold if is_today else QFont.Weight.Normal
         day_lbl.setFont(QFont("", 9, day_weight))
         day_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         lay.addWidget(day_lbl)
 
+        today_border = _theme.ACCENT if dark else '#1565c0'
+
         if day_data:
-            pnl = day_data['net_pnl']
+            pnl   = day_data['net_pnl']
             count = day_data['trade_count']
 
             pnl_lbl = QLabel(f"{pnl:+.2f}")
@@ -354,35 +360,53 @@ class CalendarHeatmapWidget(QWidget):
 
             # Background colour proportional to |P&L| / max_abs
             intensity = min(abs(pnl) / max_abs, 1.0)
-            if pnl > 0:
-                r = int(232 - intensity * 160)
-                g = int(245 - intensity * 105)
-                b = int(233 - intensity * 180)
-                border_col = '#2e7d32' if intensity > 0.3 else '#81c784'
-            elif pnl < 0:
-                r = int(255 - intensity * 110)
-                g = int(235 - intensity * 215)
-                b = int(238 - intensity * 220)
-                border_col = '#c62828' if intensity > 0.3 else '#e57373'
+
+            if dark:
+                # Dark mode: start from near-black, tint toward vivid green/red
+                if pnl > 0:
+                    r = int(18  + intensity * 12)
+                    g = int(35  + intensity * 95)
+                    b = int(24  + intensity * 36)
+                    border_col = '#2e7d32' if intensity > 0.3 else '#1a4a22'
+                elif pnl < 0:
+                    r = int(50  + intensity * 110)
+                    g = int(18  + intensity * 10)
+                    b = int(20  + intensity * 10)
+                    border_col = '#7a1c1c' if intensity > 0.3 else '#4a1212'
+                else:
+                    r, g, b = 30, 30, 30
+                    border_col = _theme.BORDER
+                # In dark mode text is always light; dim it slightly at low intensity
+                text_color = _theme.TEXT if intensity > 0.2 else _theme.TEXT_DIM
             else:
-                r, g, b = 240, 240, 240
-                border_col = '#aaa'
+                # Light mode: start from near-white, tint toward vivid green/red
+                if pnl > 0:
+                    r = int(232 - intensity * 160)
+                    g = int(245 - intensity * 105)
+                    b = int(233 - intensity * 180)
+                    border_col = '#2e7d32' if intensity > 0.3 else '#81c784'
+                elif pnl < 0:
+                    r = int(255 - intensity * 110)
+                    g = int(235 - intensity * 215)
+                    b = int(238 - intensity * 220)
+                    border_col = '#c62828' if intensity > 0.3 else '#e57373'
+                else:
+                    r, g, b = 240, 240, 240
+                    border_col = '#aaa'
+                text_color = '#fff' if intensity > 0.65 else '#000'
 
-            text_color = '#fff' if intensity > 0.65 else '#000'
             bg = f'#{r:02x}{g:02x}{b:02x}'
-
             pnl_lbl.setStyleSheet(f"color: {text_color};")
             cnt_lbl.setStyleSheet(f"color: {text_color};")
             day_lbl.setStyleSheet(f"color: {text_color};")
 
             border_width = '2px' if is_today else '1px'
-            border_color = '#1565c0' if is_today else border_col
+            border_color = today_border if is_today else border_col
             cell.setStyleSheet(
                 f"QFrame {{ background-color: {bg}; "
                 f"border: {border_width} solid {border_color}; "
                 f"border-radius: 4px; }}"
             )
-
             cell.setToolTip(
                 f"{date_str}\n"
                 f"Net P&L: {pnl:+.2f}\n"
@@ -391,18 +415,24 @@ class CalendarHeatmapWidget(QWidget):
             )
             cell.setCursor(Qt.CursorShape.PointingHandCursor)
             cell.mousePressEvent = lambda e, d=date_str: self._on_day_clicked(d)
+
         else:
-            # No trades that day
-            if is_today:
-                cell.setStyleSheet(
-                    "QFrame { background-color: #fff; "
-                    "border: 2px solid #1565c0; border-radius: 4px; }"
-                )
+            # No trades — empty cell
+            if dark:
+                empty_bg     = _theme.BG_MID
+                empty_border = _theme.BORDER
+                day_lbl.setStyleSheet(f"color: {_theme.TEXT_DIM};")
             else:
-                cell.setStyleSheet(
-                    "QFrame { background-color: #fafafa; "
-                    "border: 1px solid #e0e0e0; border-radius: 4px; }"
-                )
-            day_lbl.setStyleSheet("color: #aaa;")
+                empty_bg     = '#fafafa'
+                empty_border = '#e0e0e0'
+                day_lbl.setStyleSheet("color: #aaa;")
+
+            border_width  = '2px' if is_today else '1px'
+            border_color  = today_border if is_today else empty_border
+            cell.setStyleSheet(
+                f"QFrame {{ background-color: {empty_bg}; "
+                f"border: {border_width} solid {border_color}; "
+                f"border-radius: 4px; }}"
+            )
 
         return cell

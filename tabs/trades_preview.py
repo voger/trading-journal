@@ -202,11 +202,9 @@ class TradesPreviewMixin:
         self.pv_badges.setText(f"{dir_html}&nbsp;&nbsp;{st_html}")
 
         # P&L Hero (effective P&L: includes swap + commission)
-        _pos = _theme.GREEN if _theme.is_dark() else '#008200'
-        _neg = _theme.RED if _theme.is_dark() else '#c80000'
-        _neu = _theme.TEXT_DIM if _theme.is_dark() else '#666'
-        pc = _pos if epnl > 0 else _neg if epnl < 0 else _neu
-        self.pv_pnl_hero.setText(f"<span style='color:{pc}'>{epnl:+.2f}</span>")
+        self.pv_pnl_hero.setText(
+            f"<span style='color:{_theme.pnl_color(epnl)}'>{epnl:+.2f}</span>"
+        )
 
         # Metrics
         entry = t['entry_price'] or 0

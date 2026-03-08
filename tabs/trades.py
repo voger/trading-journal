@@ -360,9 +360,9 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
         expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
 
-        _p = _theme.GREEN if _theme.is_dark() else "#008200"
-        _n = _theme.RED   if _theme.is_dark() else "#c80000"
-        _z = _theme.TEXT_DIM if _theme.is_dark() else "#666"
+        _p = _theme.pos_color()
+        _n = _theme.neg_color()
+        _z = _theme.neu_color()
 
         self.kpi_trades.set_value(
             f"{total}  ({len(winners)}W / {len(losers)}L)",
@@ -455,12 +455,12 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(rows_data))
 
+        profit_fg  = QColor(_theme.pos_color())
+        loss_fg    = QColor(_theme.neg_color())
+        neutral_fg = QColor(_theme.neu_color())
         if _theme.is_dark():
             dep_bg = QColor(_theme.GREEN_BG)
             wd_bg = QColor(_theme.RED_BG)
-            profit_fg = QColor(_theme.GREEN)
-            loss_fg = QColor(_theme.RED)
-            neutral_fg = QColor(_theme.TEXT_DIM)
             long_fg = QColor(_theme.ACCENT)
             short_fg = QColor("#c8804a")
             status_colors = {
@@ -472,9 +472,6 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         else:
             dep_bg = QColor(230, 245, 230)
             wd_bg = QColor(250, 235, 235)
-            profit_fg = QColor(0, 130, 0)
-            loss_fg = QColor(200, 0, 0)
-            neutral_fg = QColor(100, 100, 100)
             long_fg = QColor(0, 100, 180)
             short_fg = QColor(180, 80, 0)
             status_colors = {

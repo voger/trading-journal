@@ -83,7 +83,7 @@ class TradesActionsMixin:
             return
         trade = get_trade(self.conn, tid)
         if not trade: return
-        dlg = TradeDialog(self, self.conn, trade=trade)
+        dlg = TradeDialog(self, self.conn, trade=dict(trade))
         if dlg.exec():
             try:
                 vals = dlg.get_values()
