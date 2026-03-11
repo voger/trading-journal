@@ -29,18 +29,16 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pillow
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
-        run: |
-          python -m venv venv
-          bash build_app.sh
+        run: bash build_app.sh
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
-        shell: cmd
-        run: |
-          python -m venv venv
-          build_app.bat
+        run: build_app.bat
 
       - name: Upload asset to Release
         uses: softprops/action-gh-release@v2
