@@ -30,6 +30,24 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 class TradesActionsMixin:
     """Mixin providing CRUD and import/export actions for TradesTab."""
 
+    # ── Row ID helpers ──
+
+    def _get_trade_id_at_row(self, row: int) -> 'int | None':
+        """Return trade ID for the given table row, or None if not a trade row."""
+        if row < 0:
+            return None
+        id_item = self.table.item(row, 0)
+        if not id_item or not id_item.text():
+            return None
+        try:
+            return int(id_item.text())
+        except ValueError:
+            return None
+
+    def _get_selected_trade_id(self) -> 'int | None':
+        """Return trade ID for the currently selected row, or None."""
+        return self._get_trade_id_at_row(self.table.currentRow())
+
     # ── Validation ──
 
     def _validate_trade(self, v) -> str:
@@ -71,16 +89,8 @@ class TradesActionsMixin:
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_edit(self):
-        r = self.table.currentRow()
-        if r < 0: return
-        id_item = self.table.item(r, 0)
-        if not id_item: return
-        id_text = id_item.text()
-        if not id_text: return
-        try:
-            tid = int(id_text)
-        except ValueError:
-            return
+        tid = self._get_selected_trade_id()
+        if tid is None: return
         trade = get_trade(self.conn, tid)
         if not trade: return
         dlg = TradeDialog(self, self.conn, trade=dict(trade))
@@ -115,19 +125,15 @@ class TradesActionsMixin:
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_delete(self):
-        r = self.table.currentRow()
-        if r < 0: return
-        id_item = self.table.item(r, 0)
-        if not id_item: return
-        id_text = id_item.text()
-        if not id_text: return
-        try:
-            tid = int(id_text)
-        except ValueError:
-            return
+        tid = self._get_selected_trade_id()
+        if tid is None: return
         if QMessageBox.question(self, "Delete", f"Delete trade #{tid}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-            delete_trade(self.conn, tid); self.data_changed.emit()
+            try:
+                delete_trade(self.conn, tid)
+                self.data_changed.emit()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
 
     # ── Context menu ──
 
@@ -165,15 +171,8 @@ class TradesActionsMixin:
         QApplication.clipboard().setText("\t".join(parts))
 
     def _on_duplicate(self):
-        r = self.table.currentRow()
-        if r < 0:
-            return
-        id_item = self.table.item(r, 0)
-        if not id_item or not id_item.text():
-            return
-        try:
-            tid = int(id_item.text())
-        except ValueError:
+        tid = self._get_selected_trade_id()
+        if tid is None:
             return
         trade = get_trade(self.conn, tid)
         if not trade:
@@ -194,12 +193,8 @@ class TradesActionsMixin:
                 QMessageBox.critical(self, "Error", str(e))
 
     def _jump_to_journal(self, row):
-        id_item = self.table.item(row, 0)
-        if not id_item or not id_item.text():
-            return
-        try:
-            tid = int(id_item.text())
-        except ValueError:
+        tid = self._get_trade_id_at_row(row)
+        if tid is None:
             return
         trade = get_trade(self.conn, tid)
         if not trade:
@@ -209,24 +204,16 @@ class TradesActionsMixin:
             self.jump_to_journal.emit(date)
 
     def _on_add_view_chart(self, row):
-        id_item = self.table.item(row, 0)
-        if not id_item or not id_item.text():
-            return
-        try:
-            trade_id = int(id_item.text())
-        except ValueError:
+        trade_id = self._get_trade_id_at_row(row)
+        if trade_id is None:
             return
         from dialogs import TradeChartsDialog
         dlg = TradeChartsDialog(self, self.conn, trade_id)
         dlg.exec()
 
     def _export_row(self, row):
-        id_item = self.table.item(row, 0)
-        if not id_item or not id_item.text():
-            return
-        try:
-            tid = int(id_item.text())
-        except ValueError:
+        tid = self._get_trade_id_at_row(row)
+        if tid is None:
             return
         trade = get_trade(self.conn, tid)
         if not trade:
@@ -288,7 +275,7 @@ class TradesActionsMixin:
         for t in self._visible_trades:
             row = []
             for key, _ in EXPORT_COLUMNS:
-                val = t[key] if key in t.keys() else ''
+                val = t[key] if key in t else ''
                 row.append('' if val is None else val)
             row.append(round(effective_pnl(t), 8))
             rows.append(row)

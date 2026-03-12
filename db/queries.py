@@ -7,13 +7,15 @@ import sqlite3
 from db.analytics import effective_pnl  # noqa: F401 — re-exported for callers
 
 
-_TRADES_BASE_SQL = """SELECT t.*, a.name as account_name, a.currency as account_currency,
-                    i.symbol, i.display_name as instrument_name, i.instrument_type,
-                    st.name as setup_name
-             FROM trades t
+_TRADES_FROM_SQL = """FROM trades t
              JOIN accounts a ON t.account_id = a.id
              JOIN instruments i ON t.instrument_id = i.id
              LEFT JOIN setup_types st ON t.setup_type_id = st.id"""
+
+_TRADES_BASE_SQL = ("""SELECT t.*, a.name as account_name, a.currency as account_currency,
+                    i.symbol, i.display_name as instrument_name, i.instrument_type,
+                    st.name as setup_name """
+                    + _TRADES_FROM_SQL)
 
 
 def _build_trade_filters(account_id=None, setup_id=None, direction=None,
@@ -97,12 +99,7 @@ def get_trades_paged(conn: sqlite3.Connection, account_id=None,
 def count_trades_filtered(conn: sqlite3.Connection, account_id=None, **filters) -> int:
     """Return total count of trades matching filters (no LIMIT)."""
     clauses, params = _build_trade_filters(account_id=account_id, **filters)
-    sql = ("""SELECT COUNT(*) as cnt
-              FROM trades t
-              JOIN accounts a ON t.account_id = a.id
-              JOIN instruments i ON t.instrument_id = i.id
-              LEFT JOIN setup_types st ON t.setup_type_id = st.id
-              WHERE """ + " AND ".join(clauses))
+    sql = "SELECT COUNT(*) as cnt " + _TRADES_FROM_SQL + " WHERE " + " AND ".join(clauses)
     return conn.execute(sql, params).fetchone()['cnt']
 
 

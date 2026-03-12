@@ -380,7 +380,7 @@ def _import_balance_events(conn, account_id, balance_events, errors, log_id=None
                 amount=evt['amount'],
                 event_date=evt['event_date'],
                 description=evt.get('description'),
-                broker_ticket_id=str(ticket) if ticket else None,
+                broker_ticket_id=str(ticket) if ticket is not None else None,
                 import_log_id=log_id,
             )
             count += 1
