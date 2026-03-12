@@ -844,8 +844,12 @@ def save_custom_query(conn: sqlite3.Connection, name: str, sql_text: str) -> int
 
 
 def delete_custom_query(conn: sqlite3.Connection, query_id: int):
-    conn.execute("DELETE FROM custom_queries WHERE id = ?", (query_id,))
-    conn.commit()
+    try:
+        conn.execute("DELETE FROM custom_queries WHERE id = ?", (query_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def seed_default_queries(conn: sqlite3.Connection):

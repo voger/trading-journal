@@ -9,7 +9,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
 from tabs import BaseTab
-from database import get_account, get_equity_curve_data, get_equity_events
+from database import get_account, get_equity_curve_data, get_equity_events, effective_pnl
 import theme as _theme
 
 
@@ -152,7 +152,7 @@ class EquityTab(BaseTab):
             dates = []
             balances = [0.0]
             for t in data:
-                pnl = (t['pnl_account_currency'] or 0) + (t['swap'] or 0) + (t['commission'] or 0)
+                pnl = effective_pnl(t)
                 try:
                     d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
                     pnl_running += pnl
@@ -201,10 +201,9 @@ class EquityTab(BaseTab):
         # Each entry: (date, amount, event_row_or_None)
         timeline = []
         for t in data:
-            pnl = (t['pnl_account_currency'] or 0) + (t['swap'] or 0) + (t['commission'] or 0)
             try:
                 d = datetime.strptime(t['exit_date'][:10], '%Y-%m-%d')
-                timeline.append((d, pnl, None))
+                timeline.append((d, effective_pnl(t), None))
             except (ValueError, TypeError): continue
         for ev in events:
             try:
