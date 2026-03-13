@@ -8,8 +8,24 @@ on:
 permissions:
   contents: write   # needed to create releases and upload assets
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --repo ${{ github.repository }} \
+            --title ${{ github.ref_name }} \
+            --generate-notes
+
   build:
+    needs: create-release
     strategy:
       matrix:
         include:
@@ -19,8 +35,6 @@ jobs:
             asset_name: TradingJournal_windows.zip
 
     runs-on: ${{ matrix.os }}
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -49,7 +63,6 @@ jobs:
           build_app.bat
 
       - name: Upload asset to Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/${{ matrix.asset_name }}
-          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} dist/${{ matrix.asset_name }} --repo ${{ github.repository }}
