@@ -67,6 +67,16 @@ class TradesActionsMixin:
 
     # ── CRUD ──
 
+    def _attach_trade_metadata(self, tid: int, dlg):
+        """Save screenshots, rule checks, and tags for a new or updated trade."""
+        self._save_screenshots(tid, dlg)
+        checks = dlg.get_rule_checks()
+        if checks:
+            save_trade_rule_checks(self.conn, tid, checks)
+        tag_names = dlg.get_tag_names()
+        tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
+        set_trade_tags(self.conn, tid, tag_ids)
+
     def _on_new(self):
         if not get_accounts(self.conn):
             QMessageBox.warning(self, "No Accounts", "Create an account first."); return
@@ -78,12 +88,7 @@ class TradesActionsMixin:
                 QMessageBox.warning(self, "Validation Error", err); return
             try:
                 tid = create_trade(self.conn, **v)
-                self._save_screenshots(tid, dlg)
-                checks = dlg.get_rule_checks()
-                if checks: save_trade_rule_checks(self.conn, tid, checks)
-                tag_names = dlg.get_tag_names()
-                tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
-                set_trade_tags(self.conn, tid, tag_ids)
+                self._attach_trade_metadata(tid, dlg)
                 self.refresh_tag_filter()
                 self.data_changed.emit()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
@@ -113,12 +118,7 @@ class TradesActionsMixin:
                             oserrors.append(str(oe))
                 if oserrors:
                     raise OSError("Could not delete screenshot file(s):\n" + "\n".join(oserrors))
-                self._save_screenshots(tid, dlg)
-                checks = dlg.get_rule_checks()
-                if checks: save_trade_rule_checks(self.conn, tid, checks)
-                tag_names = dlg.get_tag_names()
-                tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
-                set_trade_tags(self.conn, tid, tag_ids)
+                self._attach_trade_metadata(tid, dlg)
                 self.refresh_tag_filter()
                 self._selected_trade_id = tid
                 self.data_changed.emit()
