@@ -81,6 +81,12 @@ Subclasses registered in `chart_providers/__init__.py`. API keys stored in `app_
 - Tests never import PyQt6 — all UI code is excluded from the test surface.
 - Baseline: **614 passed, 42 skipped**.
 
+## SQL style
+
+- SQL strings must be **plain readable literals** — never assembled by concatenating Python variables or constants together. Readability of the query as a whole matters more than DRY.
+- Dynamic WHERE clauses (built from filter lists like `clauses`) are the one acceptable exception, since the conditions are genuinely runtime-variable.
+- `_TRADES_BASE_SQL` in `db/queries.py` is a single literal string. `count_trades_filtered()` repeats the FROM/JOIN block intentionally — do not extract it.
+
 ## Intentional design decisions (do not change)
 
 - **Equity Curve requires a specific account** — "All Accounts" shows a prompt by design. No combined multi-account curve.
