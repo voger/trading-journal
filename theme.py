@@ -27,7 +27,7 @@ def is_dark():
 
 def set_dark(value: bool):
     global _dark
-    _dark = value
+    _dark = bool(value)
 
 
 # ── Colour palette (neutral dark gray — no color tint) ────────────────────

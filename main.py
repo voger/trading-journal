@@ -28,7 +28,7 @@ from asset_modules import get_module
 from backup_manager import create_backup, restore_backup
 import theme as _theme
 
-APP_VERSION = "3.1.0"
+APP_VERSION = "3.2.0"
 ICON_PATH = os.path.join(_resource_dir, 'icons', 'icon.png')
 
 _fonts_dir = os.path.join(_resource_dir, 'fonts')
@@ -329,6 +329,13 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Backup", f"Saved to:\n{p}")
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
+    def _reconnect_tabs(self):
+        """Propagate the current DB connection to all tabs."""
+        for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
+                    self.equity_tab, self.stats_tab, self.imports_tab,
+                    self.watchlist_tab]:
+            tab.conn = self.conn
+
     def _on_restore(self):
         fp, _ = QFileDialog.getOpenFileName(self, "Restore Backup", "", "Zip (*.zip)")
         if not fp: return
@@ -340,10 +347,7 @@ class MainWindow(QMainWindow):
             if not result.get('success'):
                 raise Exception(result.get('message', 'Restore failed'))
             self.conn = get_connection(self.db_path)
-            for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
-                        self.equity_tab, self.stats_tab, self.imports_tab,
-                        self.watchlist_tab]:
-                tab.conn = self.conn
+            self._reconnect_tabs()
             self._refresh_all()
             QMessageBox.information(self, "Restored", "Backup restored successfully.")
         except Exception as e:
@@ -351,10 +355,7 @@ class MainWindow(QMainWindow):
             # stays functional even if the restore itself failed.
             try:
                 self.conn = get_connection(self.db_path)
-                for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
-                            self.equity_tab, self.stats_tab, self.imports_tab,
-                            self.watchlist_tab]:
-                    tab.conn = self.conn
+                self._reconnect_tabs()
             except Exception:
                 pass
             QMessageBox.critical(self, "Error", str(e))

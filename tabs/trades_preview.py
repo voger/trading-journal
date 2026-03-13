@@ -238,7 +238,7 @@ class TradesPreviewMixin:
             if exit_p and exit_p > 0:
                 actual = (exit_p - entry) if direction == 'LONG' else (entry - exit_p)
                 r_mult = actual / risk_dist if risk_dist > 0 else 0
-                rc = _pos if r_mult > 0 else _neg if r_mult < 0 else _neu
+                rc = _theme.pos_color() if r_mult > 0 else _theme.neg_color() if r_mult < 0 else _theme.neu_color()
                 lines.append(f"<b>R Multiple:</b> <span style='color:{rc}'>{r_mult:+.2f}R</span>")
 
         if risk_pct: lines.append(f"<b>Risk:</b> {risk_pct:.2f}%")
@@ -302,7 +302,7 @@ class TradesPreviewMixin:
         acct = get_account(self.conn, t['account_id']) if t['account_id'] else None
         self.pv_chart.asset_type = (acct['asset_type'] if acct else 'forex')
         self.pv_chart.set_trade(chart_data)
-        cached = t['chart_data'] if 'chart_data' in t.keys() else None
+        cached = t['chart_data'] if 'chart_data' in t else None
         if cached:
             self.pv_chart.load_cached_data(cached)
         else:

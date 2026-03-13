@@ -19,6 +19,8 @@ jobs:
             asset_name: TradingJournal_windows.zip
 
     runs-on: ${{ matrix.os }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout

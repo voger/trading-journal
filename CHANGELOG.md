@@ -4,6 +4,39 @@ All notable changes to Trading Journal are documented here.
 
 ---
 
+## [3.2.0] — 2026-03-13
+
+### Changed
+- Codebase refactoring: eliminated duplicated code, fixed latent bugs, and improved robustness across several modules
+
+### Fixed
+- `NameError` crash in trade preview panel when displaying R-multiple for any closed trade with a stop loss (undefined `_pos`/`_neg`/`_neu` variables)
+- Broker ticket ID `0` was silently dropped during balance event import (falsy check `if ticket` replaced with `if ticket is not None`)
+- `delete_trade()` DB failures in the trades table were unhandled and propagated silently; now shown to the user via error dialog
+- Path traversal validation in backup restore replaced fragile string-prefix check with `os.path.commonpath()`
+
+### Refactored
+- `main.py`: extracted `_reconnect_tabs()` to eliminate duplicated 7-tab list in backup restore
+- `tabs/trades_actions.py`: extracted `_get_trade_id_at_row()` / `_get_selected_trade_id()` helpers (removed 6 repetitions); extracted `_attach_trade_metadata()` (removed duplication between new/edit)
+- `tabs/equity.py`: replaced two inline P&L sums with `effective_pnl()`
+- `db/schema.py`: removed 75 lines of unreachable migration code (dead since `SCHEMA_SQL` always runs `CREATE TABLE IF NOT EXISTS` before `_migrate()`)
+- `db/crud.py`: added missing `try/except/rollback` to `delete_custom_query`
+- `theme.py`: `set_dark()` now enforces `bool(value)`
+
+### CI
+- GitHub Actions: opt into Node.js 24 runner (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`) to silence deprecation warnings ahead of the June 2026 forced migration
+
+---
+
+## [3.1.0] — 2026-03-11
+
+### Changed
+- Unified P&L colour palette across all UI panels: `theme.pos_color()`, `neg_color()`, `neu_color()`, `pnl_color()` used everywhere — dark mode uses muted palette, light mode uses darker colours for contrast on white backgrounds
+- SQL console: theme-aware cheatsheet and schema panels; fixed A− button label
+- Syntax highlighter: bold keywords fixed; desaturated dark-mode keyword colour
+
+---
+
 ## [3.0.0] — 2026-03-03
 
 ### Added
