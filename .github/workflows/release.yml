@@ -26,6 +26,8 @@ jobs:
 
   build:
     needs: create-release
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       matrix:
         include:
