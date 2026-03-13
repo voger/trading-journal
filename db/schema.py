@@ -438,86 +438,13 @@ def init_database(db_path: str = None) -> str:
 
 
 def _migrate(conn):
-    """Apply schema migrations for existing databases."""
-    # Add chart_data column if missing
+    """Apply schema migrations for existing databases.
+
+    Only contains migrations that cannot be expressed as CREATE TABLE IF NOT EXISTS
+    (e.g. ALTER TABLE). All table and index creation lives in SCHEMA_SQL, which
+    always runs before this function via executescript().
+    """
+    # Add chart_data column if missing (ALTER TABLE has no IF NOT EXISTS in SQLite)
     cols = [r[1] for r in conn.execute("PRAGMA table_info(trades)").fetchall()]
     if 'chart_data' not in cols:
         conn.execute("ALTER TABLE trades ADD COLUMN chart_data TEXT")
-
-    # Create executions table if missing (v2: FIFO lot tracking)
-    tables = [r[0] for r in conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-    if 'executions' not in tables:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS executions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                account_id INTEGER NOT NULL,
-                instrument_id INTEGER NOT NULL,
-                trade_id INTEGER,
-                broker_order_id TEXT,
-                action TEXT NOT NULL,
-                shares REAL NOT NULL,
-                price REAL NOT NULL,
-                price_currency TEXT,
-                exchange_rate REAL,
-                total_account_currency REAL,
-                commission REAL DEFAULT 0,
-                broker_result REAL,
-                executed_at TEXT NOT NULL,
-                import_log_id INTEGER,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-                FOREIGN KEY (instrument_id) REFERENCES instruments(id),
-                FOREIGN KEY (trade_id) REFERENCES trades(id) ON DELETE SET NULL,
-                FOREIGN KEY (import_log_id) REFERENCES import_logs(id),
-                UNIQUE(account_id, broker_order_id)
-            );
-            CREATE TABLE IF NOT EXISTS lot_consumptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trade_id INTEGER NOT NULL,
-                buy_execution_id INTEGER NOT NULL,
-                sell_execution_id INTEGER NOT NULL,
-                shares_consumed REAL NOT NULL,
-                buy_price REAL NOT NULL,
-                sell_price REAL NOT NULL,
-                buy_exchange_rate REAL,
-                sell_exchange_rate REAL,
-                pnl_computed REAL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (trade_id) REFERENCES trades(id) ON DELETE CASCADE,
-                FOREIGN KEY (buy_execution_id) REFERENCES executions(id),
-                FOREIGN KEY (sell_execution_id) REFERENCES executions(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_executions_account ON executions(account_id);
-            CREATE INDEX IF NOT EXISTS idx_executions_instrument ON executions(instrument_id);
-            CREATE INDEX IF NOT EXISTS idx_executions_trade ON executions(trade_id);
-            CREATE INDEX IF NOT EXISTS idx_executions_dedup ON executions(account_id, broker_order_id);
-            CREATE INDEX IF NOT EXISTS idx_executions_date ON executions(executed_at);
-            CREATE INDEX IF NOT EXISTS idx_lot_consumptions_trade ON lot_consumptions(trade_id);
-            CREATE INDEX IF NOT EXISTS idx_lot_consumptions_buy ON lot_consumptions(buy_execution_id);
-            CREATE INDEX IF NOT EXISTS idx_lot_consumptions_sell ON lot_consumptions(sell_execution_id);
-        """)
-
-    # Composite index for the most common stats filter (account + status)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_trades_account_status ON trades(account_id, status)"
-    )
-    # Composite index for queries that filter+sort by account+entry_date
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_trades_account_entry_date ON trades(account_id, entry_date)"
-    )
-    # Composite index for stats queries that filter by account+exit_date
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_trades_account_exit_date ON trades(account_id, exit_date)"
-    )
-
-    # custom_queries table (added for custom analytics console)
-    if 'custom_queries' not in tables:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS custom_queries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                sql_text TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )
-        """)
