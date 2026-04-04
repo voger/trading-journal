@@ -414,10 +414,8 @@ INSERT OR IGNORE INTO formula_definitions (metric_key, display_name, formula_tex
 """
 
 
-def init_database(db_path: str = None) -> str:
+def init_database(db_path: str) -> str:
     """Initialize the database with schema and seed data. Returns the db_path used."""
-    if db_path is None:
-        db_path = get_db_path()
     conn = get_connection(db_path)
     try:
         conn.executescript(SCHEMA_SQL)

@@ -27,15 +27,11 @@ def get_app_data_dir() -> str:
     return os.path.join(base, 'TradingJournal')
 
 
-def get_db_path(app_data_dir: str = None) -> str:
-    if app_data_dir:
-        return os.path.join(app_data_dir, DB_NAME)
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), DB_NAME)
+def get_db_path(app_data_dir: str) -> str:
+    return os.path.join(app_data_dir, DB_NAME)
 
 
-def get_connection(db_path: str = None) -> sqlite3.Connection:
-    if db_path is None:
-        db_path = get_db_path()
+def get_connection(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")

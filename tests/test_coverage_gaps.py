@@ -747,7 +747,7 @@ class TestBackupRestore:
 class TestMigrationExtra:
 
     def test_get_db_path_returns_string(self):
-        path = db.get_db_path()
+        path = db.get_db_path('/tmp/test_dir')
         assert isinstance(path, str)
         assert 'trading_journal.db' in path
 
