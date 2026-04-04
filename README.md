@@ -175,7 +175,7 @@ source venv/bin/activate
 python -m pytest tests/ -q
 ```
 
-Current: **614 passed, 42 skipped** (integration tests require real broker files and are skipped by default).
+Current: **609 passed, 42 skipped** (integration tests require real broker files and are skipped by default).
 
 ```bash
 # Integration tests (provide your own files)
@@ -189,34 +189,34 @@ python -m pytest tests/ -q --real-mt4=/path/to/DetailedStatement.htm
 
 ```
 trading-journal/
-├── main.py              # Application entry point
-├── database.py          # Star-import shim (real code in db/)
+├── main.py                      # Application entry point
+├── database.py                  # Star-import shim (real code in db/)
 ├── db/
-│   ├── connection.py    # DB path, get_connection()
-│   ├── schema.py        # Schema, migrations
-│   ├── crud.py          # All entity CRUD
-│   ├── analytics.py     # Stats, P&L, breakdowns
-│   └── queries.py       # Paged/filtered trade queries, EXPORT_COLUMNS
-├── fifo_engine.py       # FIFO lot matching engine
-├── chart_widget.py      # Candlestick chart widget (mplfinance)
-├── import_manager.py    # Plugin-based import orchestration
-├── backup_manager.py    # Backup / restore to ZIP
-├── executions_dialog.py # Execution detail viewer (T212 lot breakdown)
-├── theme.py             # Dark theme QSS + P&L colour palette (pos/neg/neu helpers)
-├── fonts/               # Bundled JetBrains Mono (OFL 1.1) for the SQL console
-├── tabs/                # UI tabs: trades, journal, stats, equity, watchlist…
-├── plugins/             # Broker import plugins (Trading212, MT4)
-├── asset_modules/       # Per-asset-type behaviour (forex, stocks)
-├── chart_providers/     # OHLC data providers (TwelveData, Yahoo Finance)
-├── tests/               # Pytest test suite (614 tests)
-├── build_app.sh                  # Linux PyInstaller build + AppImage
-├── build_app.bat                 # Windows PyInstaller build + NSIS installer
-├── build_installer_linux.sh      # AppImage creation script (called by build_app.sh)
-├── build_installer_windows.nsi   # NSIS installer script (called by build_app.bat)
-├── requirements.txt              # Python dependencies
-├── icons/                        # Application icons
-├── install.sh                    # Linux desktop integration script
-└── install.ps1                   # Windows desktop integration script
+│   ├── connection.py            # DB path, get_connection()
+│   ├── schema.py                # Schema, migrations
+│   ├── crud.py                  # All entity CRUD
+│   ├── analytics.py             # Stats, P&L, breakdowns
+│   └── queries.py               # Paged/filtered trade queries, EXPORT_COLUMNS
+├── fifo_engine.py               # FIFO lot matching engine
+├── chart_widget.py              # Candlestick chart widget (mplfinance)
+├── import_manager.py            # Plugin-based import orchestration
+├── backup_manager.py            # Backup / restore to ZIP
+├── executions_dialog.py         # Execution detail viewer (T212 lot breakdown)
+├── theme.py                     # Dark theme QSS + P&L colour palette
+├── fonts/                       # Bundled JetBrains Mono (OFL 1.1) for SQL console
+├── tabs/                        # UI tabs: trades, journal, stats, equity, watchlist…
+├── plugins/                     # Broker import plugins (Trading212, MT4)
+├── asset_modules/               # Per-asset-type behaviour (forex, stocks)
+├── chart_providers/             # OHLC data providers (TwelveData, Yahoo Finance)
+├── tests/                       # Pytest test suite (609 tests)
+├── build_app.sh                 # Linux PyInstaller build + AppImage
+├── build_app.bat                # Windows PyInstaller build + NSIS installer
+├── build_installer_linux.sh     # AppImage creation script (called by build_app.sh)
+├── build_installer_windows.nsi  # NSIS installer script (called by build_app.bat)
+├── requirements.txt             # Python dependencies
+├── icons/                       # Application icons
+├── install.sh                   # Linux desktop integration script
+└── install.ps1                  # Windows desktop integration script
 ```
 
 ---
