@@ -41,6 +41,8 @@ All notable changes to Trading Journal are documented here.
 
 ### Chore
 - Split CLAUDE.md into four skill files: test.md, build.md, db.md, ui.md for cleaner reference
+- Integrated installer build into CI/CD: AppImage for Linux, NSIS .exe for Windows
+- GitHub Actions release workflow now builds and uploads all distribution formats
 - Test baseline: 609 passed, 42 skipped — no regressions
 
 ---
