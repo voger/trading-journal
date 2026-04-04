@@ -126,7 +126,7 @@ copy /Y install.ps1 "dist\%APP_NAME%\install.ps1" >nul
 echo   install.ps1 copied (run with -Uninstall to reverse).
 
 REM -- Archive --
-echo [5/5] Creating archive...
+echo [5/6] Creating archive...
 cd dist
 if exist "%ProgramFiles%\7-Zip\7z.exe" (
     "%ProgramFiles%\7-Zip\7z.exe" a "%APP_NAME%_windows.zip" "%APP_NAME%\" > nul
@@ -136,10 +136,34 @@ if exist "%ProgramFiles%\7-Zip\7z.exe" (
 )
 cd ..
 
+REM -- Build installer with NSIS if available --
+echo [6/6] Building Windows installer...
+if exist "%ProgramFiles(x86)%\NSIS\makensis.exe" (
+    "%ProgramFiles(x86)%\NSIS\makensis.exe" build_installer_windows.nsi > nul
+    if exist "dist\%APP_NAME%_Setup.exe" (
+        echo   Created dist\%APP_NAME%_Setup.exe
+    ) else (
+        echo   WARNING: NSIS build may have failed - check build_installer_windows.nsi
+    )
+) else if exist "%ProgramFiles%\NSIS\makensis.exe" (
+    "%ProgramFiles%\NSIS\makensis.exe" build_installer_windows.nsi > nul
+    if exist "dist\%APP_NAME%_Setup.exe" (
+        echo   Created dist\%APP_NAME%_Setup.exe
+    ) else (
+        echo   WARNING: NSIS build may have failed - check build_installer_windows.nsi
+    )
+) else (
+    echo   NSIS not found - skipping installer
+    echo   To create Windows installer:
+    echo   1. Download NSIS from https://nsis.sourceforge.io/
+    echo   2. Run: "%%ProgramFiles(x86)%%\NSIS\makensis.exe" build_installer_windows.nsi
+)
+
 echo.
 echo ===========================================
 echo   Build complete!
 echo   Run:       dist\%APP_NAME%\%APP_NAME%.exe
 echo   Install:   powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1
 echo   Uninstall: powershell -ExecutionPolicy Bypass -File dist\%APP_NAME%\install.ps1 -Uninstall
+echo   Installer: dist\%APP_NAME%_Setup.exe (if NSIS is installed^)
 echo ===========================================

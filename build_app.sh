@@ -251,7 +251,7 @@ INSTALL_SCRIPT
 fi
 
 # ── Create portable archive ──
-echo "[5/5] Creating portable archive..."
+echo "[5/6] Creating portable archive..."
 cd dist
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     if command -v 7z &>/dev/null; then
@@ -266,6 +266,18 @@ else
 fi
 cd ..
 
+# ── Build AppImage (Linux only) ──
+if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "cygwin" && "$OSTYPE" != "win32" ]]; then
+    echo "[6/6] Building AppImage..."
+    if command -v appimagetool &>/dev/null; then
+        bash build_installer_linux.sh
+    else
+        echo "  ⚠ appimagetool not found — skipping AppImage"
+        echo "     Install with: sudo apt install appimagetool"
+        echo "     Or download: https://github.com/AppImage/AppImageKit/releases"
+    fi
+fi
+
 echo ""
 echo "═══════════════════════════════════════════"
 echo "  Build complete!"
@@ -274,5 +286,6 @@ echo "  Run:      $EXECUTABLE"
 if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "cygwin" && "$OSTYPE" != "win32" ]]; then
 echo "  Install:  bash dist/$APP_NAME/install.sh"
 echo "  Remove:   bash dist/$APP_NAME/install.sh uninstall"
+echo "  AppImage: dist/${APP_NAME}.AppImage"
 fi
 echo "═══════════════════════════════════════════"

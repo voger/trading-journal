@@ -42,6 +42,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y appimagetool
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -49,6 +55,11 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt pyinstaller pillow
           bash build_app.sh
+
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install nsis -y
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -59,7 +70,19 @@ jobs:
           pip install -r requirements.txt pyinstaller pillow
           build_app.bat
 
-      - name: Upload asset to Release
+      - name: Upload portable archive to Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload ${{ github.ref_name }} dist/${{ matrix.asset_name }} --repo ${{ github.repository }}
+
+      - name: Upload AppImage to Release
+        if: runner.os == 'Linux'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} dist/TradingJournal.AppImage --repo ${{ github.repository }}
+
+      - name: Upload Windows Installer to Release
+        if: runner.os == 'Windows'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.ref_name }} dist/TradingJournal_Setup.exe --repo ${{ github.repository }}
