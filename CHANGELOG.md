@@ -4,6 +4,47 @@ All notable changes to Trading Journal are documented here.
 
 ---
 
+## [3.3.0] — 2026-04-04
+
+### Fixed
+- WAL checkpoint before backup to prevent data loss on incomplete transactions
+- `set_setting(key, None)` now stores SQL NULL instead of string "None"
+- `delete_import_log` now only deletes FIFO-generated trades, preserving manually-entered trades
+- `reset_formulas_to_defaults` no longer uses `executescript` (implicit commit breaking rollback)
+- M/MINI broker suffix stripping now only applies to forex, fixing corruption of stock tickers (IBM→IB, XOM→XO, QCOM→QCO)
+- `_apply_theme` now sets dark state before stylesheet to avoid stale theme callbacks
+- Pop-out chart savefig now uses dark-mode background color
+- Journal entry colour now uses `theme.pos_color()` instead of hardcoded #008200
+- BreakdownTable and SetupPerformanceWidget numeric columns now sort numerically (added `_NumItem` class)
+- DayDetailDialog P&L column now sorts numerically
+- Stats tab early return for empty period now refreshes calendar heatmap and SQL console
+- SQL console export button no longer crashes if clicked before first query (`_last_col_names`/`_last_rows` initialized)
+- Status label in stats query console now uses theme-aware color instead of hardcoded #c80000
+- ISIN-based ETF detection removed (false positives for Irish/Luxembourg stocks; name keywords only)
+- Plugin template now includes `IMPORT_MODE` and `file_hash()` stubs
+- Test duplication cleaned: removed 5 redundant tests from test_coverage_gaps.py
+
+### Changed
+- Per-row DB commits deferred to transaction end: bulk imports now 10x+ faster with effective rollback
+- `_recalc_metrics` now skipped during dialog populate (eliminates 15+ redundant calculations on keystroke)
+- Tag chip colors now adapt to dark mode
+- MetricCard label colors now theme-aware
+- SL/TP chart annotations now theme-aware
+- Chart label text color now theme-aware
+- Screenshot thumbnails use theme-aware border and background colors
+- Watchlist bias colors now theme-aware via `_bias_color()` function
+- R-histogram and hour-chart note labels use theme-aware colors
+- Day detail dialog hint label uses theme-aware color
+- Setup chart thumbnails use theme-aware border and background
+- KPICard title and value default colors now theme-aware
+- `add_account_event` rollback now respects `_commit` parameter to avoid destroying caller's transaction
+
+### Chore
+- Split CLAUDE.md into four skill files: test.md, build.md, db.md, ui.md for cleaner reference
+- Test baseline: 609 passed, 42 skipped — no regressions
+
+---
+
 ## [3.2.0] — 2026-03-13
 
 ### Changed
