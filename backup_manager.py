@@ -41,9 +41,19 @@ def create_backup(app_dir: str, backup_dir: str = None) -> str:
         'backup_name': backup_name,
     }
 
+    # Checkpoint WAL so the .db file contains all committed data
+    import sqlite3
+    db_path = paths['db']
+    if os.path.exists(db_path):
+        try:
+            _conn = sqlite3.connect(db_path)
+            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            _conn.close()
+        except sqlite3.DatabaseError:
+            pass  # not a valid SQLite DB (or no WAL to checkpoint)
+
     with zipfile.ZipFile(backup_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         # Database
-        db_path = paths['db']
         if os.path.exists(db_path):
             zf.write(db_path, 'trading_journal.db')
 

@@ -14,7 +14,8 @@ import warnings
 from collections import deque
 
 
-def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: int):
+def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: int,
+                      _commit=True):
     """
     Run FIFO matching for all executions of a given instrument in an account.
 
@@ -40,7 +41,10 @@ def run_fifo_matching(conn: sqlite3.Connection, account_id: int, instrument_id: 
         return []
 
     try:
-        return _run_fifo_matching_inner(conn, account_id, instrument_id, execs)
+        result = _run_fifo_matching_inner(conn, account_id, instrument_id, execs)
+        if _commit:
+            conn.commit()
+        return result
     except Exception:
         conn.rollback()
         raise
@@ -203,7 +207,6 @@ def _run_fifo_matching_inner(conn, account_id, instrument_id, execs):
             if not has_execs:
                 conn.execute("DELETE FROM trades WHERE id = ?", (row['id'],))
 
-    conn.commit()
     return trade_ids
 
 

@@ -691,8 +691,8 @@ class TestGetTradesFilters:
 class TestInstruments:
     def test_get_instruments_empty(self, conn):
         result = db.get_instruments(conn)
-        # Built-in forex pairs created during init
-        assert len(result) >= 0  # depends on schema init
+        # No instruments are seeded during init
+        assert isinstance(result, list)
 
     def test_get_instrument(self, conn):
         iid = db.get_or_create_instrument(conn, 'AAPL', 'Apple Inc', 'stock')
@@ -1566,15 +1566,21 @@ class TestDeleteImportLog:
                             broker_order_id='ORD-DEL-3', action='buy', shares=10,
                             price=300.0, executed_at='2025-01-01',
                             import_log_id=log_id)
-        # Simulate a FIFO-built trade for this instrument
+        # Simulate a FIFO-built trade for this instrument (with FIFO ticket ID)
         db.create_trade(conn, account_id=stock_account, instrument_id=iid,
                         direction='long', entry_date='2025-01-01',
-                        entry_price=300, position_size=10, status='open')
+                        entry_price=300, position_size=10, status='open',
+                        broker_ticket_id=f'EXEC_FIFO_{stock_account}_{iid}_0')
+        # Also add a manually-entered trade (no FIFO ticket) — must survive
+        db.create_trade(conn, account_id=stock_account, instrument_id=iid,
+                        direction='long', entry_date='2025-01-02',
+                        entry_price=310, position_size=5, status='open')
         db.delete_import_log(conn, log_id)
         count = conn.execute(
             "SELECT COUNT(*) FROM trades WHERE account_id = ? AND instrument_id = ?",
             (stock_account, iid)).fetchone()[0]
-        assert count == 0
+        # FIFO trade deleted, manual trade preserved
+        assert count == 1
 
     def test_executions_mode_keeps_other_instruments_executions(self, conn, stock_account):
         """Executions for instruments NOT in this log must not be deleted."""

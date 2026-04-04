@@ -153,6 +153,7 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
                 display_name=trade_data.get('display_name'),
                 instrument_type=trade_data.get('instrument_type', 'forex'),
                 pip_size=trade_data.get('pip_size'),
+                _commit=False,
             )
 
             trade_record = {
@@ -175,7 +176,7 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
                 'status': trade_data.get('status', 'closed'),
             }
 
-            db.create_trade(conn, **trade_record)
+            db.create_trade(conn, _commit=False, **trade_record)
             imported += 1
 
         except Exception as e:
@@ -184,7 +185,7 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
     # Create import log, import balance events, and commit — wrapped so that any
     # DB error here rolls back the uncommitted trade inserts above.
     try:
-        log_id = db.create_import_log(conn,
+        log_id = db.create_import_log(conn, _commit=False,
             account_id=account_id,
             plugin_name=plugin.PLUGIN_NAME,
             file_name=os.path.basename(file_path),
@@ -249,7 +250,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
     skipped = 0
 
     # Create import log first (we need the ID for linking)
-    log_id = db.create_import_log(conn,
+    log_id = db.create_import_log(conn, _commit=False,
         account_id=account_id,
         plugin_name=plugin.PLUGIN_NAME,
         file_name=os.path.basename(file_path),
@@ -292,10 +293,11 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
                 symbol=ex['symbol'],
                 display_name=ex.get('display_name'),
                 instrument_type=ex.get('instrument_type', 'stock'),
+                _commit=False,
             )
 
             # Insert execution
-            db.create_execution(conn,
+            db.create_execution(conn, _commit=False,
                 account_id=account_id,
                 instrument_id=instrument_id,
                 broker_order_id=str(order_id),
@@ -322,7 +324,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
     fifo_failed = False
     for instrument_id in affected_instruments:
         try:
-            trade_ids = run_fifo_matching(conn, account_id, instrument_id)
+            trade_ids = run_fifo_matching(conn, account_id, instrument_id, _commit=False)
             trades_created += len(trade_ids) if trade_ids else 0
         except Exception as e:
             fifo_failed = True
@@ -382,6 +384,7 @@ def _import_balance_events(conn, account_id, balance_events, errors, log_id=None
                 description=evt.get('description'),
                 broker_ticket_id=str(ticket) if ticket is not None else None,
                 import_log_id=log_id,
+                _commit=False,
             )
             count += 1
         except Exception as e:

@@ -73,7 +73,7 @@ def delete_account(conn: sqlite3.Connection, account_id: int):
 
 def get_or_create_instrument(conn: sqlite3.Connection, symbol: str,
                              display_name: str = None, instrument_type: str = 'forex',
-                             pip_size: float = None):
+                             pip_size: float = None, _commit=True):
     symbol_clean = symbol.strip().upper()
     row = conn.execute("SELECT * FROM instruments WHERE symbol = ?", (symbol_clean,)).fetchone()
     if row:
@@ -83,7 +83,8 @@ def get_or_create_instrument(conn: sqlite3.Connection, symbol: str,
     cur = conn.execute(
         "INSERT INTO instruments (symbol, display_name, instrument_type, pip_size) VALUES (?, ?, ?, ?)",
         (symbol_clean, display_name, instrument_type, pip_size))
-    conn.commit()
+    if _commit:
+        conn.commit()
     return cur.lastrowid
 
 
@@ -136,13 +137,14 @@ def get_trade(conn: sqlite3.Connection, trade_id: int):
            WHERE t.id = ?""", (trade_id,)).fetchone()
 
 
-def create_trade(conn: sqlite3.Connection, **kwargs):
+def create_trade(conn: sqlite3.Connection, _commit=True, **kwargs):
     columns = ', '.join(kwargs.keys())
     placeholders = ', '.join('?' * len(kwargs))
     cur = conn.execute(
         f"INSERT INTO trades ({columns}) VALUES ({placeholders})",
         list(kwargs.values()))
-    conn.commit()
+    if _commit:
+        conn.commit()
     return cur.lastrowid
 
 
@@ -412,13 +414,14 @@ def delete_setup_chart(conn: sqlite3.Connection, chart_id: int):
 
 # ── Import logs ───────────────────────────────────────────────────────────
 
-def create_import_log(conn: sqlite3.Connection, **kwargs):
+def create_import_log(conn: sqlite3.Connection, _commit=True, **kwargs):
     columns = ', '.join(kwargs.keys())
     placeholders = ', '.join('?' * len(kwargs))
     cur = conn.execute(
         f"INSERT INTO import_logs ({columns}) VALUES ({placeholders})",
         list(kwargs.values()))
-    conn.commit()
+    if _commit:
+        conn.commit()
     return cur.lastrowid
 
 
@@ -487,7 +490,8 @@ def delete_import_log(conn: sqlite3.Connection, log_id: int):
             # Cascades: lot_consumptions, trade_tags, trade_charts, trade_rule_checks.
             for inst_id in affected_instruments:
                 conn.execute(
-                    "DELETE FROM trades WHERE account_id = ? AND instrument_id = ?",
+                    "DELETE FROM trades WHERE account_id = ? AND instrument_id = ?"
+                    " AND broker_ticket_id LIKE 'EXEC\\_FIFO\\_%' ESCAPE '\\'",
                     (account_id, inst_id)
                 )
 
@@ -552,16 +556,19 @@ def save_journal_entry(conn: sqlite3.Connection, journal_date: str, account_id=N
 
 def add_account_event(conn: sqlite3.Connection, account_id: int, event_type: str,
                       amount: float, event_date: str, description: str = None,
-                      broker_ticket_id: str = None, import_log_id: int = None):
+                      broker_ticket_id: str = None, import_log_id: int = None,
+                      _commit=True):
     try:
         cur = conn.execute(
             """INSERT OR IGNORE INTO account_events
                (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (account_id, event_type, amount, event_date, description, broker_ticket_id, import_log_id))
-        conn.commit()
+        if _commit:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if _commit:
+            conn.rollback()
         raise
     return cur.lastrowid if cur.rowcount else None
 
@@ -581,14 +588,15 @@ def account_event_exists(conn: sqlite3.Connection, account_id: int, broker_ticke
 
 # ── Executions (for lot-tracked stock trades) ─────────────────────────────
 
-def create_execution(conn: sqlite3.Connection, **kwargs):
+def create_execution(conn: sqlite3.Connection, _commit=True, **kwargs):
     """Insert a raw execution (buy or sell order)."""
     columns = ', '.join(kwargs.keys())
     placeholders = ', '.join('?' * len(kwargs))
     cur = conn.execute(
         f"INSERT INTO executions ({columns}) VALUES ({placeholders})",
         list(kwargs.values()))
-    conn.commit()
+    if _commit:
+        conn.commit()
     return cur.lastrowid
 
 
@@ -709,7 +717,7 @@ def update_formula(conn: sqlite3.Connection, metric_key: str, **kwargs):
 def reset_formulas_to_defaults(conn: sqlite3.Connection):
     """Delete all formula definitions and re-insert defaults from SEED_SQL."""
     conn.execute("DELETE FROM formula_definitions")
-    conn.executescript(FORMULA_SEED_SQL)
+    conn.execute(FORMULA_SEED_SQL.strip().rstrip(';'))
     conn.commit()
 
 
@@ -879,5 +887,5 @@ def set_setting(conn: sqlite3.Connection, key: str, value):
     """Write a value to app_settings (upsert)."""
     conn.execute(
         "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
-        "VALUES (?, ?, datetime('now'))", (key, str(value)))
+        "VALUES (?, ?, datetime('now'))", (key, None if value is None else str(value)))
     conn.commit()

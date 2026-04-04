@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
+import theme as _theme
 
 
 class _NumItem(QTableWidgetItem):
@@ -30,13 +31,16 @@ class KPICard(QFrame):
         lay.setContentsMargins(10, 4, 10, 4)
         lay.setSpacing(0)
         self._title = QLabel(title)
-        self._title.setStyleSheet("color: #666; font-size: 10px; font-weight: bold;")
+        _t_color = '#aaa' if _theme.is_dark() else '#666'
+        self._title.setStyleSheet(f"color: {_t_color}; font-size: 10px; font-weight: bold;")
         self._value = QLabel("—")
         self._value.setStyleSheet("font-size: 16px; font-weight: bold;")
         self._value.setAlignment(Qt.AlignmentFlag.AlignRight)
         lay.addWidget(self._title)
         lay.addWidget(self._value)
 
-    def set_value(self, text, color="#333"):
+    def set_value(self, text, color=None):
+        if color is None:
+            color = '#ddd' if _theme.is_dark() else '#333'
         self._value.setText(text)
         self._value.setStyleSheet(f"color: {color}; font-size: 16px; font-weight: bold;")

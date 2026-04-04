@@ -83,7 +83,11 @@ class YFinanceProvider(ChartProvider):
         # Strip known broker suffixes before dot removal.
         # Use [:-len(suffix)] (not rstrip) to remove exactly the suffix string.
         # Check MINI before M so a symbol ending in 'MINI' isn't partially matched by 'M'.
-        for suffix in ['.RAW', '.ECN', '.PRO', '.STD', 'MINI', 'M']:
+        # Broker suffixes — only strip forex-specific ones for forex symbols
+        suffixes = ['.RAW', '.ECN', '.PRO', '.STD']
+        if asset_type == 'forex':
+            suffixes += ['MINI', 'M']
+        for suffix in suffixes:
             if s.endswith(suffix):
                 candidate = s[:-len(suffix)]
                 if candidate:  # only strip if result is non-empty

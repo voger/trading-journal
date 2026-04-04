@@ -172,6 +172,8 @@ class StatsTab(BaseTab):
             self.setup_perf.populate([])
             self.r_hist.populate([], 0)
             self.hour_hist.populate([])
+            self.calendar_heatmap.refresh(self.conn)
+            self.sql_console.refresh_account(aid)
             return
 
         acct = get_account(self.conn, aid)

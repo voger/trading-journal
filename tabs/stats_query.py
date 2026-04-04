@@ -290,6 +290,8 @@ class SqlQueryWidget(QWidget):
         self._get_aid = get_aid_fn
         self._queries = []       # list of sqlite3.Row: id, name, sql_text
         self._loading = False    # guard against combo signal during rebuild
+        self._last_col_names = []
+        self._last_rows = []
 
         seed_default_queries(conn)
         saved = get_setting(conn, 'sql_console_font_size')
@@ -362,7 +364,8 @@ class SqlQueryWidget(QWidget):
         toolbar.addStretch()
 
         self.account_label = QLabel("No account selected")
-        self.account_label.setStyleSheet("font-size:11px; color:#555; padding-right:4px;")
+        _dim = '#999' if _theme.is_dark() else '#555'
+        self.account_label.setStyleSheet(f"font-size:11px; color:{_dim}; padding-right:4px;")
         toolbar.addWidget(self.account_label)
 
         root.addLayout(toolbar)
@@ -424,7 +427,7 @@ class SqlQueryWidget(QWidget):
 
         status_row = QHBoxLayout()
         self.status_label = QLabel("No results yet.")
-        self.status_label.setStyleSheet("font-size:11px; color:#555;")
+        self.status_label.setStyleSheet(f"font-size:11px; color:{'#999' if _theme.is_dark() else '#555'};")
         status_row.addWidget(self.status_label)
         status_row.addStretch()
         self.btn_export = QPushButton("Export CSV")
@@ -548,7 +551,7 @@ class SqlQueryWidget(QWidget):
         aid = self._get_aid()
         if aid is None:
             self.status_label.setText("No account selected — please select an account first.")
-            self.status_label.setStyleSheet("font-size:11px; color:#c80000;")
+            self.status_label.setStyleSheet(f"font-size:11px; color:{_theme.neg_color()};")
             return
 
         # Warn if the query may modify data
@@ -570,7 +573,7 @@ class SqlQueryWidget(QWidget):
             col_names = [d[0] for d in cur.description] if cur.description else []
         except Exception as exc:
             self.status_label.setText(f"Error: {exc}")
-            self.status_label.setStyleSheet("font-size:11px; color:#c80000;")
+            self.status_label.setStyleSheet(f"font-size:11px; color:{_theme.neg_color()};")
             self.results.setRowCount(0)
             self.results.setColumnCount(0)
             self.btn_export.setEnabled(False)
@@ -608,7 +611,7 @@ class SqlQueryWidget(QWidget):
         n = len(rows)
         noun = "row" if n == 1 else "rows"
         self.status_label.setText(f"{n} {noun} returned.")
-        self.status_label.setStyleSheet("font-size:11px; color:#555;")
+        self.status_label.setStyleSheet(f"font-size:11px; color:{'#999' if _theme.is_dark() else '#555'};")
         self.btn_export.setEnabled(n > 0)
         self._last_col_names = col_names
         self._last_rows = rows

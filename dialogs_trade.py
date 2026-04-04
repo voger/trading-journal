@@ -79,11 +79,14 @@ class TradeDialog(QDialog):
         outer.addWidget(btns)
 
         # ── Connect live calculation ──
+        self._populating = False
         self._connect_live_calc()
 
         # ── Populate ──
         if trade:
+            self._populating = True
             self._populate(dict(trade))
+            self._populating = False
         elif default_account_id:
             idx = self.account_combo.findData(default_account_id)
             if idx >= 0:
@@ -449,6 +452,8 @@ class TradeDialog(QDialog):
         return None
 
     def _recalc_metrics(self):
+        if self._populating:
+            return
         entry = self.entry_price.value()
         sl = self.sl_spin.value()
         tp = self.tp_spin.value()
@@ -567,7 +572,9 @@ class TradeDialog(QDialog):
             thumb.setIcon(QIcon(scaled)); thumb.setIconSize(scaled.size())
         else:
             thumb.setText("?")
-        thumb.setStyleSheet("border:1px solid #ccc; background:#f0f0f0; padding:1px;")
+        thumb.setStyleSheet(
+            f"border:1px solid {'#444' if _theme.is_dark() else '#ccc'}; "
+            f"background:{'#2a2a2a' if _theme.is_dark() else '#f0f0f0'}; padding:1px;")
         path = str(file_path)
         thumb.clicked.connect(lambda checked=False, p=path: self._view_screenshot(p))
         vlay.addWidget(thumb)

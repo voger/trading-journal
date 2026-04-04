@@ -9,6 +9,17 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
+
+class _NumItem(QTableWidgetItem):
+    """QTableWidgetItem that sorts numerically by its UserRole float value."""
+    def __lt__(self, other):
+        a = self.data(Qt.ItemDataRole.UserRole)
+        b = other.data(Qt.ItemDataRole.UserRole)
+        if a is not None and b is not None:
+            return float(a) < float(b)
+        return super().__lt__(other)
+
+
 # Force English month names regardless of system locale
 _MONTH_NAMES = [
     '', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -95,12 +106,12 @@ class BreakdownTable(QWidget):
                 else:
                     text = str(val)
 
-                item = QTableWidgetItem()
-                # Store numeric value for sorting
                 if isinstance(val, (int, float)) and key != 'group_name':
+                    item = _NumItem()
                     item.setData(Qt.ItemDataRole.DisplayRole, text)
                     item.setData(Qt.ItemDataRole.UserRole, float(val))
                 else:
+                    item = QTableWidgetItem()
                     item.setText(text)
 
                 # Color coding
@@ -215,11 +226,12 @@ class SetupPerformanceWidget(QWidget):
                 else:
                     text = str(val) if val is not None else "—"
 
-                item = QTableWidgetItem()
                 if isinstance(val, (int, float)) and key != 'setup_name':
+                    item = _NumItem()
                     item.setData(Qt.ItemDataRole.DisplayRole, text)
                     item.setData(Qt.ItemDataRole.UserRole, float(val))
                 else:
+                    item = QTableWidgetItem()
                     item.setText(text)
 
                 if key == 'win_rate' and val is not None:
@@ -279,7 +291,7 @@ class RMultipleHistogramWidget(QWidget):
 
         self._note = QLabel("")
         self._note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._note.setStyleSheet("font-size: 11px; color: #666; padding: 4px;")
+        self._note.setStyleSheet(f"font-size: 11px; color: {'#999' if _theme.is_dark() else '#666'}; padding: 4px;")
         self._note.setWordWrap(True)
         lay.addWidget(self._note)
 
@@ -373,7 +385,7 @@ class HourOfDayWidget(QWidget):
 
         self._note = QLabel("")
         self._note.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._note.setStyleSheet("font-size: 11px; color: #666; padding: 4px;")
+        self._note.setStyleSheet(f"font-size: 11px; color: {'#999' if _theme.is_dark() else '#666'}; padding: 4px;")
         lay.addWidget(self._note)
 
     def populate(self, breakdowns, currency=''):

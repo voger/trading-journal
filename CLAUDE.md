@@ -2,104 +2,39 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Quick reference
+
+- Run tests: see `.claude/skills/test.md` (or invoke `/test`)
+- Build app: see `.claude/skills/build.md` (or invoke `/build`)
+- DB architecture & SQL style: `.claude/skills/db.md` (or invoke `/db`)
+- UI architecture & theming: `.claude/skills/ui.md` (or invoke `/ui`)
+
 ## Commands
 
 ```bash
 source venv/bin/activate
-
-python -m pytest tests/ -q
-python -m pytest tests/test_fifo_engine.py::TestFIFOEngine::test_basic_buy_sell -q
-
-# Integration tests (skipped unless files provided)
-python -m pytest tests/ -q --real-csv=/home/voger/VMSHARED/from_2025-05-22_to_2026-02-15_MTc3MTE1NTA4MjgyNg.csv
-python -m pytest tests/ -q --real-mt4=/home/voger/VMSHARED/DetailedStatement.htm
-
-bash build_app.sh   # Linux
-build_app.bat       # Windows
 python main.py
 ```
 
-## Architecture
+## Architecture overview
 
-### Data flow
+Python + PyQt6 desktop app, SQLite backend.
 
-**MT4** (`trades` mode): `import_manager._import_trades()` → one trade row per parsed row, dedup by `broker_ticket_id`.
-
-**Trading212** (`executions` mode): `import_manager._import_executions()` → raw executions table → `fifo_engine.run_fifo_matching()` per instrument → writes `trades` + `lot_consumptions`. FIFO is idempotent.
-
-### Key modules
-
-- **`database.py`** — star-import shim only; real code in `db/`
-  - `db/connection.py` — `get_app_data_dir()`, `get_connection()`. Data dir: `~/.local/share/TradingJournal` (Linux), `%APPDATA%\TradingJournal` (Windows), `~/Library/Application Support/TradingJournal` (macOS).
-  - `db/schema.py` — `init_database()`, `_migrate()`
-  - `db/crud.py` — all entity CRUD
-  - `db/analytics.py` — `effective_pnl()`, `get_trade_stats()`, `get_trade_breakdowns()`, `get_advanced_stats()`, `get_daily_pnl()`
-  - `db/queries.py` — `get_trades_paged()`, `get_trades_all_filtered()`, `EXPORT_COLUMNS`
-- **`fifo_engine.py`** — stocks only; forex bypasses it entirely
-- **`import_manager.py`** — plugin selection → validate → parse → `_import_trades` or `_import_executions`
+- **`database.py`** — star-import shim; real code in `db/`
+- **`fifo_engine.py`** — FIFO matching for stocks (forex bypasses it)
+- **`import_manager.py`** — plugin selection → validate → parse → import
 - **`main.py`** — app entry, account CRUD, backup/restore, tab wiring
+- **`theme.py`** — unified P&L color palette
+- **`tabs/`** — one `QWidget` per tab, each with `refresh()`
+- **`plugins/`** — auto-discovered import plugins
+- **`asset_modules/`** — per-asset-type behaviour (columns, dialogs, stats)
+- **`chart_providers/`** — price chart backends
 
 ### Plugin interface (`plugins/`)
 
 Must expose: `PLUGIN_NAME`, `DISPLAY_NAME`, `SUPPORTED_EXTENSIONS`, `IMPORT_MODE` (`'trades'` or `'executions'`), `validate(path) -> (bool, str)`, `parse(path) -> list | (list, list)`, `file_hash(path) -> str`.
 
 New plugins are auto-discovered — **also add to `--hidden-import` in both build scripts**.
-
-### Asset modules (`asset_modules/`)
-
-`AssetModule` subclasses define per-asset-type behaviour (table columns, trade dialog fields, stats HTML). Registered in `asset_modules/__init__.py`. Selected at runtime via `get_module(account.asset_type)`.
-
-### UI (`tabs/`)
-
-Each tab is a `QWidget` with `refresh()`, receives `(conn, get_account_id_fn, status_fn)`. Tabs communicate via `MainWindow` signals (`data_changed` → `_on_trades_changed`, `_on_setups_changed`). No shared state except the SQLite connection.
-
-- `StatsTab` has inner sub-tabs; widgets in `stats_widgets.py`, formula editor in `stats_formula.py`, calendar heatmap in `stats_calendar.py`.
-- `TradesTab` uses mixins: `trades_preview.py`, `trades_actions.py`, `trades_widgets.py`.
-- `dialogs.py` is a shim; real classes in `dialogs_widgets.py`, `dialogs_account.py`, `dialogs_trade.py`, `dialogs_setup.py`.
-
-### Theming (`theme.py`)
-
-- **Unified P&L palette** — `pos_color()`, `neg_color()`, `neu_color()`, `pnl_color(val)` return theme-aware hex strings. Use these everywhere for P&L coloring (HTML panels, `QLabel` rich text, `QColor` for table cells). Never hardcode `#008200`/`#c80000`/`QColor(0,130,0)` etc.
-- Dark palette: muted `#6bbc9a` / `#d97580`. Light palette: darker `#1e7a4c` / `#b53b3b` for contrast on white.
-- `is_dark()` — only use for non-P&L theme differences (backgrounds, borders, badge colors).
-- Direction badges (▲ LONG / ▼ SHORT) and status badges (WIN/LOSS) keep bright fixed backgrounds — they are not P&L indicators.
-- ODS export colors are spreadsheet colors (external app, white background) — do not use dark-mode palette there.
-
-### Chart providers (`chart_providers/`)
-
-Subclasses registered in `chart_providers/__init__.py`. API keys stored in `app_settings` DB table. `yfinance_provider.py` uses `auto_adjust=False` (raw/unadjusted prices to match recorded trade prices).
-
-### Build notes
-
-- PyInstaller 6.x — `--add-data` separator is `:` on all platforms.
-- Both scripts include `--hidden-import` for all dynamically loaded modules (plugins, asset modules, chart providers, `executions_dialog`).
-- `.spec` is auto-generated and gitignored; build scripts are the source of truth.
-
-### Testing
-
-- Fixtures in `tests/conftest.py`: `db_path`, `conn`, `stock_account`, `forex_account`, `sample_t212_csv`.
-- Tests never import PyQt6 — all UI code is excluded from the test surface.
-- Baseline: **614 passed, 42 skipped**.
-
-## SQL style
-
-- SQL strings must be **plain readable literals** — never assembled by concatenating Python variables or constants together. Readability of the query as a whole matters more than DRY.
-- Dynamic WHERE clauses (built from filter lists like `clauses`) are the one acceptable exception, since the conditions are genuinely runtime-variable.
-- `_TRADES_BASE_SQL` in `db/queries.py` is a single literal string. `count_trades_filtered()` repeats the FROM/JOIN block intentionally — do not extract it.
-
-## Intentional design decisions (do not change)
-
-- **Equity Curve requires a specific account** — "All Accounts" shows a prompt by design. No combined multi-account curve.
-- **Watchlist and Journal clear on "All Accounts"** — items are always account-scoped.
-- **`dates.insert(0, dates[0])` in `equity.py`** — intentional anchor so `balances[0]` aligns with initial balance on step plots.
-- **`_saving` flag in `watchlist.py._on_save()` uses `try/finally`** — intentional, resets even on exception.
-- **Font embedding was tried and reverted** — loading via `QFontDatabase` bypasses OS sub-pixel rendering (FreeType/ClearType), producing fuzzy text. Not fixable without a custom style engine.
-- **Splitter initial sizing on Windows is a known issue** — proportions wrong on first launch, can be dragged. No reliable fix found.
-- **QCompleter**: `setModel()` must be called *after* `setFilterMode()` — passing model to constructor before configuring filter silently reverts `MatchContains` to `MatchStartsWith`.
-- **`stocks.py` dividends `if v` not `if v is not None`** — zero means "no dividend data injected", shown as empty. Intentional; covered by `test_dividends_zero`.
-- **`sqlite3.Row` has no `.get()`** — always pass `dict(row)` to `TradeDialog` and any code expecting a dict. Callers in `trades_actions.py`, `stats_calendar.py` all do this unconditionally.
-- **Calendar `_make_cell()` dark mode** — intensity-ramped near-black base → vivid green/red. Light mode uses near-white base. Do not unify; they are intentionally different ramps.
-- **`_overview_css()` in `stats.py`** — called on every `refresh()` by design; generates dynamic CSS so theme changes are picked up immediately. Not a static constant.
 
 ## Roadmap
 

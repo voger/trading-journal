@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QDate, Qt
 from tabs import BaseTab
 from database import get_journal_entry, save_journal_entry
+import theme as _theme
 
 
 class JournalTab(BaseTab):
@@ -105,7 +106,7 @@ class JournalTab(BaseTab):
             self.j_lessons.setPlainText(entry['lessons_learned'] or '')
             self.j_tomorrow.setPlainText(entry['plan_for_tomorrow'] or '')
             self.status_label.setText(
-                f"<span style='color:#008200'>&#10003; Entry saved for {ds}</span>")
+                f"<span style='color:{_theme.pos_color()}'>&#10003; Entry saved for {ds}</span>")
         else:
             self.j_cond.setCurrentIndex(0); self.j_emot.setCurrentIndex(0); self.j_plan_f.setCurrentIndex(0)
             self.j_obs.setPlainText(''); self.j_lessons.setPlainText(''); self.j_tomorrow.setPlainText('')
@@ -137,5 +138,5 @@ class JournalTab(BaseTab):
         self._dirty = False
         self.status_label.setTextFormat(Qt.TextFormat.RichText)
         self.status_label.setText(
-            f"<span style='color:#008200'>&#10003; Entry saved for {ds}</span>")
+            f"<span style='color:{_theme.pos_color()}'>&#10003; Entry saved for {ds}</span>")
         self._status(f"Journal saved for {ds}.")

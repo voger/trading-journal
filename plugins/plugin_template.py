@@ -36,6 +36,7 @@ Optional fields:
 PLUGIN_NAME = "template"
 DISPLAY_NAME = "Template Plugin (Do Not Use)"
 SUPPORTED_EXTENSIONS = [".csv"]
+IMPORT_MODE = "trades"  # or "executions" for lot-tracked stock imports
 
 
 def validate(file_path: str) -> tuple:
@@ -47,3 +48,13 @@ def validate(file_path: str) -> tuple:
 def parse(file_path: str) -> list:
     """Parse the broker file and return a list of standardized trade dicts."""
     raise NotImplementedError("Template plugin - implement your parser here.")
+
+
+def file_hash(file_path: str) -> str:
+    """Return a hash of the file contents for deduplication."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()

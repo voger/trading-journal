@@ -262,8 +262,10 @@ class TradesPreviewMixin:
 
         tags = get_trade_tags(self.conn, trade_id)
         if tags:
+            chip_bg = '#2e3a5c' if _theme.is_dark() else '#e0e7ff'
+            chip_fg = '#a8b5e0' if _theme.is_dark() else '#3730a3'
             chips = ' '.join(
-                f'<span style="background:#e0e7ff;color:#3730a3;padding:1px 6px;'
+                f'<span style="background:{chip_bg};color:{chip_fg};padding:1px 6px;'
                 f'border-radius:3px;font-size:11px;">{_esc(tag["name"])}</span>'
                 for tag in tags
             )

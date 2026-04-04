@@ -111,7 +111,9 @@ class SetupsTab(BaseTab):
                 pix = QPixmap(c['file_path']).scaled(140, 100, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 thumb.setIcon(QIcon(pix)); thumb.setIconSize(pix.size())
                 thumb.setToolTip(c['caption'] or os.path.basename(c['file_path']))
-                thumb.setStyleSheet("border:1px solid #ccc; padding:2px; background:white;")
+                thumb.setStyleSheet(
+                    f"border:1px solid {'#444' if _theme.is_dark() else '#ccc'}; "
+                    f"padding:2px; background:{'#2a2a2a' if _theme.is_dark() else 'white'};")
                 path = str(c['file_path']); caption = str(c['caption'] or '')
                 thumb.clicked.connect(lambda checked=False, p=path, cap=caption: ImageViewer.open(p))
                 self.thumb_layout.addWidget(thumb)

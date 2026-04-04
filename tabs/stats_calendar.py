@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 
+from tabs.stats_widgets import _NumItem
 from database import get_daily_pnl, get_account, effective_pnl
 
 # Force English month names regardless of system locale
@@ -110,18 +111,22 @@ class DayDetailDialog(QDialog):
                 f"{pnl:+.2f}",
             ]
             for col, text in enumerate(cells):
-                item = QTableWidgetItem(text)
-                if col == 0:  # store trade ID for double-click lookup
-                    item.setData(Qt.ItemDataRole.UserRole, t['id'])
-                if col == len(cells) - 1:  # P&L column
+                if col == len(cells) - 1:  # P&L column — numeric sort
+                    item = _NumItem()
+                    item.setData(Qt.ItemDataRole.DisplayRole, text)
+                    item.setData(Qt.ItemDataRole.UserRole, float(pnl))
                     item.setForeground(profit_fg if pnl > 0 else loss_fg if pnl < 0 else QColor(_theme.neu_color()))
                     item.setFont(bold)
+                else:
+                    item = QTableWidgetItem(text)
+                if col == 0:  # store trade ID for double-click lookup
+                    item.setData(Qt.ItemDataRole.UserRole, t['id'])
                 tbl.setItem(row, col, item)
 
         tbl.setSortingEnabled(True)
         tbl.doubleClicked.connect(self._on_row_double_clicked)
         hint = QLabel("Double-click a row to open full trade details.")
-        hint.setStyleSheet("font-size: 10px; color: #888; padding: 2px;")
+        hint.setStyleSheet(f"font-size: 10px; color: {'#aaa' if _theme.is_dark() else '#888'}; padding: 2px;")
         lay.addWidget(tbl)
         lay.addWidget(hint)
 

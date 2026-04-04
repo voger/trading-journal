@@ -744,18 +744,7 @@ class TestBackupRestore:
 
 # ── Migration ────────────────────────────────────────────────────────────
 
-class TestMigration:
-
-    def test_migration_idempotent(self, db_path):
-        """Running init_database twice should not error."""
-        db.init_database(db_path)
-        db.init_database(db_path)
-        conn = db.get_connection(db_path)
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        assert 'trades' in tables
-        assert 'executions' in tables
-        conn.close()
+class TestMigrationExtra:
 
     def test_get_db_path_returns_string(self):
         path = db.get_db_path()
@@ -900,19 +889,8 @@ class TestNormalizeSymbol:
 
 # ── Account CRUD ─────────────────────────────────────────────────────────
 
-class TestUpdateAccount:
-
-    def test_update_single_field(self, conn, forex_account):
-        db.update_account(conn, forex_account, name='Renamed Account')
-        acct = db.get_account(conn, forex_account)
-        assert acct['name'] == 'Renamed Account'
-
-    def test_update_multiple_fields(self, conn, forex_account):
-        db.update_account(conn, forex_account, name='FX Pro', broker='FXCM', currency='USD')
-        acct = db.get_account(conn, forex_account)
-        assert acct['name'] == 'FX Pro'
-        assert acct['broker'] == 'FXCM'
-        assert acct['currency'] == 'USD'
+class TestUpdateAccountExtra:
+    """Tests complementing TestUpdateAccount in test_database.py."""
 
     def test_update_sets_updated_at(self, conn, forex_account):
         before = db.get_account(conn, forex_account)['updated_at']
@@ -920,19 +898,6 @@ class TestUpdateAccount:
         db.update_account(conn, forex_account, name='Changed')
         after = db.get_account(conn, forex_account)['updated_at']
         assert after != before
-
-    def test_update_empty_kwargs_is_noop(self, conn, forex_account):
-        orig = db.get_account(conn, forex_account)['name']
-        db.update_account(conn, forex_account)
-        assert db.get_account(conn, forex_account)['name'] == orig
-
-    def test_update_ignores_disallowed_fields(self, conn, forex_account):
-        orig_id = db.get_account(conn, forex_account)['id']
-        # 'id' and 'created_at' are not in the allowed set — should be silently ignored
-        db.update_account(conn, forex_account, id=9999, created_at='2000-01-01', name='Safe')
-        acct = db.get_account(conn, forex_account)
-        assert acct['id'] == orig_id
-        assert acct['name'] == 'Safe'
 
     def test_update_initial_balance(self, conn, forex_account):
         db.update_account(conn, forex_account, initial_balance=5000.0)

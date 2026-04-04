@@ -125,7 +125,8 @@ class TradeChartWidget(QWidget):
         self._show_placeholder()
 
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color:#666; font-size:9pt; padding:2px;")
+        _sl_color = '#999' if _theme.is_dark() else '#666'
+        self.status_label.setStyleSheet(f"color:{_sl_color}; font-size:9pt; padding:2px;")
         lay.addWidget(self.status_label)
 
     def _update_tf(self):
@@ -356,7 +357,8 @@ class TradeChartWidget(QWidget):
             self._tmp_files.append(tmp.name)  # track before savefig so it's cleaned up on exception
             tmp.close()  # close handle before savefig to avoid FD leak on exception
             fig.savefig(tmp.name, dpi=150, bbox_inches='tight',
-                        facecolor='#fafafa', edgecolor='none')
+                        facecolor=(_theme.BG_DARK if _theme.is_dark() else '#fafafa'),
+                        edgecolor='none')
             import matplotlib.pyplot as plt
             plt.close(fig)
             QDesktopServices.openUrl(QUrl.fromLocalFile(
@@ -470,7 +472,7 @@ class TradeChartWidget(QWidget):
         ax.text(0.01, 0.98, chart_label,
                 transform=ax.transAxes,
                 fontsize=6, fontweight='bold', va='top', ha='left',
-                color='#333',
+                color=('#ccc' if _theme.is_dark() else '#333'),
                 bbox=dict(boxstyle='round,pad=0.15', facecolor=(_theme.BG_LIGHT if _theme.is_dark() else 'white'),
                           edgecolor='none', alpha=0.72),
                 zorder=10)
@@ -520,18 +522,23 @@ class TradeChartWidget(QWidget):
                                   edgecolor=x_col, linewidth=0.8, alpha=0.9))
 
         # ── SL / TP labels (subtle, right-edge reference) ──
+        dark = _theme.is_dark()
         if sl:
+            sl_fg = '#ef9a9a' if dark else '#d32f2f'
+            sl_bg = '#3c1f1f' if dark else '#ffebee'
             ax.annotate(f'SL {_fmt_price(sl)}', xy=(n - 1, sl), xytext=(-8, 0),
-                       textcoords='offset points', fontsize=7, color='#d32f2f',
+                       textcoords='offset points', fontsize=7, color=sl_fg,
                        ha='right', va='center',
-                       bbox=dict(boxstyle='round,pad=0.2', facecolor='#ffebee',
-                                 edgecolor='#d32f2f', linewidth=0.5, alpha=0.75))
+                       bbox=dict(boxstyle='round,pad=0.2', facecolor=sl_bg,
+                                 edgecolor=sl_fg, linewidth=0.5, alpha=0.75))
         if tp:
+            tp_fg = '#81c784' if dark else '#388e3c'
+            tp_bg = '#1b3b1f' if dark else '#e8f5e9'
             ax.annotate(f'TP {_fmt_price(tp)}', xy=(n - 1, tp), xytext=(-8, 0),
-                       textcoords='offset points', fontsize=7, color='#388e3c',
+                       textcoords='offset points', fontsize=7, color=tp_fg,
                        ha='right', va='center',
-                       bbox=dict(boxstyle='round,pad=0.2', facecolor='#e8f5e9',
-                                 edgecolor='#388e3c', linewidth=0.5, alpha=0.75))
+                       bbox=dict(boxstyle='round,pad=0.2', facecolor=tp_bg,
+                                 edgecolor=tp_fg, linewidth=0.5, alpha=0.75))
 
         # ── Y precision ──
         if entry_price and entry_price < 10:

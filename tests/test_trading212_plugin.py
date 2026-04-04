@@ -108,9 +108,12 @@ class TestInstrumentDetection:
         assert t212._detect_instrument_type('', '', 'iShares MSCI World') == 'etf'
         assert t212._detect_instrument_type('', '', 'SPDR Gold Trust') == 'etf'
 
-    def test_etf_by_isin_prefix(self):
-        assert t212._detect_instrument_type('IE00BK5BQT80', '', 'Some Fund') == 'etf'
-        assert t212._detect_instrument_type('LU0000000001', '', 'Some Fund') == 'etf'
+    def test_isin_alone_does_not_classify_as_etf(self):
+        """ISIN prefix alone is unreliable — Irish/Luxembourg stocks exist."""
+        assert t212._detect_instrument_type('IE00BK5BQT80', '', 'Some Fund') == 'stock'
+        assert t212._detect_instrument_type('LU0000000001', '', 'Some Fund') == 'stock'
+        # But name keywords still work
+        assert t212._detect_instrument_type('IE00BK5BQT80', '', 'iShares Core Fund') == 'etf'
 
     def test_stock_default(self):
         assert t212._detect_instrument_type('US0378331005', 'AAPL', 'Apple Inc') == 'stock'

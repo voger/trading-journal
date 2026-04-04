@@ -44,7 +44,8 @@ class MetricCard(QFrame):
         lay.setContentsMargins(10, 6, 10, 6)
         lay.setSpacing(2)
         self._label = QLabel(label_text)
-        self._label.setStyleSheet("color: #666; font-size: 11px; font-weight: bold;")
+        lbl_color = '#aaa' if _theme.is_dark() else '#666'
+        self._label.setStyleSheet(f"color: {lbl_color}; font-size: 11px; font-weight: bold;")
         self._value = QLabel(initial_value)
         self._value.setStyleSheet("font-size: 18px; font-weight: bold;")
         self._value.setAlignment(Qt.AlignmentFlag.AlignRight)

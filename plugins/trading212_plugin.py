@@ -57,8 +57,6 @@ def _detect_instrument_type(isin: str, ticker: str, name: str) -> str:
                     'xtrackers', 'lyxor', 'invesco', '(acc)', '(dist)')
     if any(kw in name_lower for kw in etf_keywords):
         return 'etf'
-    if isin and (isin.startswith('IE') or isin.startswith('LU')):
-        return 'etf'
     return 'stock'
 
 

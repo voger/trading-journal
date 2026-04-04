@@ -142,10 +142,9 @@ def pytest_addoption(parser):
 @pytest.fixture
 def real_csv(request):
     """Path to the real Trading212 CSV if available (for integration tests)."""
-    path = request.config.getoption("--real-csv") or \
-           '/mnt/user-data/uploads/from_2025-05-22_to_2026-02-15_MTc3MTE1NTA4MjgyNg.csv'
-    if not os.path.exists(path):
-        pytest.skip("Real Trading212 CSV not available")
+    path = request.config.getoption("--real-csv")
+    if not path or not os.path.exists(path):
+        pytest.skip("Real Trading212 CSV not available — pass --real-csv=/path/to/file.csv")
     return path
 
 

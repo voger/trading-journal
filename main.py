@@ -223,12 +223,12 @@ class MainWindow(QMainWindow):
             """)
 
     def _apply_theme(self, dark: bool):
+        _theme.set_dark(dark)
         app = QApplication.instance()
         if dark:
             app.setStyleSheet(_theme.get_stylesheet())
         else:
             app.setStyleSheet("")
-        _theme.set_dark(dark)
         self._apply_sidebar_style()
         set_setting(self.conn, 'dark_mode', '1' if dark else '0')
         # Re-render all charts and trade preview to pick up new colors

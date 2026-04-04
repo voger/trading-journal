@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QStringListModel, QEvent
 from PyQt6.QtGui import QColor, QFont
+import theme as _theme
 from tabs import BaseTab
 from database import (
     get_watchlist, get_watchlist_item, add_watchlist_item,
@@ -20,12 +21,14 @@ from database import (
 
 _BIAS_CHOICES = ['', 'bullish', 'bearish', 'neutral']
 _BIAS_ICONS = {'bullish': '▲', 'bearish': '▼', 'neutral': '◆', '': '—'}
-_BIAS_COLORS = {
-    'bullish': QColor(0, 150, 0),
-    'bearish': QColor(200, 0, 0),
-    'neutral': QColor(120, 120, 120),
-    '': QColor(180, 180, 180),
-}
+def _bias_color(bias: str) -> QColor:
+    if _theme.is_dark():
+        _map = {'bullish': QColor(_theme.pos_color()), 'bearish': QColor(_theme.neg_color()),
+                'neutral': QColor(160, 160, 160), '': QColor(120, 120, 120)}
+    else:
+        _map = {'bullish': QColor(0, 150, 0), 'bearish': QColor(200, 0, 0),
+                'neutral': QColor(120, 120, 120), '': QColor(180, 180, 180)}
+    return _map.get(bias, _map[''])
 
 _HISTORY_KEY = 'watchlist_symbol_history'
 _HISTORY_MAX = 100
@@ -300,7 +303,7 @@ class WatchlistTab(BaseTab):
                 if 3 <= col <= 5:
                     bias_key = ['bias_weekly', 'bias_daily', 'bias_h4'][col - 3]
                     bias_val = w[bias_key] or ''
-                    item.setForeground(_BIAS_COLORS.get(bias_val, QColor(180, 180, 180)))
+                    item.setForeground(_bias_color(bias_val))
                     item.setFont(QFont("", -1, QFont.Weight.Bold))
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, col, item)
