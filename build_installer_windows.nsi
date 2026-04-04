@@ -15,7 +15,7 @@
 !define PRODUCT_PUBLISHER "Trading Journal Contributors"
 
 Name "${PRODUCT_NAME} v${VERSION}"
-OutFile "dist\${PRODUCT_NAME}_Setup.exe"
+OutFile "dist\TradingJournal_Setup.exe"
 InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "Software\${PRODUCT_NAME}" "InstallLocation"
 

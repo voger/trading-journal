@@ -43,6 +43,8 @@ All notable changes to Trading Journal are documented here.
 - Split CLAUDE.md into four skill files: test.md, build.md, db.md, ui.md for cleaner reference
 - Integrated installer build into CI/CD: AppImage for Linux, NSIS .exe for Windows
 - GitHub Actions release workflow now builds and uploads all distribution formats
+- `get_db_path`, `get_connection`, `init_database` now require explicit path — removed silent fallback to install directory
+- README updated for v3.3.0: installer downloads, version badge, aligned project structure
 - Test baseline: 609 passed, 42 skipped — no regressions
 
 ---
