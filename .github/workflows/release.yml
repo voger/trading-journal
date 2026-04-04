@@ -60,8 +60,7 @@ jobs:
 
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
-        run: |
-          choco install nsis -y
+        run: choco install nsis -y
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
@@ -71,6 +70,11 @@ jobs:
           call venv\Scripts\activate.bat
           pip install -r requirements.txt pyinstaller pillow
           build_app.bat
+
+      - name: Build Windows Installer
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: makensis build_installer_windows.nsi
 
       - name: Upload portable archive to Release
         env:
