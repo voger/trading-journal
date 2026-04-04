@@ -273,8 +273,10 @@ if [[ "$OSTYPE" != "msys" && "$OSTYPE" != "cygwin" && "$OSTYPE" != "win32" ]]; t
         bash build_installer_linux.sh
     else
         echo "  ⚠ appimagetool not found — skipping AppImage"
-        echo "     Install with: sudo apt install appimagetool"
-        echo "     Or download: https://github.com/AppImage/AppImageKit/releases"
+        echo "     Install with:"
+        echo "       wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool"
+        echo "       chmod +x /tmp/appimagetool && sudo mv /tmp/appimagetool /usr/local/bin/appimagetool"
+        echo "       sudo apt install libfuse2"
     fi
 fi
 

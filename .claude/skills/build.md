@@ -24,7 +24,10 @@ Running `build_app.sh` or `build_app.bat` produces:
 
 **Linux AppImage:**
 ```bash
-sudo apt install appimagetool  # Creates single-file .AppImage
+# appimagetool is NOT in apt — download the binary directly:
+wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /tmp/appimagetool
+chmod +x /tmp/appimagetool && sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
+sudo apt install libfuse2  # runtime dependency
 ```
 
 **Windows NSIS Installer:**
