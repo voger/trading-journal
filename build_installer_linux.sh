@@ -65,8 +65,8 @@ exec "$APPDIR/usr/bin/TradingJournal" "$@"
 EOF
 chmod +x "$APP_DIR/AppRun"
 
-# Create .desktop file
-cat > "$APP_DIR/usr/share/applications/TradingJournal.desktop" << 'EOF'
+# Create .desktop file (must be in both AppDir root AND usr/share/applications)
+cat > "$APP_DIR/TradingJournal.desktop" << 'EOF'
 [Desktop Entry]
 Name=Trading Journal
 Version=1.1
@@ -78,13 +78,20 @@ Categories=Finance;Office;
 Terminal=false
 StartupWMClass=TradingJournal
 EOF
+cp "$APP_DIR/TradingJournal.desktop" "$APP_DIR/usr/share/applications/TradingJournal.desktop"
 
-# Create a simple icon (256x256 placeholder)
-# In production, replace with actual icon
-python3 << 'PYTHON_ICON'
+# Create icon (use app icon if available, else a simple placeholder)
+ICON_SRC="$SCRIPT_DIR/icons/icon.png"
+ICON_DEST_DIR="$APP_DIR/usr/share/icons/hicolor/256x256/apps"
+if [ -f "$ICON_SRC" ]; then
+    cp "$ICON_SRC" "$ICON_DEST_DIR/trading-journal.png"
+    cp "$ICON_SRC" "$APP_DIR/trading-journal.png"   # also in AppDir root
+    echo "[*] App icon copied"
+else
+    python3 << 'PYTHON_ICON'
 try:
     from PIL import Image, ImageDraw
-    img = Image.new('RGB', (256, 256), color=(70, 130, 180))  # Steel blue
+    img = Image.new('RGB', (256, 256), color=(70, 130, 180))
     d = ImageDraw.Draw(img)
     d.text((80, 110), "TJ", fill=(255, 255, 255))
     img.save('/tmp/tj_icon.png')
@@ -92,16 +99,16 @@ try:
 except ImportError:
     print("[!] PIL not available, skipping icon")
 PYTHON_ICON
-
-if [ -f /tmp/tj_icon.png ]; then
-    cp /tmp/tj_icon.png "$APP_DIR/usr/share/icons/hicolor/256x256/apps/trading-journal.png"
+    if [ -f /tmp/tj_icon.png ]; then
+        cp /tmp/tj_icon.png "$ICON_DEST_DIR/trading-journal.png"
+        cp /tmp/tj_icon.png "$APP_DIR/trading-journal.png"
+    fi
 fi
 
 # Create AppImage
 echo "[*] Creating AppImage..."
 appimagetool \
     --comp=gzip \
-    --sign \
     "$APP_DIR" \
     "$DIST_DIR/${APP_NAME}.AppImage"
 
