@@ -16,7 +16,7 @@
 
 Name "${PRODUCT_NAME} v${VERSION}"
 OutFile "dist\TradingJournal_Setup.exe"
-InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
+InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "Software\${PRODUCT_NAME}" "InstallLocation"
 
 ; Request admin privileges
@@ -33,6 +33,7 @@ RequestExecutionLevel admin
 ; Installer sections
 Section "$(^NameDA)" SEC_INSTALL
   SectionIn RO
+  SetRegView 64
   SetOutPath "$INSTDIR"
 
   ; Copy files from PyInstaller output
@@ -65,6 +66,7 @@ SectionEnd
 
 ; Uninstaller section
 Section "Uninstall"
+  SetRegView 64
   ; Remove files
   RMDir /r "$INSTDIR"
 
