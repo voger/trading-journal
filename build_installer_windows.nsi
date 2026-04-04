@@ -8,6 +8,7 @@
 ; ─────────────────────────────────────────────────────────────────────
 
 !include "MUI2.nsh"
+!include "x64.nsh"
 
 ; Basic settings
 !define VERSION "3.3.0"
@@ -21,6 +22,14 @@ InstallDirRegKey HKLM "Software\${PRODUCT_NAME}" "InstallLocation"
 
 ; Request admin privileges
 RequestExecutionLevel admin
+
+; Reject 32-bit Windows at launch
+Function .onInit
+  ${IfNot} ${RunningX64}
+    MessageBox MB_OK|MB_ICONSTOP "Trading Journal requires 64-bit Windows."
+    Abort
+  ${EndIf}
+FunctionEnd
 
 ; MUI Settings
 !insertmacro MUI_PAGE_WELCOME
