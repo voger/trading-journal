@@ -15,6 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 APP_NAME="TradingJournal"
+APP_VERSION="3.3.0"
 DIST_DIR="$SCRIPT_DIR/dist"
 BUILD_DIR="$DIST_DIR/appimage_build"
 APP_DIR="$BUILD_DIR/$APP_NAME.AppDir"
@@ -44,10 +45,17 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$APP_DIR/usr/bin"
 mkdir -p "$APP_DIR/usr/share/applications"
 mkdir -p "$APP_DIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$APP_DIR/usr/share/doc/$APP_NAME"
 
 # Copy app files
 echo "[*] Copying application files..."
 cp -r "$DIST_DIR/$APP_NAME"/* "$APP_DIR/usr/bin/"
+
+# Copy license
+if [ -f "LICENSE" ]; then
+    cp LICENSE "$APP_DIR/usr/share/doc/$APP_NAME/"
+    echo "[*] License copied to AppDir"
+fi
 
 # Create launcher script
 cat > "$APP_DIR/AppRun" << 'EOF'
@@ -61,12 +69,14 @@ chmod +x "$APP_DIR/AppRun"
 cat > "$APP_DIR/usr/share/applications/TradingJournal.desktop" << 'EOF'
 [Desktop Entry]
 Name=Trading Journal
-Comment=Trade analysis and journaling application
+Version=1.1
+Comment=Personal trading journal and performance analytics
 Exec=TradingJournal
 Icon=trading-journal
 Type=Application
 Categories=Finance;Office;
 Terminal=false
+StartupWMClass=TradingJournal
 EOF
 
 # Create a simple icon (256x256 placeholder)

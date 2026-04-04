@@ -10,44 +10,57 @@
 !include "MUI2.nsh"
 
 ; Basic settings
-Name "Trading Journal"
-OutFile "dist\TradingJournal_Setup.exe"
-InstallDir "$PROGRAMFILES\TradingJournal"
-InstallDirRegKey HKLM "Software\TradingJournal" "InstallLocation"
+!define VERSION "3.3.0"
+!define PRODUCT_NAME "Trading Journal"
+!define PRODUCT_PUBLISHER "Trading Journal Contributors"
+
+Name "${PRODUCT_NAME} v${VERSION}"
+OutFile "dist\${PRODUCT_NAME}_Setup.exe"
+InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
+InstallDirRegKey HKLM "Software\${PRODUCT_NAME}" "InstallLocation"
 
 ; Request admin privileges
 RequestExecutionLevel admin
 
 ; MUI Settings
 !insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_LICENSE "LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_LANGUAGE "English"
 
 ; Installer sections
-Section "Install"
+Section "$(^NameDA)" SEC_INSTALL
+  SectionIn RO
   SetOutPath "$INSTDIR"
 
   ; Copy files from PyInstaller output
   File /r "dist\TradingJournal\*.*"
 
-  ; Create Start Menu shortcuts
-  CreateDirectory "$SMPROGRAMS\Trading Journal"
-  CreateShortCut "$SMPROGRAMS\Trading Journal\Trading Journal.lnk" "$INSTDIR\TradingJournal.exe"
-  CreateShortCut "$SMPROGRAMS\Trading Journal\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
-
-  ; Create Desktop shortcut
-  CreateShortCut "$DESKTOP\Trading Journal.lnk" "$INSTDIR\TradingJournal.exe"
+  ; Copy license
+  File "LICENSE"
 
   ; Write registry for uninstall
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingJournal" "DisplayName" "Trading Journal"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingJournal" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingJournal" "DisplayIcon" "$INSTDIR\TradingJournal.exe"
-  WriteRegStr HKLM "Software\TradingJournal" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "DisplayName" "${PRODUCT_NAME} v${VERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "Publisher" "${PRODUCT_PUBLISHER}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" "DisplayIcon" "$INSTDIR\TradingJournal.exe"
+  WriteRegStr HKLM "Software\${PRODUCT_NAME}" "InstallLocation" "$INSTDIR"
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+SectionEnd
+
+Section "$(^StartMenuFolder)" SEC_STARTMENU
+  CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\TradingJournal.exe"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
+SectionEnd
+
+Section "Desktop Shortcut" SEC_DESKTOP
+  CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\TradingJournal.exe"
 SectionEnd
 
 ; Uninstaller section
@@ -56,12 +69,19 @@ Section "Uninstall"
   RMDir /r "$INSTDIR"
 
   ; Remove Start Menu shortcuts
-  RMDir /r "$SMPROGRAMS\Trading Journal"
+  RMDir /r "$SMPROGRAMS\${PRODUCT_NAME}"
 
   ; Remove Desktop shortcut
-  Delete "$DESKTOP\Trading Journal.lnk"
+  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
 
   ; Remove registry
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\TradingJournal"
-  DeleteRegKey HKLM "Software\TradingJournal"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+  DeleteRegKey HKLM "Software\${PRODUCT_NAME}"
 SectionEnd
+
+; Install options descriptions
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_INSTALL} "Trading Journal application files (required)"
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_STARTMENU} "Create shortcuts in the Start Menu"
+  !insertmacro MUI_DESCRIPTION_TEXT ${SEC_DESKTOP} "Create a shortcut on the Desktop"
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
