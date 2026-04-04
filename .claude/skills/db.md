@@ -25,6 +25,13 @@ Reference for database architecture, data flow, and SQL conventions.
 - Dynamic WHERE clauses (built from filter lists like `clauses`) are the one acceptable exception, since the conditions are genuinely runtime-variable.
 - `_TRADES_BASE_SQL` in `db/queries.py` is a single literal string. `count_trades_filtered()` repeats the FROM/JOIN block intentionally — do not extract it.
 
+## Database path isolation
+
+- **`get_db_path(app_data_dir: str)` requires explicit path** — no fallback to install directory. Always pass a real path.
+- **`get_connection(db_path: str)` requires explicit path** — prevents accidental writes to `dist/` or `Program Files`.
+- **`init_database(db_path: str)` requires explicit path** — always called from `main.py` with `os.path.join(get_app_data_dir(), 'trading_journal.db')`.
+- **Windows multi-user**: Each user's database is in their `%APPDATA%\TradingJournal\` — completely isolated by Windows itself.
+
 ## Intentional design decisions (do not change)
 
 - **`sqlite3.Row` has no `.get()`** — always pass `dict(row)` to `TradeDialog` and any code expecting a dict. Callers in `trades_actions.py`, `stats_calendar.py` all do this unconditionally.

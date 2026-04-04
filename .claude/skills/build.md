@@ -45,6 +45,14 @@ sudo apt install libfuse2  # runtime dependency
 - LICENSE file is bundled with installers (EULA in Windows, included in AppImage doc dir).
 - Version metadata (3.3.0) is baked into installers at build time.
 
+## Windows installer details
+
+- **64-bit only**: Installs to `C:\Program Files\Trading Journal` (not `Program Files (x86)`)
+- Architecture check: Rejects 32-bit Windows at installer launch with error message
+- Registry: Writes to native 64-bit registry hive (not WOW64 redirected)
+- User isolation: Each Windows user gets their own database in `%APPDATA%\TradingJournal\`
+- Optional components: Start Menu shortcuts and Desktop shortcut are checked by default but optional
+
 ## GitHub Actions release workflow
 
 Tag a commit and push to trigger automatic release:
