@@ -2,18 +2,25 @@
 
 A desktop trading journal application for stock and forex traders. Track your trades, analyse performance with FIFO lot matching, and review your strategy with detailed statistics.
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-614-brightgreen) ![Version](https://img.shields.io/badge/Version-3.1.0-blue)
+![Python](https://img.shields.io/badge/Python-3.10+-blue) ![License](https://img.shields.io/badge/License-MIT-green) ![Tests](https://img.shields.io/badge/Tests-609-brightgreen) ![Version](https://img.shields.io/badge/Version-3.3.0-blue)
 
 ## Download
 
 Pre-built binaries are available on the [Releases page](https://github.com/voger/trading-journal/releases) — no Python required.
 
-| Platform | File |
-|----------|------|
-| Linux (x86_64) | `TradingJournal_linux.tar.gz` |
-| Windows (x64) | `TradingJournal_windows.zip` |
+| Platform | Installer | Portable archive |
+|----------|-----------|-----------------|
+| Linux (x86_64) | `TradingJournal.AppImage` | `TradingJournal_linux.tar.gz` |
+| Windows (x64) | `TradingJournal_Setup.exe` | `TradingJournal_windows.zip` |
 
-### Linux
+### Linux — AppImage (recommended)
+
+```bash
+chmod +x TradingJournal.AppImage
+./TradingJournal.AppImage
+```
+
+### Linux — Portable archive
 
 ```bash
 tar -xzf TradingJournal_linux.tar.gz
@@ -25,7 +32,15 @@ bash install.sh
 bash install.sh uninstall
 ```
 
-### Windows
+### Windows — Installer (recommended)
+
+Run `TradingJournal_Setup.exe` and follow the wizard. It will:
+- Install to `Program Files\Trading Journal`
+- Optionally create Start Menu shortcuts and a Desktop icon
+- Show the MIT license before installing
+- Add an entry to **Add/Remove Programs** for clean uninstall
+
+### Windows — Portable archive
 
 Extract `TradingJournal_windows.zip` and run `TradingJournal.exe`.
 
@@ -114,6 +129,7 @@ bash build_app.sh
 This creates:
 - `dist/TradingJournal/TradingJournal` — the executable
 - `dist/TradingJournal_linux.tar.gz` — portable archive
+- `dist/TradingJournal.AppImage` — single-file AppImage (requires `appimagetool`)
 
 ### Windows
 
@@ -125,6 +141,7 @@ build_app.bat
 This creates:
 - `dist\TradingJournal\TradingJournal.exe` — the executable
 - `dist\TradingJournal_windows.zip` — portable archive (requires 7-Zip)
+- `dist\TradingJournal_Setup.exe` — installer (requires [NSIS](https://nsis.sourceforge.io/))
 
 ### Build Troubleshooting
 
@@ -192,12 +209,14 @@ trading-journal/
 ├── asset_modules/       # Per-asset-type behaviour (forex, stocks)
 ├── chart_providers/     # OHLC data providers (TwelveData, Yahoo Finance)
 ├── tests/               # Pytest test suite (614 tests)
-├── build_app.sh         # Linux PyInstaller build
-├── build_app.bat        # Windows PyInstaller build
-├── requirements.txt     # Python dependencies
-├── icons/               # Application icons
-├── install.sh           # Linux desktop integration script
-└── install.ps1          # Windows desktop integration script
+├── build_app.sh                  # Linux PyInstaller build + AppImage
+├── build_app.bat                 # Windows PyInstaller build + NSIS installer
+├── build_installer_linux.sh      # AppImage creation script (called by build_app.sh)
+├── build_installer_windows.nsi   # NSIS installer script (called by build_app.bat)
+├── requirements.txt              # Python dependencies
+├── icons/                        # Application icons
+├── install.sh                    # Linux desktop integration script
+└── install.ps1                   # Windows desktop integration script
 ```
 
 ---
