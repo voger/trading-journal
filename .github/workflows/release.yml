@@ -74,7 +74,8 @@ jobs:
       - name: Build Windows Installer
         if: runner.os == 'Windows'
         shell: cmd
-        run: makensis build_installer_windows.nsi
+        run: |
+          "C:\Program Files (x86)\NSIS\makensis.exe" build_installer_windows.nsi
 
       - name: Upload portable archive to Release
         env:
