@@ -94,7 +94,6 @@ python3 -m PyInstaller \
     --paths "." \
     --add-data "icons:icons" \
     --add-data "fonts:fonts" \
-    --add-data "requirements.txt:." \
     --hidden-import "plugins" \
     --hidden-import "plugins.trading212_plugin" \
     --hidden-import "plugins.mt4_plugin" \

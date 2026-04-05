@@ -4,6 +4,14 @@ All notable changes to Trading Journal are documented here.
 
 ---
 
+## [3.3.1] — 2026-04-05
+
+### Chore
+- Removed `requirements.txt` from PyInstaller `--add-data` — file has no runtime use and was bundled unnecessarily
+- Added `/git_fully_commit` slash command for streamlined changelog + version bump + commit + push workflow
+
+---
+
 ## [3.3.0] — 2026-04-04
 
 ### Fixed

@@ -11,7 +11,7 @@
 !include "x64.nsh"
 
 ; Basic settings
-!define VERSION "3.3.0"
+!define VERSION "3.3.1"
 !define PRODUCT_NAME "Trading Journal"
 !define PRODUCT_PUBLISHER "Trading Journal Contributors"
 
