@@ -95,3 +95,28 @@ def test_trade_dialog_constructs(qapp, seeded):
     # _build() calls get_accounts / get_setup_types via the Journal and
     # constructs the chart widget with journal.conn.
     TradeDialog(QWidget(), j, default_account_id=aid_fn())
+
+
+def _make_trade(j, aid):
+    """Insert a minimal closed trade and return its id."""
+    iid = j.get_or_create_instrument('AAPL', instrument_type='stocks')
+    return j.create_trade(account_id=aid, instrument_id=iid, direction='long',
+                          entry_date='2025-01-02T10:00:00', entry_price=100.0,
+                          position_size=10.0, status='closed')
+
+
+def test_executions_dialog_constructs(qapp, seeded):
+    j, aid_fn, _ = seeded
+    from PyQt6.QtWidgets import QWidget
+    from executions_dialog import ExecutionsDialog, get_execution_summary
+    tid = _make_trade(j, aid_fn())
+    ExecutionsDialog(QWidget(), j, tid, symbol='AAPL')  # uses journal.conn for FIFO reads
+    assert get_execution_summary(j, tid) is None  # no executions yet
+
+
+def test_trade_charts_dialog_constructs(qapp, seeded):
+    j, aid_fn, _ = seeded
+    from PyQt6.QtWidgets import QWidget
+    from dialogs_widgets import TradeChartsDialog
+    tid = _make_trade(j, aid_fn())
+    TradeChartsDialog(QWidget(), j, tid)  # _refresh() calls journal.get_trade_charts
