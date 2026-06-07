@@ -69,9 +69,9 @@ class FormulaEditDialog(QDialog):
 class FormulaEditorWidget(QWidget):
     """Table of formula definitions with edit and reset-to-defaults."""
 
-    def __init__(self, conn, parent=None):
+    def __init__(self, journal, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.journal = journal
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
 
@@ -115,7 +115,7 @@ class FormulaEditorWidget(QWidget):
         self.populate()
 
     def populate(self):
-        formulas = get_all_formulas(self.conn)
+        formulas = self.journal.get_all_formulas()
         self.table.setRowCount(len(formulas))
         self._formulas = formulas
         for row, f in enumerate(formulas):
@@ -133,7 +133,7 @@ class FormulaEditorWidget(QWidget):
         dlg = FormulaEditDialog(f, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_data()
-            update_formula(self.conn, f['metric_key'], **data)
+            self.journal.update_formula(f['metric_key'], **data)
             self.populate()
 
     def _on_reset(self):
@@ -143,5 +143,5 @@ class FormulaEditorWidget(QWidget):
             "Any customisations will be lost.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
-            reset_formulas_to_defaults(self.conn)
+            self.journal.reset_formulas_to_defaults()
             self.populate()

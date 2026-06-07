@@ -7,9 +7,9 @@ class BaseTab(QWidget):
     """Base class for tab widgets. Provides shared access patterns."""
     data_changed = pyqtSignal()  # Emitted when this tab modifies data
 
-    def __init__(self, conn, get_aid_fn):
+    def __init__(self, journal, get_aid_fn):
         super().__init__()
-        self.conn = conn
+        self.journal = journal  # owns the DB connection (see db/journal.py)
         self._get_aid = get_aid_fn  # callable returning current account ID or None
 
     def aid(self):

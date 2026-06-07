@@ -11,8 +11,8 @@ from import_manager import delete_import
 
 
 class ImportsTab(BaseTab):
-    def __init__(self, conn, get_aid_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn):
+        super().__init__(journal, get_aid_fn)
         self._build()
 
     def _build(self):
@@ -43,7 +43,7 @@ class ImportsTab(BaseTab):
 
     def refresh(self):
         self.btn_delete.setEnabled(False)
-        logs = get_import_logs(self.conn, account_id=self.aid())
+        logs = self.journal.get_import_logs(account_id=self.aid())
         self.table.setRowCount(len(logs))
         for row, log in enumerate(logs):
             err_count = 0
@@ -93,7 +93,7 @@ class ImportsTab(BaseTab):
         try:
             # delete_import owns log removal + FIFO re-derivation behind one
             # interface, so the UI never orchestrates the FIFO engine directly.
-            delete_import(self.conn, log_id)
+            delete_import(self.journal.conn, log_id)
             self.data_changed.emit()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not delete log:\n{e}")

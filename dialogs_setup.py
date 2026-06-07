@@ -24,9 +24,9 @@ from dialogs_widgets import ImageViewer, SETUP_CHARTS_DIR
 
 class SetupDialog(QDialog):
     """Dialog for creating/editing a setup with rules."""
-    def __init__(self, parent, conn, setup=None):
+    def __init__(self, parent, journal, setup=None):
         super().__init__(parent)
-        self.conn = conn; self.setup = setup
+        self.journal = journal; self.setup = setup
         self.setWindowTitle("Edit Setup" if setup else "New Setup")
         self.setMinimumSize(600, 550)
         self.setWindowFlags(
@@ -105,15 +105,15 @@ class SetupDialog(QDialog):
         self.tf_edit.setText(s['timeframes'] or '')
         self.risk_spin.setValue(s['default_risk_percent'] or 0)
         self.rr_spin.setValue(s['target_rr_ratio'] or 0)
-        for r in get_setup_rules(self.conn, s['id'], 'entry'):
+        for r in self.journal.get_setup_rules(s['id'], 'entry'):
             item = QListWidgetItem(r['rule_text'])
             item.setData(Qt.ItemDataRole.UserRole, r['id'])
             self.entry_list.addItem(item)
-        for r in get_setup_rules(self.conn, s['id'], 'exit'):
+        for r in self.journal.get_setup_rules(s['id'], 'exit'):
             item = QListWidgetItem(r['rule_text'])
             item.setData(Qt.ItemDataRole.UserRole, r['id'])
             self.exit_list.addItem(item)
-        for c in get_setup_charts(self.conn, s['id']):
+        for c in self.journal.get_setup_charts(s['id']):
             item = QListWidgetItem(f"[Saved] {c['caption'] or os.path.basename(c['file_path'])}")
             item.setData(Qt.ItemDataRole.UserRole, ('existing', c['id'], c['file_path']))
             self.chart_list.addItem(item)

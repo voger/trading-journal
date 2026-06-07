@@ -72,22 +72,22 @@ class TradesActionsMixin:
         self._save_screenshots(tid, dlg)
         checks = dlg.get_rule_checks()
         if checks:
-            save_trade_rule_checks(self.conn, tid, checks)
+            self.journal.save_trade_rule_checks(tid, checks)
         tag_names = dlg.get_tag_names()
-        tag_ids = [get_or_create_tag(self.conn, n) for n in tag_names]
-        set_trade_tags(self.conn, tid, tag_ids)
+        tag_ids = [self.journal.get_or_create_tag(n) for n in tag_names]
+        self.journal.set_trade_tags(tid, tag_ids)
 
     def _on_new(self):
-        if not get_accounts(self.conn):
+        if not self.journal.get_accounts():
             QMessageBox.warning(self, "No Accounts", "Create an account first."); return
-        dlg = TradeDialog(self, self.conn, default_account_id=self.aid())
+        dlg = TradeDialog(self, self.journal, default_account_id=self.aid())
         if dlg.exec():
             v = dlg.get_values()
             err = self._validate_trade(v)
             if err:
                 QMessageBox.warning(self, "Validation Error", err); return
             try:
-                tid = create_trade(self.conn, **v)
+                tid = self.journal.create_trade(**v)
                 self._attach_trade_metadata(tid, dlg)
                 self.refresh_tag_filter()
                 self.data_changed.emit()
@@ -96,9 +96,9 @@ class TradesActionsMixin:
     def _on_edit(self):
         tid = self._get_selected_trade_id()
         if tid is None: return
-        trade = get_trade(self.conn, tid)
+        trade = self.journal.get_trade(tid)
         if not trade: return
-        dlg = TradeDialog(self, self.conn, trade=dict(trade))
+        dlg = TradeDialog(self, self.journal, trade=dict(trade))
         if dlg.exec():
             try:
                 vals = dlg.get_values()
@@ -107,10 +107,10 @@ class TradesActionsMixin:
                     QMessageBox.warning(self, "Validation Error", err); return
                 chart_json = dlg.chart_widget.get_cached_data_json()
                 if chart_json: vals['chart_data'] = chart_json
-                update_trade(self.conn, tid, **vals)
+                self.journal.update_trade(tid, **vals)
                 oserrors = []
                 for cid in dlg.get_delete_chart_ids():
-                    fpath = delete_trade_chart(self.conn, cid)
+                    fpath = self.journal.delete_trade_chart(cid)
                     if fpath and os.path.exists(fpath):
                         try:
                             os.remove(fpath)
@@ -130,7 +130,7 @@ class TradesActionsMixin:
         if QMessageBox.question(self, "Delete", f"Delete trade #{tid}?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             try:
-                delete_trade(self.conn, tid)
+                self.journal.delete_trade(tid)
                 self.data_changed.emit()
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
@@ -174,20 +174,20 @@ class TradesActionsMixin:
         tid = self._get_selected_trade_id()
         if tid is None:
             return
-        trade = get_trade(self.conn, tid)
+        trade = self.journal.get_trade(tid)
         if not trade:
             return
-        dlg = TradeDialog(self, self.conn, trade=dict(trade),
+        dlg = TradeDialog(self, self.journal, trade=dict(trade),
                           default_account_id=self.aid())
         dlg.setWindowTitle("Duplicate Trade")
         if dlg.exec():
             vals = dlg.get_values()
             vals.pop('broker_ticket_id', None)
             try:
-                new_id = create_trade(self.conn, **vals)
-                tags = get_trade_tags(self.conn, tid)
+                new_id = self.journal.create_trade(**vals)
+                tags = self.journal.get_trade_tags(tid)
                 if tags:
-                    set_trade_tags(self.conn, new_id, [t['id'] for t in tags])
+                    self.journal.set_trade_tags(new_id, [t['id'] for t in tags])
                 self.data_changed.emit()
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
@@ -196,7 +196,7 @@ class TradesActionsMixin:
         tid = self._get_trade_id_at_row(row)
         if tid is None:
             return
-        trade = get_trade(self.conn, tid)
+        trade = self.journal.get_trade(tid)
         if not trade:
             return
         date = (trade['entry_date'] or '')[:10]
@@ -208,14 +208,14 @@ class TradesActionsMixin:
         if trade_id is None:
             return
         from dialogs import TradeChartsDialog
-        dlg = TradeChartsDialog(self, self.conn, trade_id)
+        dlg = TradeChartsDialog(self, self.journal, trade_id)
         dlg.exec()
 
     def _export_row(self, row):
         tid = self._get_trade_id_at_row(row)
         if tid is None:
             return
-        trade = get_trade(self.conn, tid)
+        trade = self.journal.get_trade(tid)
         if not trade:
             return
         trade_dict = dict(trade)
@@ -238,7 +238,7 @@ class TradesActionsMixin:
             if src_type == 'file': shutil.copy2(src_path, dest)
             elif src_type == 'clipboard':
                 if src_path != dest: shutil.move(src_path, dest)
-            add_trade_chart(self.conn, trade_id, 'screenshot', dest, caption=os.path.basename(src_path))
+            self.journal.add_trade_chart(trade_id, 'screenshot', dest, caption=os.path.basename(src_path))
 
     # ── Export ──
 
@@ -254,7 +254,7 @@ class TradesActionsMixin:
             return
 
         aid = self.aid()
-        acct = get_account(self.conn, aid) if aid else None
+        acct = self.journal.get_account(aid) if aid else None
         acct_name = (acct['name'] or 'account').replace(' ', '_') if acct else 'trades'
         stem = f"{acct_name}_export_{datetime.now().strftime('%Y%m%d')}"
 
@@ -316,7 +316,7 @@ class TradesActionsMixin:
         fp, _ = QFileDialog.getOpenFileName(self, "Import Trades", "", filter_str)
         if not fp: return
 
-        accounts = get_accounts(self.conn)
+        accounts = self.journal.get_accounts()
         aid = self.aid()
 
         if aid is None:
@@ -343,12 +343,12 @@ class TradesActionsMixin:
                             base_name = f"{info.get('broker','?')} - {info.get('account_number','New')}"
                             name = base_name; suffix = 2
                             while True:
-                                existing = self.conn.execute(
+                                existing = self.journal.conn.execute(
                                     "SELECT id FROM accounts WHERE name = ?", (name,)).fetchone()
                                 if not existing: break
                                 name = f"{base_name} ({suffix})"; suffix += 1
                             try:
-                                nid = create_account(self.conn, name=name,
+                                nid = self.journal.create_account(name=name,
                                     broker=info.get('broker','?'),
                                     account_number=info.get('account_number'),
                                     currency=info.get('currency','EUR'),
@@ -382,7 +382,7 @@ class TradesActionsMixin:
             QApplication.processEvents()
 
         self._status("Importing..."); QApplication.processEvents()
-        result = run_import(self.conn, aid, fp, progress_cb=_progress)
+        result = run_import(self.journal.conn, aid, fp, progress_cb=_progress)
         prog.setValue(100)
         msg = result['message']
         if result['errors']: msg += "\n\nErrors:\n" + "\n".join(result['errors'][:10])

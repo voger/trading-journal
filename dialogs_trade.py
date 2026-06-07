@@ -40,9 +40,9 @@ class TradeDialog(QDialog):
     Right panel: live calculated metrics + executions summary + price chart
     """
 
-    def __init__(self, parent, conn, trade=None, default_account_id=None):
+    def __init__(self, parent, journal, trade=None, default_account_id=None):
         super().__init__(parent)
-        self.conn = conn
+        self.journal = journal
         self.trade = trade
         self.pending_screenshots = []
         self.delete_chart_ids = []
@@ -175,7 +175,7 @@ class TradeDialog(QDialog):
         col1 = QFormLayout()
         col1.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
         self.account_combo = QComboBox(); self.account_combo.setMinimumWidth(180)
-        for a in get_accounts(self.conn):
+        for a in self.journal.get_accounts():
             self.account_combo.addItem(f"{a['name']} ({a['currency']})", a['id'])
         col1.addRow("Account:", self.account_combo)
         self.instrument_edit = QLineEdit()
@@ -188,7 +188,7 @@ class TradeDialog(QDialog):
         self.dir_combo = QComboBox(); self.dir_combo.addItems(['long', 'short'])
         col1.addRow("Direction:", self.dir_combo)
         self.setup_combo = QComboBox(); self.setup_combo.addItem("(none)", None)
-        for s in get_setup_types(self.conn):
+        for s in self.journal.get_setup_types():
             self.setup_combo.addItem(s['name'], s['id'])
         col1.addRow("Setup:", self.setup_combo)
         id_lay.addLayout(col1)
@@ -361,11 +361,11 @@ class TradeDialog(QDialog):
         chart_lay = QVBoxLayout(self.chart_group)
         asset_type = 'forex'
         if self.trade:
-            for a in get_accounts(self.conn):
+            for a in self.journal.get_accounts():
                 if a['id'] == self.trade['account_id']:
                     asset_type = a['asset_type'] or 'forex'; break
         from chart_widget import TradeChartWidget
-        self.chart_widget = TradeChartWidget(self, conn=self.conn, trade=None, asset_type=asset_type)
+        self.chart_widget = TradeChartWidget(self, conn=self.journal.conn, trade=None, asset_type=asset_type)
         chart_lay.addWidget(self.chart_widget)
         right.addWidget(self.chart_group, 1)
 
@@ -392,7 +392,7 @@ class TradeDialog(QDialog):
         aid = self.account_combo.currentData()
         if aid is None:
             return 0
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         return acct['initial_balance'] if acct else 0
 
     def _get_account_currency(self):
@@ -400,7 +400,7 @@ class TradeDialog(QDialog):
         aid = self.account_combo.currentData()
         if aid is None:
             return ''
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         return acct['currency'] if acct else ''
 
     def _calc_r_multiple(self):
@@ -508,7 +508,7 @@ class TradeDialog(QDialog):
 
     def _populate_executions(self, t):
         from executions_dialog import get_execution_summary
-        summary = get_execution_summary(self.conn, t['id'], currency=self._get_account_currency())
+        summary = get_execution_summary(self.journal, t['id'], currency=self._get_account_currency())
         if summary:
             self.exec_summary_label.setText(summary)
             self.exec_bar.setVisible(True)
@@ -520,7 +520,7 @@ class TradeDialog(QDialog):
             return
         from executions_dialog import ExecutionsDialog
         sym = self.instrument_edit.text().strip().upper()
-        dlg = ExecutionsDialog(self, self.conn, self.trade['id'], symbol=sym)
+        dlg = ExecutionsDialog(self, self.journal, self.trade['id'], symbol=sym)
         dlg.exec()
 
     # ──────────────────────────────────────────
@@ -534,7 +534,7 @@ class TradeDialog(QDialog):
         self.rule_checkboxes.clear()
         if setup_id is None:
             self.rules_group.setVisible(False); return
-        rules = get_setup_rules(self.conn, setup_id)
+        rules = self.journal.get_setup_rules(setup_id)
         if not rules:
             self.rules_group.setVisible(False); return
         self.rules_group.setVisible(True)
@@ -550,7 +550,7 @@ class TradeDialog(QDialog):
             self.rules_layout.addWidget(cb)
             self.rule_checkboxes[r['id']] = cb
         if self.trade:
-            checks = get_trade_rule_checks(self.conn, self.trade['id'])
+            checks = self.journal.get_trade_rule_checks(self.trade['id'])
             for c in checks:
                 cb = self.rule_checkboxes.get(c['rule_id'])
                 if cb and isinstance(cb, QCheckBox):
@@ -678,7 +678,7 @@ class TradeDialog(QDialog):
         self.post_notes.setPlainText(t['post_trade_notes'] or '')
 
         # Screenshots
-        charts = get_trade_charts(self.conn, t['id'])
+        charts = self.journal.get_trade_charts(t['id'])
         for c in charts:
             if os.path.exists(c['file_path']):
                 self._screenshot_paths.append(('existing', c['id']))
@@ -698,7 +698,7 @@ class TradeDialog(QDialog):
         self.chart_widget.load_saved_or_cached(cached)
 
         # Tags
-        tags = get_trade_tags(self.conn, t['id'])
+        tags = self.journal.get_trade_tags(t['id'])
         self.tags_edit.setText(', '.join(tag['name'] for tag in tags))
 
         # Executions
@@ -735,8 +735,7 @@ class TradeDialog(QDialog):
         )
         sym = self.instrument_edit.text().strip().upper()
         if sym:
-            vals['instrument_id'] = get_or_create_instrument(
-                self.conn, sym, instrument_type=self.itype_combo.currentText()
+            vals['instrument_id'] = self.journal.get_or_create_instrument(sym, instrument_type=self.itype_combo.currentText()
             )
         return vals
 

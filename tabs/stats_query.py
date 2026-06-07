@@ -284,17 +284,17 @@ def _build_schema_html(conn, dark: bool) -> str:
 class SqlQueryWidget(QWidget):
     """Custom SQL analytics console."""
 
-    def __init__(self, conn, get_aid_fn, parent=None):
+    def __init__(self, journal, get_aid_fn, parent=None):
         super().__init__(parent)
-        self.conn = conn
+        self.journal = journal
         self._get_aid = get_aid_fn
         self._queries = []       # list of sqlite3.Row: id, name, sql_text
         self._loading = False    # guard against combo signal during rebuild
         self._last_col_names = []
         self._last_rows = []
 
-        seed_default_queries(conn)
-        saved = get_setting(conn, 'sql_console_font_size')
+        journal.seed_default_queries()
+        saved = journal.get_setting('sql_console_font_size')
         self._font_size = int(saved) if saved else 10
         self._build_ui()
         self._refresh_combo()
@@ -455,7 +455,7 @@ class SqlQueryWidget(QWidget):
     def _refresh_combo(self):
         self._loading = True
         try:
-            self._queries = list(get_custom_queries(self.conn))
+            self._queries = list(self.journal.get_custom_queries())
             self.combo.clear()
             self.combo.addItem("— select a saved query —", userData=None)
             for q in self._queries:
@@ -488,7 +488,7 @@ class SqlQueryWidget(QWidget):
         if not ok or not name.strip():
             return
         name = name.strip()
-        save_custom_query(self.conn, name, sql)
+        self.journal.save_custom_query(name, sql)
         self._refresh_combo()
         # Re-select the just-saved query
         idx = self.combo.findText(name)
@@ -509,7 +509,7 @@ class SqlQueryWidget(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            delete_custom_query(self.conn, q['id'])
+            self.journal.delete_custom_query(q['id'])
             self._refresh_combo()
 
     # ── Running queries ──────────────────────────────────────────────────
@@ -526,7 +526,7 @@ class SqlQueryWidget(QWidget):
 
     def _apply_font_size(self):
         self.editor.setFont(_code_font(self._font_size))
-        set_setting(self.conn, 'sql_console_font_size', self._font_size)
+        self.journal.set_setting('sql_console_font_size', self._font_size)
 
     def rebuild_highlighter(self):
         """Recreate highlighter and reference panels to match the current theme."""
@@ -568,7 +568,7 @@ class SqlQueryWidget(QWidget):
 
         try:
             # :account_id is available as a named parameter in every query
-            cur = self.conn.execute(sql, {"account_id": aid})
+            cur = self.journal.conn.execute(sql, {"account_id": aid})
             rows = cur.fetchall()
             col_names = [d[0] for d in cur.description] if cur.description else []
         except Exception as exc:
@@ -639,4 +639,4 @@ class SqlQueryWidget(QWidget):
 
     def _on_ref_tab_changed(self, index):
         if index == 1 and not self.schema_browser.toPlainText():
-            self.schema_browser.setHtml(_build_schema_html(self.conn, _theme.is_dark()))
+            self.schema_browser.setHtml(_build_schema_html(self.journal.conn, _theme.is_dark()))

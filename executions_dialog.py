@@ -24,7 +24,7 @@ def _get_trade_currency(conn, trade_id):
 class ExecutionsDialog(QDialog):
     """Full-size read-only view of executions and FIFO lot matching."""
 
-    def __init__(self, parent, conn, trade_id, symbol=''):
+    def __init__(self, parent, journal, trade_id, symbol=''):
         super().__init__(parent)
         self.setWindowTitle(f"Executions — {symbol}" if symbol else "Executions & FIFO Detail")
         self.setMinimumSize(800, 500)
@@ -34,9 +34,9 @@ class ExecutionsDialog(QDialog):
             | Qt.WindowType.WindowMaximizeButtonHint
             | Qt.WindowType.WindowMinimizeButtonHint
         )
-        self.conn = conn
+        self.journal = journal
         self.trade_id = trade_id
-        self._currency = _get_trade_currency(conn, trade_id)
+        self._currency = _get_trade_currency(journal.conn, trade_id)
         self._build()
         self._populate()
 
@@ -88,7 +88,7 @@ class ExecutionsDialog(QDialog):
         sell_color = QColor(_theme.neg_color())
 
         # ── Executions ──
-        execs = get_executions_for_trade(self.conn, self.trade_id)
+        execs = get_executions_for_trade(self.journal.conn, self.trade_id)
         headers = ['Action', 'Date', 'Shares', 'Price', 'Currency', 'XRate',
                     'Total (acct)', 'Commission', 'Result']
         self.exec_table.setColumnCount(len(headers))
@@ -122,8 +122,8 @@ class ExecutionsDialog(QDialog):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
         # ── Lot consumptions ──
-        lots = get_lot_consumptions_for_trade(self.conn, self.trade_id)
-        open_lots = get_open_lots_for_trade(self.conn, self.trade_id)
+        lots = get_lot_consumptions_for_trade(self.journal.conn, self.trade_id)
+        open_lots = get_open_lots_for_trade(self.journal.conn, self.trade_id)
 
         if lots:
             self.lot_group.setTitle("FIFO Lot Matching")
@@ -204,15 +204,14 @@ class ExecutionsDialog(QDialog):
         self.summary_label.setText("  |  ".join(parts))
 
 
-def get_execution_summary(conn, trade_id, currency='€'):
+def get_execution_summary(journal, trade_id, currency='€'):
     """Return a short summary string for the executions bar, or None if no executions."""
-    from database import get_execution_count_for_trade
-    count = get_execution_count_for_trade(conn, trade_id)
+    count = journal.get_execution_count_for_trade(trade_id)
     if count == 0:
         return None
 
     from fifo_engine import get_executions_for_trade
-    execs = get_executions_for_trade(conn, trade_id)
+    execs = get_executions_for_trade(journal.conn, trade_id)
     buys = [e for e in execs if e['action'] == 'buy']
     sells = [e for e in execs if e['action'] == 'sell']
     broker_pnl = sum(e['broker_result'] or 0 for e in execs)

@@ -22,8 +22,8 @@ from database import (
 
 
 class SetupsTab(BaseTab):
-    def __init__(self, conn, get_aid_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn):
+        super().__init__(journal, get_aid_fn)
         self._build()
 
     def _build(self):
@@ -56,7 +56,7 @@ class SetupsTab(BaseTab):
 
     def refresh(self):
         self.setup_list.clear()
-        for s in get_setup_types(self.conn, active_only=False):
+        for s in self.journal.get_setup_types(active_only=False):
             item = QListWidgetItem(s['name']); item.setData(Qt.ItemDataRole.UserRole, s['id'])
             if not s['is_active']: item.setForeground(QColor(150,150,150))
             self.setup_list.addItem(item)
@@ -68,12 +68,12 @@ class SetupsTab(BaseTab):
         item = self.setup_list.item(row)
         if not item: self.detail.clear(); return
         sid = item.data(Qt.ItemDataRole.UserRole)
-        s = get_setup_type(self.conn, sid)
+        s = self.journal.get_setup_type(sid)
         if not s: return
-        rules = get_setup_rules(self.conn, sid)
+        rules = self.journal.get_setup_rules(sid)
         entry_rules = [r for r in rules if r['rule_type'] == 'entry']
         exit_rules = [r for r in rules if r['rule_type'] == 'exit']
-        stats = get_setup_stats(self.conn, sid, self.aid())
+        stats = self.journal.get_setup_stats(sid, self.aid())
 
         html = f"<h2>{s['name']}</h2>"
         if s['description']: html += f"<p>{s['description']}</p>"
@@ -104,7 +104,7 @@ class SetupsTab(BaseTab):
         else:
             html += "<p><i>No trades recorded with this setup yet.</i></p>"
         self.detail.setHtml(html)
-        for c in get_setup_charts(self.conn, sid):
+        for c in self.journal.get_setup_charts(sid):
             if os.path.exists(c['file_path']):
                 thumb = QPushButton(); thumb.setCursor(Qt.CursorShape.PointingHandCursor)
                 thumb.setFixedSize(144, 104)
@@ -121,17 +121,17 @@ class SetupsTab(BaseTab):
     # ── CRUD ──
 
     def _on_new(self):
-        dlg = SetupDialog(self, self.conn)
+        dlg = SetupDialog(self, self.journal)
         if dlg.exec():
             v = dlg.get_values()
             if not v['name']: QMessageBox.warning(self, "Error", "Name required."); return
             try:
-                sid = create_setup_type(self.conn, v.pop('name'), v.pop('description', None))
-                update_setup_type(self.conn, sid, **v)
+                sid = self.journal.create_setup_type(v.pop('name'), v.pop('description', None))
+                self.journal.update_setup_type(sid, **v)
                 for i, rule in enumerate(dlg.get_entry_rules()):
-                    add_setup_rule(self.conn, sid, 'entry', rule, i)
+                    self.journal.add_setup_rule(sid, 'entry', rule, i)
                 for i, rule in enumerate(dlg.get_exit_rules()):
-                    add_setup_rule(self.conn, sid, 'exit', rule, i)
+                    self.journal.add_setup_rule(sid, 'exit', rule, i)
                 self._save_charts(sid, dlg)
                 self.data_changed.emit()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
@@ -142,18 +142,18 @@ class SetupsTab(BaseTab):
         item = self.setup_list.item(row)
         if not item: return
         sid = item.data(Qt.ItemDataRole.UserRole)
-        s = get_setup_type(self.conn, sid)
+        s = self.journal.get_setup_type(sid)
         if not s: return
-        dlg = SetupDialog(self, self.conn, setup=s)
+        dlg = SetupDialog(self, self.journal, setup=s)
         if dlg.exec():
             v = dlg.get_values()
             try:
-                update_setup_type(self.conn, sid, **v)
-                for r in get_setup_rules(self.conn, sid): delete_setup_rule(self.conn, r['id'])
-                for i, rule in enumerate(dlg.get_entry_rules()): add_setup_rule(self.conn, sid, 'entry', rule, i)
-                for i, rule in enumerate(dlg.get_exit_rules()): add_setup_rule(self.conn, sid, 'exit', rule, i)
+                self.journal.update_setup_type(sid, **v)
+                for r in self.journal.get_setup_rules(sid): self.journal.delete_setup_rule(r['id'])
+                for i, rule in enumerate(dlg.get_entry_rules()): self.journal.add_setup_rule(sid, 'entry', rule, i)
+                for i, rule in enumerate(dlg.get_exit_rules()): self.journal.add_setup_rule(sid, 'exit', rule, i)
                 for cid in dlg.get_delete_chart_ids():
-                    fp = delete_setup_chart(self.conn, cid)
+                    fp = self.journal.delete_setup_chart(cid)
                     if fp and os.path.exists(fp):
                         try: os.remove(fp)
                         except OSError: pass
@@ -170,7 +170,7 @@ class SetupsTab(BaseTab):
         name = item.text()
         if QMessageBox.question(self, "Delete Setup", f"Delete '{name}'?\nTrades using it will be unlinked.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-            delete_setup_type(self.conn, sid); self.data_changed.emit()
+            self.journal.delete_setup_type(sid); self.data_changed.emit()
 
     def _save_charts(self, setup_id, dlg):
         for i, src_path in enumerate(dlg.get_pending_charts()):
@@ -184,4 +184,4 @@ class SetupsTab(BaseTab):
                 QMessageBox.warning(self, "Chart Save Error",
                     f"Could not save chart '{os.path.basename(src_path)}':\n{e}")
                 continue
-            add_setup_chart(self.conn, setup_id, dest, caption=os.path.basename(src_path), sort_order=i)
+            self.journal.add_setup_chart(setup_id, dest, caption=os.path.basename(src_path), sort_order=i)
