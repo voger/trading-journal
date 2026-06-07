@@ -4,6 +4,13 @@ All notable changes to Trading Journal are documented here.
 
 ---
 
+## [3.3.3] — 2026-06-07
+
+### Changed
+- Lifted API-key persistence out of `chart_widget` into a dedicated `KeyStore` module (issue #2). `chart_providers/key_store.py` now owns all `app_settings` access for provider keys and the `{provider_id}_api_key` naming convention. `chart_widget` calls only `key_store.get/save/clear` — no raw SQL in the widget. 12 unit tests cover the module without requiring Qt.
+
+---
+
 ## [3.3.2] — 2026-06-07
 
 ### Fixed
