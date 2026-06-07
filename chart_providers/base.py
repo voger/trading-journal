@@ -23,6 +23,7 @@ class ChartProvider(ABC):
     """
     PROVIDER_ID: str = ""      # e.g. 'yfinance'
     DISPLAY_NAME: str = ""     # e.g. 'Yahoo Finance'
+    api_key: str = ""          # populated by chart_widget after key_store lookup
 
     @property
     def requires_api_key(self) -> bool:

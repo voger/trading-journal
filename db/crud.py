@@ -889,3 +889,9 @@ def set_setting(conn: sqlite3.Connection, key: str, value):
         "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
         "VALUES (?, ?, datetime('now'))", (key, None if value is None else str(value)))
     conn.commit()
+
+
+def delete_setting(conn: sqlite3.Connection, key: str):
+    """Remove a key from app_settings. No-op if key does not exist."""
+    conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
+    conn.commit()
