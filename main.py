@@ -19,9 +19,7 @@ from PyQt6.QtGui import QAction, QIcon, QFont, QPalette, QFontDatabase
 
 
 from database import (
-    init_database, get_connection, get_app_data_dir,
-    get_accounts, get_account, create_account, update_account, delete_account,
-    get_setting, set_setting,
+    init_database, get_connection, get_app_data_dir, Journal,
 )
 from dialogs import AccountDialog
 from asset_modules import get_module
@@ -59,6 +57,7 @@ class MainWindow(QMainWindow):
 
         self.db_path = init_database(os.path.join(self.app_dir, 'trading_journal.db'))
         self.conn = get_connection(self.db_path)
+        self.journal = Journal(self.conn)  # owns the connection; passed to all tabs
         self._build_ui()
         self._refresh_all()
 
@@ -140,13 +139,13 @@ class MainWindow(QMainWindow):
         from tabs.imports import ImportsTab
         from tabs.watchlist import WatchlistTab
 
-        self.trades_tab = TradesTab(self.conn, self._aid, self._status)
-        self.journal_tab = JournalTab(self.conn, self._aid, self._status)
-        self.setups_tab = SetupsTab(self.conn, self._aid)
-        self.watchlist_tab = WatchlistTab(self.conn, self._aid, self._status)
-        self.equity_tab = EquityTab(self.conn, self._aid)
-        self.stats_tab = StatsTab(self.conn, self._aid)
-        self.imports_tab = ImportsTab(self.conn, self._aid)
+        self.trades_tab = TradesTab(self.journal, self._aid, self._status)
+        self.journal_tab = JournalTab(self.journal, self._aid, self._status)
+        self.setups_tab = SetupsTab(self.journal, self._aid)
+        self.watchlist_tab = WatchlistTab(self.journal, self._aid, self._status)
+        self.equity_tab = EquityTab(self.journal, self._aid)
+        self.stats_tab = StatsTab(self.journal, self._aid)
+        self.imports_tab = ImportsTab(self.journal, self._aid)
 
         self.tabs.addTab(self.trades_tab, "Trades")
         self.tabs.addTab(self.watchlist_tab, "Watchlist")
@@ -230,7 +229,7 @@ class MainWindow(QMainWindow):
         else:
             app.setStyleSheet("")
         self._apply_sidebar_style()
-        set_setting(self.conn, 'dark_mode', '1' if dark else '0')
+        self.journal.set_setting('dark_mode', '1' if dark else '0')
         # Re-render all charts and trade preview to pick up new colors
         self.trades_tab.refresh()
         self.trades_tab.refresh_chart_theme()
@@ -245,7 +244,7 @@ class MainWindow(QMainWindow):
     def _refresh_all(self):
         self._refresh_account_list()
         # Apply saved theme on first run
-        if get_setting(self.conn, 'dark_mode', '0') == '1':
+        if self.journal.get_setting('dark_mode', '0') == '1':
             _theme.set_dark(True)
             QApplication.instance().setStyleSheet(_theme.get_stylesheet())
             self._dark_action.setChecked(True)
@@ -270,7 +269,7 @@ class MainWindow(QMainWindow):
             f = all_item.font(); f.setBold(True); all_item.setFont(f)
             self.account_list.addItem(all_item)
 
-            for a in get_accounts(self.conn):
+            for a in self.journal.get_accounts():
                 mod = get_module(a['asset_type'])
                 label = f"{a['name']} ({a['currency']})"
                 if mod: label += f"\n{mod.DISPLAY_NAME}"
@@ -296,28 +295,28 @@ class MainWindow(QMainWindow):
     def _on_new_account(self):
         dlg = AccountDialog(self)
         if dlg.exec():
-            try: create_account(self.conn, **dlg.get_values()); self._refresh_account_list()
+            try: self.journal.create_account(**dlg.get_values()); self._refresh_account_list()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_edit_account(self):
         aid = self._aid()
         if aid is None: QMessageBox.information(self, "Select", "Select a specific account first."); return
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         if not acct: return
         dlg = AccountDialog(self, account=acct)
         if dlg.exec():
-            try: update_account(self.conn, aid, **dlg.get_values()); self._refresh_account_list()
+            try: self.journal.update_account(aid, **dlg.get_values()); self._refresh_account_list()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _on_delete_account(self):
         aid = self._aid()
         if aid is None: QMessageBox.information(self, "Select", "Select a specific account first."); return
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         if not acct: return
         if QMessageBox.warning(self, "Delete Account",
             f"Delete '{acct['name']}' and ALL its trades, journals, and history?\n\nThis cannot be undone.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-            delete_account(self.conn, aid); self.account_list.setCurrentRow(0); self._refresh_all()
+            self.journal.delete_account(aid); self.account_list.setCurrentRow(0); self._refresh_all()
 
     # ── Backup / Restore ──
 
@@ -330,11 +329,11 @@ class MainWindow(QMainWindow):
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _reconnect_tabs(self):
-        """Propagate the current DB connection to all tabs."""
+        """Propagate the current Journal (and its connection) to all tabs."""
         for tab in [self.trades_tab, self.journal_tab, self.setups_tab,
                     self.equity_tab, self.stats_tab, self.imports_tab,
                     self.watchlist_tab]:
-            tab.conn = self.conn
+            tab.journal = self.journal
 
     def _on_restore(self):
         fp, _ = QFileDialog.getOpenFileName(self, "Restore Backup", "", "Zip (*.zip)")
@@ -347,6 +346,7 @@ class MainWindow(QMainWindow):
             if not result.get('success'):
                 raise Exception(result.get('message', 'Restore failed'))
             self.conn = get_connection(self.db_path)
+            self.journal = Journal(self.conn)
             self._reconnect_tabs()
             self._refresh_all()
             QMessageBox.information(self, "Restored", "Backup restored successfully.")
@@ -355,6 +355,7 @@ class MainWindow(QMainWindow):
             # stays functional even if the restore itself failed.
             try:
                 self.conn = get_connection(self.db_path)
+                self.journal = Journal(self.conn)
                 self._reconnect_tabs()
             except Exception:
                 pass

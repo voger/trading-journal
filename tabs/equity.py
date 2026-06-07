@@ -14,8 +14,8 @@ import theme as _theme
 
 
 class EquityTab(BaseTab):
-    def __init__(self, conn, get_aid_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn):
+        super().__init__(journal, get_aid_fn)
         self._dirty = True
         self._mode = 'balance'
         self._build()
@@ -123,12 +123,12 @@ class EquityTab(BaseTab):
             self.deposits_table.setRowCount(0)
             self.account_label.setText(""); self.info_label.setText(""); return
 
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         currency = acct['currency'] if acct else '?'
         self.account_label.setText(f"{acct['name']} — {currency}" if acct else "")
 
-        data = get_equity_curve_data(self.conn, aid)
-        events = get_equity_events(self.conn, aid)
+        data = self.journal.get_equity_curve_data(aid)
+        events = self.journal.get_equity_events(aid)
 
         if not data and not events:
             self._show_empty_chart('No closed trades yet')

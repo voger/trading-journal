@@ -10,8 +10,28 @@ Reference for database architecture, data flow, and SQL conventions.
   - `db/crud.py` — all entity CRUD
   - `db/analytics.py` — `effective_pnl()`, `get_trade_stats()`, `get_trade_breakdowns()`, `get_advanced_stats()`, `get_daily_pnl()`
   - `db/queries.py` — `get_trades_paged()`, `get_trades_all_filtered()`, `EXPORT_COLUMNS`
+  - `db/journal.py` — `Journal`, the repository seam (see below)
 - **`fifo_engine.py`** — stocks only; forex bypasses it entirely
 - **`import_manager.py`** — plugin selection → validate → parse → `_import_trades` or `_import_executions`
+
+## Journal seam (issue #6)
+
+`Journal` wraps one `sqlite3.Connection` and owns its lifecycle. It exposes every
+conn-first `crud`/`analytics`/`queries` function as a method with the connection
+injected, so the **UI layer calls `journal.get_accounts()` instead of
+`get_accounts(conn)`**. `main.py` builds one `Journal` and passes it to every tab;
+tabs/dialogs store it (`self.journal`, or `self._journal` in sub-widgets).
+
+- **Additive, not a rewrite.** `crud`/`analytics`/`queries` functions still take
+  `conn` as their first arg and are still public — `Journal` delegates to them via
+  `__getattr__`. Tests of the data layer call them directly with `conn`.
+- **Precise.** Only functions whose first parameter is literally named `conn` are
+  proxied; pure helpers (`effective_pnl(t)`) are not — call those directly.
+- **Out-of-scope engines keep raw `conn`.** `fifo_engine`, `import_manager`,
+  `chart_providers.key_store`, and `chart_widget` take a raw connection; hand them
+  `journal.conn` (and use `journal.conn.execute(...)` for raw SQL).
+- On backup-restore, `main.py` rebuilds the `Journal` on the new connection before
+  re-propagating it to tabs (`_reconnect_tabs`).
 
 ## Data flow
 

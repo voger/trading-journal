@@ -97,7 +97,7 @@ class TradesPreviewMixin:
 
         # Bottom pane: chart widget (renders cached OHLC data)
         from chart_widget import TradeChartWidget
-        self.pv_chart = TradeChartWidget(parent=outer, conn=self.conn)
+        self.pv_chart = TradeChartWidget(parent=outer, conn=self.journal.conn)
         self.pv_chart.setMinimumHeight(150)
         vsplit.addWidget(self.pv_chart)
 
@@ -157,7 +157,7 @@ class TradesPreviewMixin:
 
     def _show_trade_preview(self, trade_id):
         """Populate the preview panel with trade details."""
-        t = get_trade(self.conn, trade_id)
+        t = self.journal.get_trade(trade_id)
         if not t:
             self._clear_preview()
             return
@@ -260,7 +260,7 @@ class TradesPreviewMixin:
         lines.append(f"<b>Grade:</b> {grade}")
         if conf: lines.append(f"<b>Confidence:</b> {'★' * conf}{'☆' * (5 - conf)}")
 
-        tags = get_trade_tags(self.conn, trade_id)
+        tags = self.journal.get_trade_tags(trade_id)
         if tags:
             chip_bg = '#2e3a5c' if _theme.is_dark() else '#e0e7ff'
             chip_fg = '#a8b5e0' if _theme.is_dark() else '#3730a3'
@@ -282,7 +282,7 @@ class TradesPreviewMixin:
         self.pv_notes_label.setText("<br><br>".join(notes_parts) if notes_parts else "")
 
         # Rule checks
-        checks = get_trade_rule_checks(self.conn, trade_id)
+        checks = self.journal.get_trade_rule_checks(trade_id)
         if checks:
             rc_lines = ["<b>Rule Checklist:</b>"]
             for c in checks:
@@ -301,7 +301,7 @@ class TradesPreviewMixin:
             'stop_loss': t['stop_loss_price'], 'take_profit': t['take_profit_price'],
             'pnl_account_currency': t['pnl_account_currency'],
         }
-        acct = get_account(self.conn, t['account_id']) if t['account_id'] else None
+        acct = self.journal.get_account(t['account_id']) if t['account_id'] else None
         self.pv_chart.asset_type = (acct['asset_type'] if acct else 'forex')
         self.pv_chart.set_trade(chart_data)
         cached = t['chart_data'] if 'chart_data' in t else None

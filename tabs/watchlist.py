@@ -34,8 +34,8 @@ _HISTORY_KEY = 'watchlist_symbol_history'
 _HISTORY_MAX = 100
 
 
-def _load_history(conn):
-    raw = get_setting(conn, _HISTORY_KEY)
+def _load_history(journal):
+    raw = journal.get_setting(_HISTORY_KEY)
     if not raw:
         return []
     try:
@@ -44,30 +44,30 @@ def _load_history(conn):
         return []
 
 
-def _save_history(conn, symbols):
-    set_setting(conn, _HISTORY_KEY, json.dumps(symbols))
+def _save_history(journal, symbols):
+    journal.set_setting(_HISTORY_KEY, json.dumps(symbols))
 
 
-def _add_to_history(conn, symbol):
-    history = _load_history(conn)
+def _add_to_history(journal, symbol):
+    history = _load_history(journal)
     symbol = symbol.upper()
     if symbol in history:
         history.remove(symbol)
     history.insert(0, symbol)
-    _save_history(conn, history[:_HISTORY_MAX])
+    _save_history(journal, history[:_HISTORY_MAX])
 
 
 class _ManageHistoryDialog(QDialog):
-    def __init__(self, conn, parent=None):
+    def __init__(self, journal, parent=None):
         super().__init__(parent)
-        self._conn = conn
+        self._journal = journal
         self.setWindowTitle("Manage Symbol History")
         self.resize(280, 360)
 
         lay = QVBoxLayout(self)
         self._list = QListWidget()
         self._list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self._list.addItems(_load_history(conn))
+        self._list.addItems(_load_history(journal))
         self._list.installEventFilter(self)
         lay.addWidget(self._list)
 
@@ -91,13 +91,13 @@ class _ManageHistoryDialog(QDialog):
             return
         self._list.takeItem(row)
         symbols = [self._list.item(i).text() for i in range(self._list.count())]
-        _save_history(self._conn, symbols)
+        _save_history(self._journal, symbols)
 
 
 class _AddSymbolDialog(QDialog):
-    def __init__(self, conn, instruments, parent=None):
+    def __init__(self, journal, instruments, parent=None):
         super().__init__(parent)
-        self._conn = conn
+        self._journal = journal
         self._instruments = instruments
         self.setWindowTitle("Add to Watchlist")
         self.setMinimumWidth(340)
@@ -132,7 +132,7 @@ class _AddSymbolDialog(QDialog):
 
     def _build_model(self):
         """History (MRU) first, then any known instruments not already in history."""
-        history = _load_history(self._conn)
+        history = _load_history(self._journal)
         seen = {s.upper() for s in history}
         extras = [
             i['symbol'].upper() for i in self._instruments
@@ -154,7 +154,7 @@ class _AddSymbolDialog(QDialog):
             self.accept()
 
     def _on_manage(self):
-        _ManageHistoryDialog(self._conn, self).exec()
+        _ManageHistoryDialog(self._journal, self).exec()
         self._completer.setModel(self._build_model())
 
     def symbol(self):
@@ -162,8 +162,8 @@ class _AddSymbolDialog(QDialog):
 
 
 class WatchlistTab(BaseTab):
-    def __init__(self, conn, get_aid_fn, status_fn=None):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn, status_fn=None):
+        super().__init__(journal, get_aid_fn)
         self.status_fn = status_fn
         self._current_item_id = None
         self._saving = False  # prevent refresh loops during save
@@ -272,7 +272,7 @@ class WatchlistTab(BaseTab):
             self.table.setRowCount(0)
             self._clear_detail()
             return
-        items = get_watchlist(self.conn, self.aid())
+        items = self.journal.get_watchlist(self.aid())
         self.table.setUpdatesEnabled(False)
         self.table.setSortingEnabled(False)
         self.table.setRowCount(len(items))
@@ -341,7 +341,7 @@ class WatchlistTab(BaseTab):
         self._load_detail(item_id)
 
     def _load_detail(self, item_id):
-        w = get_watchlist_item(self.conn, item_id)
+        w = self.journal.get_watchlist_item(item_id)
         if not w:
             self._clear_detail(); return
 
@@ -386,7 +386,7 @@ class WatchlistTab(BaseTab):
             return
         self._saving = True
         try:
-            update_watchlist_item(self.conn, self._current_item_id,
+            self.journal.update_watchlist_item(self._current_item_id,
                 bias_weekly=self.bias_weekly.currentText() or None,
                 bias_daily=self.bias_daily.currentText() or None,
                 bias_h4=self.bias_h4.currentText() or None,
@@ -407,10 +407,10 @@ class WatchlistTab(BaseTab):
             QMessageBox.information(self, "No Account", "Select an account before adding watchlist items.")
             return
         # Show dialog: type a symbol or pick from existing instruments
-        instruments = get_instruments(self.conn)
+        instruments = self.journal.get_instruments()
         existing_symbols = [i['symbol'] for i in instruments]
 
-        dlg = _AddSymbolDialog(self.conn, instruments, self)
+        dlg = _AddSymbolDialog(self.journal, instruments, self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         symbol = dlg.symbol()
@@ -419,7 +419,7 @@ class WatchlistTab(BaseTab):
 
         # Check if already on watchlist
         aid = self.aid()
-        current = get_watchlist(self.conn, aid)
+        current = self.journal.get_watchlist(aid)
         for w in current:
             if w['symbol'].upper() == symbol.upper():
                 QMessageBox.information(self, "Already Added",
@@ -438,12 +438,12 @@ class WatchlistTab(BaseTab):
             itype = chosen
 
         try:
-            instr_id = get_or_create_instrument(self.conn, symbol, instrument_type=itype)
+            instr_id = self.journal.get_or_create_instrument(symbol, instrument_type=itype)
             # Determine sort_order — append at end
             max_order = max((w['sort_order'] for w in current), default=-1)
-            add_watchlist_item(self.conn, instr_id, account_id=aid,
+            self.journal.add_watchlist_item(instr_id, account_id=aid,
                               sort_order=max_order + 1)
-            _add_to_history(self.conn, symbol)
+            _add_to_history(self.journal, symbol)
             self.refresh()
             # Select the newly added item
             for r in range(self.table.rowCount()):
@@ -468,7 +468,7 @@ class WatchlistTab(BaseTab):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                delete_watchlist_item(self.conn, self._current_item_id)
+                self.journal.delete_watchlist_item(self._current_item_id)
                 self._current_item_id = None
                 self._clear_detail()
                 self.refresh()
@@ -503,7 +503,7 @@ class WatchlistTab(BaseTab):
         # Swap
         ids[r], ids[target] = ids[target], ids[r]
         try:
-            reorder_watchlist(self.conn, ids)
+            self.journal.reorder_watchlist(ids)
             self.refresh()
             # Restore selection to moved item
             self.table.setCurrentCell(target, 1)

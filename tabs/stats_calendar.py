@@ -25,10 +25,10 @@ _MONTH_NAMES = [
 class DayDetailDialog(QDialog):
     """Shows individual trade details for a clicked calendar day."""
 
-    def __init__(self, date_str, trades, currency, conn, parent=None):
+    def __init__(self, date_str, trades, currency, journal, parent=None):
         super().__init__(parent)
         from datetime import datetime as _dt
-        self._conn = conn
+        self._journal = journal
         self._trades = trades
         self.setWindowTitle(f"Closed trades — {date_str}")
         self.setMinimumSize(680, 320)
@@ -146,10 +146,10 @@ class DayDetailDialog(QDialog):
         tid = id_item.data(Qt.ItemDataRole.UserRole)
         if tid is None:
             return
-        trade = get_trade(self._conn, tid)
+        trade = self._journal.get_trade(tid)
         if trade is None:
             return
-        dlg = TradeDialog(self, self._conn, trade=dict(trade))
+        dlg = TradeDialog(self, self._journal, trade=dict(trade))
         dlg.exec()
 
 
@@ -161,9 +161,9 @@ class CalendarHeatmapWidget(QWidget):
     account to be selected (not All Accounts).
     """
 
-    def __init__(self, conn, get_aid_fn, parent=None):
+    def __init__(self, journal, get_aid_fn, parent=None):
         super().__init__(parent)
-        self._conn = conn
+        self._journal = journal
         self._get_aid = get_aid_fn
         today = _date.today()
         self._year = today.year
@@ -227,9 +227,9 @@ class CalendarHeatmapWidget(QWidget):
             self._month += 1
         self._rebuild()
 
-    def refresh(self, conn=None):
-        if conn is not None:
-            self._conn = conn
+    def refresh(self, journal=None):
+        if journal is not None:
+            self._journal = journal
         self._rebuild()
 
     def _rebuild(self):
@@ -252,7 +252,7 @@ class CalendarHeatmapWidget(QWidget):
             self._lbl_summary.setText("")
             return
 
-        daily = get_daily_pnl(self._conn, aid, self._year, self._month)
+        daily = self._journal.get_daily_pnl(aid, self._year, self._month)
 
         # Monthly totals
         if daily:
@@ -311,7 +311,7 @@ class CalendarHeatmapWidget(QWidget):
         aid = self._get_aid()
         if aid is None:
             return
-        rows = self._conn.execute(
+        rows = self._journal.conn.execute(
             """SELECT t.*, i.symbol, st.name as setup_name
                FROM trades t
                JOIN instruments i ON t.instrument_id = i.id
@@ -323,9 +323,9 @@ class CalendarHeatmapWidget(QWidget):
         ).fetchall()
         if not rows:
             return
-        acct = get_account(self._conn, aid)
+        acct = self._journal.get_account(aid)
         currency = acct['currency'] if acct else ''
-        dlg = DayDetailDialog(date_str, rows, currency, self._conn, self)
+        dlg = DayDetailDialog(date_str, rows, currency, self._journal, self)
         dlg.exec()
 
     def _make_cell(self, day, day_data, max_abs, is_today, date_str):

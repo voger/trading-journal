@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 
 from chart_providers import get_all_providers, get_provider
+from chart_providers import key_store
 import theme as _theme
 
 
@@ -165,45 +166,10 @@ class TradeChartWidget(QWidget):
 
     # ── API Key management ─────────────────────────────────────────────
 
-    def _get_api_key(self, provider_id):
-        if not self.conn: return ''
-        try:
-            cur = self.conn.execute(
-                "SELECT value FROM app_settings WHERE key = ?",
-                (f'{provider_id}_api_key',))
-            row = cur.fetchone()
-            return (row[0] or '').strip().strip('"') if row else ''
-        except Exception:
-            return ''
-
-    def _set_api_key(self, provider_id, key):
-        if not self.conn: return
-        try:
-            self.conn.execute(
-                "INSERT OR REPLACE INTO app_settings (key, value, updated_at) "
-                "VALUES (?, ?, datetime('now'))",
-                (f'{provider_id}_api_key', key))
-            self.conn.commit()
-        except Exception:
-            pass
-
-    def _delete_api_key(self, provider_id):
-        if self.conn:
-            try:
-                self.conn.execute(
-                    "DELETE FROM app_settings WHERE key = ?",
-                    (f'{provider_id}_api_key',))
-                self.conn.commit()
-            except Exception:
-                pass
-        provider = get_provider(provider_id)
-        if provider and hasattr(provider, 'api_key'):
-            provider.api_key = ''
-
     def _ensure_api_key(self, provider):
         if not provider.requires_api_key:
             return True
-        stored_key = self._get_api_key(provider.PROVIDER_ID)
+        stored_key = key_store.get(self.conn, provider.PROVIDER_ID)
         if stored_key:
             provider.api_key = stored_key
             return True
@@ -212,14 +178,14 @@ class TradeChartWidget(QWidget):
     def _prompt_api_key(self, provider):
         instructions = provider.api_key_instructions or (
             f'{provider.DISPLAY_NAME} requires an API key.')
-        key, ok = QInputDialog.getText(
+        k, ok = QInputDialog.getText(
             self, f'{provider.DISPLAY_NAME} API Key',
             instructions, QLineEdit.EchoMode.Normal, '')
-        if not ok or not key.strip():
+        if not ok or not k.strip():
             return False
-        key = key.strip()
-        provider.api_key = key
-        self._set_api_key(provider.PROVIDER_ID, key)
+        k = k.strip()
+        provider.api_key = k
+        key_store.save(self.conn, provider.PROVIDER_ID, k)
         return True
 
     def _on_manage_key(self):
@@ -232,7 +198,7 @@ class TradeChartWidget(QWidget):
                 f"does not require an API key.")
             return
 
-        stored = self._get_api_key(pid)
+        stored = key_store.get(self.conn, pid)
         menu = QMenu(self)
         if stored:
             masked = stored[:4] + '...' + stored[-4:] if len(stored) > 10 else '****'
@@ -251,10 +217,14 @@ class TradeChartWidget(QWidget):
         action = menu.exec(self.key_btn.mapToGlobal(self.key_btn.rect().bottomLeft()))
         if not action: return
         if action == replace_act:
-            self._delete_api_key(pid)
+            key_store.clear(self.conn, pid)
+            if hasattr(provider, 'api_key'):
+                provider.api_key = ''
             self._prompt_api_key(provider)
         elif delete_act and action == delete_act:
-            self._delete_api_key(pid)
+            key_store.clear(self.conn, pid)
+            if hasattr(provider, 'api_key'):
+                provider.api_key = ''
             QMessageBox.information(self, "Key Deleted",
                                    f"API key for {provider.DISPLAY_NAME} has been removed.")
 
@@ -331,7 +301,7 @@ class TradeChartWidget(QWidget):
         except Exception as e:
             err_str = str(e)
             if 'Invalid API key' in err_str or '401' in err_str:
-                self._set_api_key(pid, '')
+                key_store.clear(self.conn, pid)
                 if hasattr(provider, 'api_key'):
                     provider.api_key = ''
             QMessageBox.critical(self, "Error", err_str)

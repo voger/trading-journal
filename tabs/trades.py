@@ -38,8 +38,8 @@ os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
     jump_to_journal = pyqtSignal(str)   # emits YYYY-MM-DD date string
 
-    def __init__(self, conn, get_aid_fn, status_bar_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn, status_bar_fn):
+        super().__init__(journal, get_aid_fn)
         self._status = status_bar_fn
         self._selected_trade_id = None
         self._visible_trades = []
@@ -232,7 +232,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         try:
             cur = self.flt_setup.currentData()
             self.flt_setup.clear(); self.flt_setup.addItem("All Setups", None)
-            for s in get_setup_types(self.conn): self.flt_setup.addItem(s['name'], s['id'])
+            for s in self.journal.get_setup_types(): self.flt_setup.addItem(s['name'], s['id'])
             if cur is not None:
                 idx = self.flt_setup.findData(cur)
                 if idx >= 0: self.flt_setup.setCurrentIndex(idx)
@@ -245,7 +245,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
             cur = self.flt_tag.currentData()
             self.flt_tag.clear()
             self.flt_tag.addItem("All Tags", None)
-            for tag in get_tags(self.conn):
+            for tag in self.journal.get_tags():
                 self.flt_tag.addItem(tag['name'], tag['id'])
             idx = self.flt_tag.findData(cur)
             if idx >= 0:
@@ -332,7 +332,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
     def _get_module(self):
         aid = self.aid()
         if aid:
-            acct = get_account(self.conn, aid)
+            acct = self.journal.get_account(aid)
             if acct: return get_module(acct['asset_type'])
         return get_module('forex')
 
@@ -389,7 +389,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
         filters = self._build_filter_kwargs()
 
         # All matching trades — for KPI and export (no LIMIT)
-        all_trades = get_trades_all_filtered(self.conn, account_id=aid, **filters)
+        all_trades = self.journal.get_trades_all_filtered(account_id=aid, **filters)
         total = len(all_trades)
 
         # Clamp page to valid range
@@ -398,8 +398,7 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
             self._page = max(0, page_count - 1)
 
         # Current page — for the table display
-        page_trades = get_trades_paged(
-            self.conn, account_id=aid, page=self._page,
+        page_trades = self.journal.get_trades_paged(account_id=aid, page=self._page,
             page_size=_PAGE_SIZE, **filters
         )
 
@@ -410,8 +409,8 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
             f"Page {self._page + 1} of {page_count} · {total} trades"
         )
 
-        chart_counts = get_trade_chart_counts(self.conn, aid)
-        events = get_account_events(self.conn, aid) if aid else []
+        chart_counts = self.journal.get_trade_chart_counts(aid)
+        events = self.journal.get_account_events(aid) if aid else []
         period_from, period_to = self._get_period_range()
 
         # Build columns dynamically

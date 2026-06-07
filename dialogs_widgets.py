@@ -86,9 +86,9 @@ class StatusBadge(QLabel):
 class TradeChartsDialog(QDialog):
     """Lightweight screenshot manager for a single trade."""
 
-    def __init__(self, parent, conn, trade_id: int):
+    def __init__(self, parent, journal, trade_id: int):
         super().__init__(parent)
-        self.conn = conn
+        self.journal = journal
         self.trade_id = trade_id
         self.setWindowTitle("Trade Screenshots")
         self.resize(480, 360)
@@ -119,7 +119,7 @@ class TradeChartsDialog(QDialog):
 
     def _refresh(self):
         self.list.clear()
-        self._charts = get_trade_charts(self.conn, self.trade_id)
+        self._charts = self.journal.get_trade_charts(self.trade_id)
         for c in self._charts:
             label = c['caption'] or os.path.basename(c['file_path'])
             item = QListWidgetItem(label)
@@ -144,7 +144,7 @@ class TradeChartsDialog(QDialog):
         fname = f"trade_{self.trade_id}_{os.path.basename(fp)}"
         dest = os.path.join(dest_dir, fname)
         shutil.copy2(fp, dest)
-        add_trade_chart(self.conn, self.trade_id, 'screenshot', dest)
+        self.journal.add_trade_chart(self.trade_id, 'screenshot', dest)
         self._refresh()
 
     def _on_open(self):
@@ -160,7 +160,7 @@ class TradeChartsDialog(QDialog):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         ) != QMessageBox.StandardButton.Yes:
             return
-        fp = delete_trade_chart(self.conn, chart['id'])
+        fp = self.journal.delete_trade_chart(chart['id'])
         if fp and os.path.exists(fp):
             try:
                 os.remove(fp)

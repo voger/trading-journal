@@ -50,8 +50,8 @@ def _ratio_cls(val, threshold=1):
 
 
 class StatsTab(BaseTab):
-    def __init__(self, conn, get_aid_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn):
+        super().__init__(journal, get_aid_fn)
         self._build()
 
     def _build(self):
@@ -115,15 +115,15 @@ class StatsTab(BaseTab):
         self.tabs.addTab(self.hour_hist, "By Hour")
 
         # Calendar heatmap sub-tab
-        self.calendar_heatmap = CalendarHeatmapWidget(self.conn, self.aid)
+        self.calendar_heatmap = CalendarHeatmapWidget(self.journal, self.aid)
         self.tabs.addTab(self.calendar_heatmap, "Calendar")
 
         # Formula editor sub-tab
-        self.formula_editor = FormulaEditorWidget(self.conn)
+        self.formula_editor = FormulaEditorWidget(self.journal)
         self.tabs.addTab(self.formula_editor, "Formulas")
 
         # Custom SQL analytics console sub-tab
-        self.sql_console = SqlQueryWidget(self.conn, self.aid)
+        self.sql_console = SqlQueryWidget(self.journal, self.aid)
         self.tabs.addTab(self.sql_console, "Custom Query")
 
 
@@ -153,16 +153,16 @@ class StatsTab(BaseTab):
             self.setup_perf.populate([])
             self.r_hist.populate([], 0)
             self.hour_hist.populate([])
-            self.calendar_heatmap.refresh(self.conn)
+            self.calendar_heatmap.refresh(self.journal)
             self.sql_console.refresh_account(None)
             return
 
         date_from, date_to = self._get_date_range()
 
         # Overview
-        stats = get_trade_stats(self.conn, account_id=aid,
+        stats = self.journal.get_trade_stats(account_id=aid,
                                 date_from=date_from, date_to=date_to)
-        self._formulas = {f['metric_key']: f for f in get_all_formulas(self.conn)}
+        self._formulas = {f['metric_key']: f for f in self.journal.get_all_formulas()}
         if not stats:
             period_note = f" for {self.flt_period.currentText().lower()}" \
                           if date_from else ""
@@ -172,11 +172,11 @@ class StatsTab(BaseTab):
             self.setup_perf.populate([])
             self.r_hist.populate([], 0)
             self.hour_hist.populate([])
-            self.calendar_heatmap.refresh(self.conn)
+            self.calendar_heatmap.refresh(self.journal)
             self.sql_console.refresh_account(aid)
             return
 
-        acct = get_account(self.conn, aid)
+        acct = self.journal.get_account(aid)
         acct_label = f"{acct['name']} ({acct['currency']})" if acct else "?"
 
         formulas = self._formulas
@@ -208,7 +208,7 @@ class StatsTab(BaseTab):
         <tr><td><b>Avg Win:</b></td><td>{stats['avg_win']:.2f}</td><td><b>Avg Loss:</b></td><td>{stats['avg_loss']:.2f}</td></tr></table>"""
 
         # Advanced stats section
-        adv = get_advanced_stats(self.conn, account_id=aid,
+        adv = self.journal.get_advanced_stats(account_id=aid,
                                  date_from=date_from, date_to=date_to)
         if adv:
             streak_val = adv['current_streak']
@@ -264,27 +264,27 @@ class StatsTab(BaseTab):
         # Breakdown sub-tabs
         currency = acct['currency'] if acct else ''
         for group_by, bt in self.bd_tables.items():
-            data = get_trade_breakdowns(self.conn, aid, group_by,
+            data = self.journal.get_trade_breakdowns(aid, group_by,
                                         date_from=date_from, date_to=date_to)
             bt.populate(data, currency=currency)
 
         # Setup performance sub-tab
-        setup_rows = get_setup_performance(self.conn, aid,
+        setup_rows = self.journal.get_setup_performance(aid,
                                            date_from=date_from, date_to=date_to)
         self.setup_perf.populate(setup_rows, currency=currency)
 
         # R-multiple histogram
-        r_values, excluded = get_r_multiple_distribution(self.conn, aid,
+        r_values, excluded = self.journal.get_r_multiple_distribution(aid,
                                                           date_from=date_from, date_to=date_to)
         self.r_hist.populate(r_values, excluded)
 
         # Hour-of-day histogram
-        hour_data = get_trade_breakdowns(self.conn, aid, 'hour_of_day',
+        hour_data = self.journal.get_trade_breakdowns(aid, 'hour_of_day',
                                          date_from=date_from, date_to=date_to)
         self.hour_hist.populate(hour_data, currency=currency)
 
-        # Calendar heatmap (pass conn so it stays current after a restore)
-        self.calendar_heatmap.refresh(self.conn)
+        # Calendar heatmap (pass journal so it stays current after a restore)
+        self.calendar_heatmap.refresh(self.journal)
 
         # Update account label in SQL console
         acct_name = acct['name'] if acct else None

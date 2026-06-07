@@ -887,6 +887,105 @@ class TestNormalizeSymbol:
     def test_yf_stock_passthrough(self):
         assert self._yf().normalize_symbol('AAPL', asset_type='stocks') == 'AAPL'
 
+
+# ── Twelve Data error handling (GitHub issue #1) ─────────────────────────────
+
+class TestTwelveDataErrorHandling:
+    """Issue #1: Twelve Data now returns real HTTP status codes (401/429/...) on
+    error instead of HTTP 200 with an error object in the body. Both the legacy
+    HTTP-200 path and the new real-status-code path must yield the same specific,
+    user-friendly messages so the UI keeps detecting bad keys / rate limits."""
+
+    import io
+    import urllib.error
+    from unittest.mock import patch
+    from datetime import datetime
+
+    def _provider(self):
+        from chart_providers.twelvedata_provider import TwelveDataProvider
+        p = TwelveDataProvider()
+        p.api_key = 'demo'  # non-empty so fetch_ohlc reaches the HTTP layer
+        return p
+
+    def _http_error(self, code, payload):
+        """Build an HTTPError whose body is the JSON error object the new API sends."""
+        import io as _io
+        import json as _json
+        import urllib.error as _ue
+        body = _json.dumps(payload).encode('utf-8')
+        return _ue.HTTPError('https://api.twelvedata.com/time_series',
+                             code, 'error', {}, _io.BytesIO(body))
+
+    class _FakeResp:
+        """Context-manager stand-in for urlopen() returning HTTP 200 (legacy path)."""
+        def __init__(self, payload):
+            import json as _json
+            self._body = _json.dumps(payload).encode('utf-8')
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def read(self):
+            return self._body
+
+    def _fetch(self, p):
+        from datetime import datetime
+        return p.fetch_ohlc('EUR/USD', datetime(2025, 1, 1), datetime(2025, 1, 10), '1d')
+
+    # ── New behavior: real HTTP status codes (post-2025-05-16) ──────────────
+    def test_new_http_401_invalid_key(self):
+        from unittest.mock import patch
+        p = self._provider()
+        err = self._http_error(401, {'code': 401, 'status': 'error', 'message': 'bad key'})
+        with patch('urllib.request.urlopen', side_effect=err):
+            with pytest.raises(ValueError, match='Invalid API key'):
+                self._fetch(p)
+
+    def test_new_http_429_rate_limit(self):
+        from unittest.mock import patch
+        p = self._provider()
+        err = self._http_error(429, {'code': 429, 'status': 'error', 'message': 'too many'})
+        with patch('urllib.request.urlopen', side_effect=err):
+            with pytest.raises(ValueError, match='Rate limit exceeded'):
+                self._fetch(p)
+
+    def test_new_http_404_generic_message(self):
+        from unittest.mock import patch
+        p = self._provider()
+        err = self._http_error(404, {'code': 404, 'status': 'error', 'message': 'not found'})
+        with patch('urllib.request.urlopen', side_effect=err):
+            with pytest.raises(ValueError, match='Twelve Data error: not found'):
+                self._fetch(p)
+
+    def test_new_http_non_json_body_falls_back(self):
+        """A non-JSON error body (e.g. gateway 502) must still surface the HTTP code."""
+        import io as _io
+        import urllib.error as _ue
+        from unittest.mock import patch
+        p = self._provider()
+        err = _ue.HTTPError('u', 502, 'bad gateway', {}, _io.BytesIO(b'<html>502</html>'))
+        with patch('urllib.request.urlopen', side_effect=err):
+            with pytest.raises(ConnectionError, match='HTTP 502'):
+                self._fetch(p)
+
+    # ── Legacy behavior: HTTP 200 + error body (regression guard) ───────────
+    def test_legacy_200_error_body_401(self):
+        from unittest.mock import patch
+        p = self._provider()
+        payload = {'code': 401, 'status': 'error', 'message': 'bad key'}
+        with patch('urllib.request.urlopen', return_value=self._FakeResp(payload)):
+            with pytest.raises(ValueError, match='Invalid API key'):
+                self._fetch(p)
+
+    def test_legacy_200_error_body_429(self):
+        from unittest.mock import patch
+        p = self._provider()
+        payload = {'code': 429, 'status': 'error', 'message': 'too many'}
+        with patch('urllib.request.urlopen', return_value=self._FakeResp(payload)):
+            with pytest.raises(ValueError, match='Rate limit exceeded'):
+                self._fetch(p)
+
+
 # ── Account CRUD ─────────────────────────────────────────────────────────
 
 class TestUpdateAccountExtra:

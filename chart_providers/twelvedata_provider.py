@@ -62,6 +62,27 @@ class TwelveDataProvider(ChartProvider):
             'More than enough for a trading journal.'
         )
 
+    @staticmethod
+    def _raise_for_api_error(data: dict) -> None:
+        """Raise a specific exception for a Twelve Data error payload.
+
+        Twelve Data signals errors with a JSON object like
+        ``{"code": 401, "status": "error", "message": "..."}``. Historically this
+        arrived with HTTP 200; since 2025-05-16 it arrives with the matching HTTP
+        status code (GitHub issue #1). The payload is identical either way, so both
+        the HTTPError branch and the HTTP-200 branch funnel through here for
+        consistent messaging. No-op when the payload is not an error.
+        """
+        if not isinstance(data, dict) or data.get('status') != 'error':
+            return
+        msg = data.get('message', 'Unknown error')
+        code = data.get('code', 0)
+        if code == 401:
+            raise ValueError(f'Invalid API key. Please check your Twelve Data key.\n{msg}')
+        elif code == 429:
+            raise ValueError(f'Rate limit exceeded. Wait a minute and try again.\n{msg}')
+        raise ValueError(f'Twelve Data error: {msg}')
+
     def fetch_ohlc(self, symbol: str, start_date: datetime, end_date: datetime,
                    timeframe: str = '1d') -> List[OHLCBar]:
         if not self.api_key:
@@ -112,22 +133,25 @@ class TwelveDataProvider(ChartProvider):
             except json.JSONDecodeError as e:
                 raise ConnectionError(f'Twelve Data returned invalid JSON: {e}. Response: {raw[:200]}')
         except urllib.error.HTTPError as e:
+            # Since 2025-05-16 Twelve Data returns the real HTTP status code
+            # (401/429/...) with the *same* JSON error object in the body that
+            # it used to return under HTTP 200 (GitHub issue #1). Parse it and
+            # funnel through the same handler so 401/429 keep their specific,
+            # user-friendly messages; fall back to a generic error otherwise.
             body = e.read().decode('utf-8', errors='replace')
+            try:
+                err_data = json.loads(body)
+            except json.JSONDecodeError:
+                err_data = None
+            self._raise_for_api_error(err_data)  # no-op unless it's an error payload
             raise ConnectionError(
                 f'Twelve Data API error (HTTP {e.code}): {body[:200]}'
             )
         except urllib.error.URLError as e:
             raise ConnectionError(f'Network error: {e.reason}')
 
-        # Check for API-level errors
-        if data.get('status') == 'error':
-            msg = data.get('message', 'Unknown error')
-            code = data.get('code', 0)
-            if code == 401:
-                raise ValueError(f'Invalid API key. Please check your Twelve Data key.\n{msg}')
-            elif code == 429:
-                raise ValueError(f'Rate limit exceeded. Wait a minute and try again.\n{msg}')
-            raise ValueError(f'Twelve Data error: {msg}')
+        # Check for API-level errors (legacy HTTP-200-with-error-body path)
+        self._raise_for_api_error(data)
 
         values = data.get('values', [])
         if not values:

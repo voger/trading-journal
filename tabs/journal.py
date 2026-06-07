@@ -10,8 +10,8 @@ import theme as _theme
 
 
 class JournalTab(BaseTab):
-    def __init__(self, conn, get_aid_fn, status_bar_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn, status_bar_fn):
+        super().__init__(journal, get_aid_fn)
         self._status = status_bar_fn
         self._dirty = False
         self._loading = False  # suppress dirty-flag during programmatic loads
@@ -95,7 +95,7 @@ class JournalTab(BaseTab):
             self.status_label.setText("")
             return
         ds = self.journal_date.date().toString("yyyy-MM-dd")
-        entry = get_journal_entry(self.conn, ds, self.aid())
+        entry = self.journal.get_journal_entry(ds, self.aid())
         self._loading = True
         if entry:
             for combo, key in [(self.j_cond,'market_conditions'),(self.j_emot,'emotional_state')]:
@@ -128,7 +128,7 @@ class JournalTab(BaseTab):
             return
         ds = self.journal_date.date().toString("yyyy-MM-dd")
         fp_map = {'N/A': None, 'Yes': 1, 'No': 0}
-        save_journal_entry(self.conn, ds, self.aid(),
+        self.journal.save_journal_entry(ds, self.aid(),
             market_conditions=self.j_cond.currentText() or None,
             emotional_state=self.j_emot.currentText() or None,
             followed_plan=fp_map.get(self.j_plan_f.currentText()),

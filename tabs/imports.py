@@ -6,12 +6,13 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from tabs import BaseTab
-from database import get_import_logs, delete_import_log
+from database import get_import_logs
+from import_manager import delete_import
 
 
 class ImportsTab(BaseTab):
-    def __init__(self, conn, get_aid_fn):
-        super().__init__(conn, get_aid_fn)
+    def __init__(self, journal, get_aid_fn):
+        super().__init__(journal, get_aid_fn)
         self._build()
 
     def _build(self):
@@ -42,7 +43,7 @@ class ImportsTab(BaseTab):
 
     def refresh(self):
         self.btn_delete.setEnabled(False)
-        logs = get_import_logs(self.conn, account_id=self.aid())
+        logs = self.journal.get_import_logs(account_id=self.aid())
         self.table.setRowCount(len(logs))
         for row, log in enumerate(logs):
             err_count = 0
@@ -90,12 +91,9 @@ class ImportsTab(BaseTab):
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
-            plugin_name, account_id, affected_instruments = delete_import_log(self.conn, log_id)
-            # Re-run FIFO for executions-mode imports so remaining data stays consistent
-            if affected_instruments:
-                from fifo_engine import run_fifo_matching
-                for inst_id in affected_instruments:
-                    run_fifo_matching(self.conn, account_id, inst_id)
+            # delete_import owns log removal + FIFO re-derivation behind one
+            # interface, so the UI never orchestrates the FIFO engine directly.
+            delete_import(self.journal.conn, log_id)
             self.data_changed.emit()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not delete log:\n{e}")

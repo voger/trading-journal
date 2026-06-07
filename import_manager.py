@@ -111,6 +111,34 @@ def run_import(conn, account_id: int, file_path: str, plugin_name: str = None,
         return _import_trades(conn, account_id, file_path, plugin, raw_data, balance_events, result, progress_cb)
 
 
+def delete_import(conn, log_id: int) -> dict:
+    """Undo an import: delete its log/data and re-derive affected trades.
+
+    Owns the full operation so callers never touch the FIFO engine directly.
+    ``db.delete_import_log`` removes the log, its executions and its FIFO-built
+    trades, returning the affected instruments; this then re-runs FIFO for each
+    so the remaining executions rebuild correct trades. Trades-mode imports have
+    no affected instruments, so nothing is rebuilt.
+
+    Returns a summary dict: ``plugin_name``, ``account_id``,
+    ``affected_instruments`` (set) and ``trades_rebuilt`` (int).
+    """
+    from fifo_engine import run_fifo_matching
+
+    plugin_name, account_id, affected_instruments = db.delete_import_log(conn, log_id)
+    trades_rebuilt = 0
+    for instrument_id in affected_instruments:
+        trade_ids = run_fifo_matching(conn, account_id, instrument_id)
+        trades_rebuilt += len(trade_ids)
+
+    return {
+        'plugin_name': plugin_name,
+        'account_id': account_id,
+        'affected_instruments': affected_instruments,
+        'trades_rebuilt': trades_rebuilt,
+    }
+
+
 # ── Legacy trade-based import (MT4 etc.) ─────────────────────────────────
 
 def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_events, result, progress_cb=None):
