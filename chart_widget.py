@@ -166,6 +166,10 @@ class TradeChartWidget(QWidget):
 
     # ── API Key management ─────────────────────────────────────────────
 
+    def _clear_provider_key(self, pid: str, provider) -> None:
+        key_store.clear(self.conn, pid)
+        provider.api_key = ''
+
     def _ensure_api_key(self, provider):
         if not provider.requires_api_key:
             return True
@@ -217,14 +221,10 @@ class TradeChartWidget(QWidget):
         action = menu.exec(self.key_btn.mapToGlobal(self.key_btn.rect().bottomLeft()))
         if not action: return
         if action == replace_act:
-            key_store.clear(self.conn, pid)
-            if hasattr(provider, 'api_key'):
-                provider.api_key = ''
+            self._clear_provider_key(pid, provider)
             self._prompt_api_key(provider)
         elif delete_act and action == delete_act:
-            key_store.clear(self.conn, pid)
-            if hasattr(provider, 'api_key'):
-                provider.api_key = ''
+            self._clear_provider_key(pid, provider)
             QMessageBox.information(self, "Key Deleted",
                                    f"API key for {provider.DISPLAY_NAME} has been removed.")
 
@@ -301,9 +301,7 @@ class TradeChartWidget(QWidget):
         except Exception as e:
             err_str = str(e)
             if 'Invalid API key' in err_str or '401' in err_str:
-                key_store.clear(self.conn, pid)
-                if hasattr(provider, 'api_key'):
-                    provider.api_key = ''
+                self._clear_provider_key(pid, provider)
             QMessageBox.critical(self, "Error", err_str)
             self.status_label.setText(f"Error: {e}")
         finally:

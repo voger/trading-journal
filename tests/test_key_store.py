@@ -1,29 +1,25 @@
 """Unit tests for chart_providers.key_store — no Qt required."""
 import pytest
+from chart_providers.key_store import get, save, clear
 
 
 class TestKeyStoreGet:
     def test_returns_empty_string_when_no_key_stored(self, conn):
-        from chart_providers.key_store import get
         assert get(conn, 'twelvedata') == ''
 
     def test_returns_stored_key(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', 'abc123')
         assert get(conn, 'twelvedata') == 'abc123'
 
     def test_strips_surrounding_whitespace(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', '  mykey  ')
         assert get(conn, 'twelvedata') == 'mykey'
 
     def test_strips_surrounding_quotes(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', '"quotedkey"')
         assert get(conn, 'twelvedata') == 'quotedkey'
 
     def test_different_providers_are_independent(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'providerA', 'keyA')
         save(conn, 'providerB', 'keyB')
         assert get(conn, 'providerA') == 'keyA'
@@ -32,18 +28,15 @@ class TestKeyStoreGet:
 
 class TestKeyStoreSave:
     def test_save_persists_key(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', 'newkey')
         assert get(conn, 'twelvedata') == 'newkey'
 
     def test_save_overwrites_existing_key(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', 'first')
         save(conn, 'twelvedata', 'second')
         assert get(conn, 'twelvedata') == 'second'
 
     def test_save_empty_string_stores_empty(self, conn):
-        from chart_providers.key_store import save, get
         save(conn, 'twelvedata', 'original')
         save(conn, 'twelvedata', '')
         assert get(conn, 'twelvedata') == ''
@@ -51,18 +44,15 @@ class TestKeyStoreSave:
 
 class TestKeyStoreClear:
     def test_clear_removes_key(self, conn):
-        from chart_providers.key_store import save, clear, get
         save(conn, 'twelvedata', 'abc123')
         clear(conn, 'twelvedata')
         assert get(conn, 'twelvedata') == ''
 
     def test_clear_missing_key_is_noop(self, conn):
-        from chart_providers.key_store import clear, get
         clear(conn, 'nonexistent')  # must not raise
         assert get(conn, 'nonexistent') == ''
 
     def test_clear_only_affects_target_provider(self, conn):
-        from chart_providers.key_store import save, clear, get
         save(conn, 'providerA', 'keyA')
         save(conn, 'providerB', 'keyB')
         clear(conn, 'providerA')
@@ -72,15 +62,12 @@ class TestKeyStoreClear:
 
 class TestKeyStoreNullConn:
     def test_get_returns_empty_when_conn_is_none(self):
-        from chart_providers.key_store import get
         assert get(None, 'twelvedata') == ''
 
     def test_save_is_noop_when_conn_is_none(self):
-        from chart_providers.key_store import save
         save(None, 'twelvedata', 'key')  # must not raise
 
     def test_clear_is_noop_when_conn_is_none(self):
-        from chart_providers.key_store import clear
         clear(None, 'twelvedata')  # must not raise
 
 
