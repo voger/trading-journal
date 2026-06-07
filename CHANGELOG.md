@@ -4,6 +4,16 @@ All notable changes to Trading Journal are documented here.
 
 ---
 
+## [3.3.2] — 2026-06-07
+
+### Fixed
+- Twelve Data chart provider now handles the new standard HTTP error status codes (issue #1). As of 2025-05-16 the API returns real status codes (401/429/...) instead of HTTP 200 with an error object in the body. Both the new and legacy error formats now funnel through a shared `_raise_for_api_error` handler, so invalid-key (401) and rate-limit (429) cases keep their specific, user-friendly messages instead of degrading to a generic connection error.
+
+### Changed
+- Closed the FIFO seam (issue #3): "delete an import log → re-derive affected trades" now lives behind a single `import_manager.delete_import()` interface. The Imports tab no longer imports or calls `fifo_engine` directly, so the two import/undo paths can't drift apart. Behaviour is unchanged; a structural test guards the seam.
+
+---
+
 ## [3.3.1] — 2026-04-05
 
 ### Chore
