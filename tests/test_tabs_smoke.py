@@ -14,19 +14,11 @@ import pytest
 pytest.importorskip("PyQt6")
 from PyQt6.QtWidgets import QApplication
 
-import database as db
-from db.journal import Journal
-
 
 @pytest.fixture(scope="module")
 def qapp():
     app = QApplication.instance() or QApplication([])
     yield app
-
-
-@pytest.fixture
-def journal(conn):
-    return Journal(conn)
 
 
 @pytest.fixture

@@ -25,26 +25,37 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def conn(db_path):
-    """Fresh database connection with schema initialized."""
+    """Fresh database connection with schema initialized.
+
+    Kept for tests that exercise the conn-first data-layer API directly
+    (db.create_trade(conn, ...)) and for raw SQL assertions (conn.execute).
+    """
     connection = db.get_connection(db_path)
     yield connection
     connection.close()
 
 
 @pytest.fixture
-def stock_account(conn):
-    """A stocks account for Trading212 imports."""
-    aid = db.create_account(conn, name='T212 Test', broker='Trading212',
-                            currency='EUR', asset_type='stocks')
-    return aid
+def journal(conn):
+    """A Journal owning the test connection — the seam from issue #6.
+
+    Fixtures and tests use this instead of threading `conn` into crud calls.
+    """
+    return db.Journal(conn)
 
 
 @pytest.fixture
-def forex_account(conn):
+def stock_account(journal):
+    """A stocks account for Trading212 imports."""
+    return journal.create_account(name='T212 Test', broker='Trading212',
+                                  currency='EUR', asset_type='stocks')
+
+
+@pytest.fixture
+def forex_account(journal):
     """A forex account for MT4 imports."""
-    aid = db.create_account(conn, name='MT4 Test', broker='Forex Broker',
-                            currency='EUR', asset_type='forex')
-    return aid
+    return journal.create_account(name='MT4 Test', broker='Forex Broker',
+                                  currency='EUR', asset_type='forex')
 
 
 @pytest.fixture
