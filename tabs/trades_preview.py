@@ -97,7 +97,7 @@ class TradesPreviewMixin:
 
         # Bottom pane: chart widget (renders cached OHLC data)
         from chart_widget import TradeChartWidget
-        self.pv_chart = TradeChartWidget(parent=outer, conn=self.journal.conn)
+        self.pv_chart = TradeChartWidget(parent=outer, journal=self.journal)
         self.pv_chart.setMinimumHeight(150)
         vsplit.addWidget(self.pv_chart)
 

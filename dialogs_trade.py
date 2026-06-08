@@ -365,7 +365,7 @@ class TradeDialog(QDialog):
                 if a['id'] == self.trade['account_id']:
                     asset_type = a['asset_type'] or 'forex'; break
         from chart_widget import TradeChartWidget
-        self.chart_widget = TradeChartWidget(self, conn=self.journal.conn, trade=None, asset_type=asset_type)
+        self.chart_widget = TradeChartWidget(self, journal=self.journal, trade=None, asset_type=asset_type)
         chart_lay.addWidget(self.chart_widget)
         right.addWidget(self.chart_group, 1)
 

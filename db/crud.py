@@ -171,6 +171,13 @@ def update_trade(conn: sqlite3.Connection, trade_id: int, **kwargs):
     conn.commit()
 
 
+def save_chart_data(conn, trade_id, json_str):
+    """Persist cached OHLC JSON for a trade (used by the chart fetch path)."""
+    conn.execute("UPDATE trades SET chart_data = ? WHERE id = ?",
+                 (json_str, trade_id))
+    conn.commit()
+
+
 def delete_trade(conn: sqlite3.Connection, trade_id: int):
     # Collect file paths before the transaction; delete files only after commit
     # so that a failed transaction never leaves orphaned-but-deleted files.

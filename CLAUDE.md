@@ -28,7 +28,7 @@ Python + PyQt6 desktop app, SQLite backend.
 - **`tabs/`** — one `QWidget` per tab, each with `refresh()`
 - **`plugins/`** — auto-discovered import plugins
 - **`asset_modules/`** — per-asset-type behaviour (columns, dialogs, stats)
-- **`chart_providers/`** — price chart backends
+- **`chart_providers/`** — price chart backends (incl. `chart_data.py` — headless `ChartData` core: fetch + 401-recovery + cache via `Journal`; `chart_widget.py` renders what it returns)
 
 ### Plugin interface (`plugins/`)
 

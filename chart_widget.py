@@ -7,8 +7,8 @@ is wrapped in FigureCanvasQTAgg and swapped into the widget.
 Charts are rendered on-the-fly from cached OHLC data stored in the database.
 No persistent image files are saved; pop-out uses a temporary file.
 """
-import json, os, tempfile
-from datetime import datetime, timedelta
+import os, tempfile
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -20,20 +20,8 @@ from PyQt6.QtGui import QDesktopServices
 
 from chart_providers import get_all_providers, get_provider
 from chart_providers import key_store
+from chart_providers.chart_data import ChartData, bars_to_json, bars_from_json
 import theme as _theme
-
-
-def _cal_days_for_bars(tf, n):
-    """Approximate calendar days needed to contain n bars of a given timeframe."""
-    if tf == '1wk':
-        return n * 7 + 3
-    elif tf == '1d':
-        return int(n * 7 / 5) + 3
-    elif tf == '4h':
-        return int(max(1, n / 6) * 7 / 5) + 3
-    elif tf == '1h':
-        return int(max(1, n / 22) * 7 / 5) + 3
-    return n + 5
 
 
 def _fmt_price(price):
@@ -50,9 +38,10 @@ def _fmt_price(price):
 
 class TradeChartWidget(QWidget):
 
-    def __init__(self, parent=None, conn=None, trade=None, asset_type='forex'):
+    def __init__(self, parent=None, journal=None, trade=None, asset_type='forex'):
         super().__init__(parent)
-        self.conn = conn
+        self.conn = journal.conn if journal is not None else None
+        self._core = ChartData(journal) if journal is not None else None
         self.trade = trade
         self.asset_type = asset_type
         self._cached_data = None
@@ -255,21 +244,16 @@ class TradeChartWidget(QWidget):
             except ValueError: pass
 
         tf = self.tf_combo.currentData() or '1d'
-        start = entry_dt - timedelta(days=_cal_days_for_bars(tf, self.bars_before.value()))
-        ref = exit_dt or entry_dt
-        end = ref + timedelta(days=_cal_days_for_bars(tf, self.bars_after.value()))
-        now = datetime.now()
-        capped = end > now
-        if capped:
-            end = now
+        trade_id = self.trade.get('id') if isinstance(self.trade, dict) else None
 
         self.fetch_btn.setEnabled(False); self.fetch_btn.setText("Fetching...")
         self.status_label.setText(f"Fetching {symbol}..."); QApplication.processEvents()
 
         try:
-            norm_sym = provider.normalize_symbol(symbol, self.asset_type)
-            bars = provider.fetch_ohlc(norm_sym, start, end, tf)
-            if not bars: raise ValueError("No data returned")
+            result = self._core.fetch(
+                provider, symbol, self.asset_type, entry_dt, exit_dt, tf,
+                self.bars_before.value(), self.bars_after.value(), trade_id=trade_id)
+            bars = result.bars
             self._cached_data = bars
             self._last_symbol = symbol; self._last_tf = tf
             canvas, fig = self._render(bars, symbol, tf, entry_dt, exit_dt, (10, 5))
@@ -279,32 +263,16 @@ class TradeChartWidget(QWidget):
             import matplotlib.pyplot as plt
             plt.close(fig)
 
-            # Auto-save OHLC data to DB so the trade dialog can load it
-            trade_id = self.trade.get('id') if isinstance(self.trade, dict) else None
-            if self.conn and trade_id:
-                json_str = self.get_cached_data_json()
-                try:
-                    self.conn.execute(
-                        "UPDATE trades SET chart_data = ? WHERE id = ?",
-                        (json_str, trade_id))
-                    self.conn.commit()
-                    if isinstance(self.trade, dict):
-                        self.trade['chart_data'] = json_str
-                except Exception:
-                    pass
+            if isinstance(self.trade, dict) and trade_id:
+                self.trade['chart_data'] = result.chart_json
 
-            status = (f"{len(bars)} bars  {norm_sym} ({tf})  "
+            status = (f"{len(bars)} bars  {result.normalized_symbol} ({tf})  "
                       f"{bars[0].timestamp:%Y-%m-%d} \u2192 {bars[-1].timestamp:%Y-%m-%d}")
-            if capped:
+            if result.capped:
                 status += "  (capped at today)"
             self.status_label.setText(status)
         except Exception as e:
-            err_str = str(e)
-            if 'Invalid API key' in err_str or '401' in err_str:
-                key_store.clear(self.conn, pid)
-                if hasattr(provider, 'api_key'):
-                    provider.api_key = ''
-            QMessageBox.critical(self, "Error", err_str)
+            QMessageBox.critical(self, "Error", str(e))
             self.status_label.setText(f"Error: {e}")
         finally:
             self.fetch_btn.setEnabled(True); self.fetch_btn.setText("Fetch Chart")
@@ -526,21 +494,12 @@ class TradeChartWidget(QWidget):
     # ── Cache ───────────────────────────────────────────────────────────
 
     def get_cached_data_json(self):
-        if not self._cached_data: return None
-        return json.dumps([{'timestamp': b.timestamp.isoformat(),
-            'open': b.open, 'high': b.high, 'low': b.low,
-            'close': b.close, 'volume': b.volume}
-            for b in self._cached_data])
+        return bars_to_json(self._cached_data)
 
     def load_cached_data(self, json_str):
         if not json_str: return
         try:
-            from chart_providers.base import OHLCBar
-            self._cached_data = [
-                OHLCBar(timestamp=datetime.fromisoformat(d['timestamp']),
-                        open=d['open'], high=d['high'], low=d['low'],
-                        close=d['close'], volume=d.get('volume', 0))
-                for d in json.loads(json_str)]
+            self._cached_data = bars_from_json(json_str)
             if self._cached_data and self.trade:
                 entry_dt, exit_dt = self._parse_dates()
                 sym = self.trade.get('symbol', '?')
