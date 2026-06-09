@@ -13,6 +13,7 @@ from PyQt6.QtGui import QColor, QFont, QIcon, QShortcut, QKeySequence, QPalette
 
 from tabs import BaseTab
 import theme as _theme
+import trade_metrics
 from database import (
     get_account, get_trade_chart_counts,
     get_account_events,
@@ -348,24 +349,21 @@ class TradesTab(TradesPreviewMixin, TradesActionsMixin, BaseTab):
                 card.set_value("—", "#666")
             return
 
-        winners = [t for t in closed if effective_pnl(t) > 0]
-        losers  = [t for t in closed if effective_pnl(t) < 0]
-        total = len(closed)
-        gross_profit = sum(effective_pnl(t) for t in winners)
-        gross_loss   = abs(sum(effective_pnl(t) for t in losers))
-        net_pnl = sum(effective_pnl(t) for t in closed)
-        avg_win  = gross_profit / len(winners) if winners else 0
-        avg_loss = gross_loss  / len(losers)  if losers  else 0
-        win_rate = len(winners) / total * 100
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
-        expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
+        stats = trade_metrics.aggregate(closed)
+        total = stats['total_trades']
+        n_win = stats['winners']
+        n_loss = stats['losers']
+        net_pnl = stats['net_pnl']
+        win_rate = stats['win_rate']
+        profit_factor = stats['profit_factor']
+        expectancy = stats['expectancy']
 
         _p = _theme.pos_color()
         _n = _theme.neg_color()
         _z = _theme.neu_color()
 
         self.kpi_trades.set_value(
-            f"{total}  ({len(winners)}W / {len(losers)}L)",
+            f"{total}  ({n_win}W / {n_loss}L)",
             _theme.TEXT_DIM if _theme.is_dark() else "#333")
 
         self.kpi_winrate.set_value(

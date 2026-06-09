@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 import theme as _theme
+import trade_metrics
 from database import (
     get_trade, get_account, effective_pnl,
     get_trade_tags, get_trade_rule_checks,
@@ -227,19 +228,15 @@ class TradesPreviewMixin:
         if sl: lines.append(f"<b>SL:</b> {sl:.5g}")
         if tp: lines.append(f"<b>TP:</b> {tp:.5g}")
 
-        # R:R and R Multiple
-        if entry > 0 and sl and sl > 0 and entry != sl:
-            risk_dist = abs(entry - sl)
-            if tp and tp > 0:
-                reward_dist = abs(tp - entry)
-                rr = reward_dist / risk_dist if risk_dist > 0 else 0
-                _rr_col = _theme.ACCENT if _theme.is_dark() else '#3b82f6'
-                lines.append(f"<b>R:R:</b> <span style='color:{_rr_col}'>1:{rr:.1f}</span>")
-            if exit_p and exit_p > 0:
-                actual = (exit_p - entry) if direction == 'LONG' else (entry - exit_p)
-                r_mult = actual / risk_dist if risk_dist > 0 else 0
-                rc = _theme.pos_color() if r_mult > 0 else _theme.neg_color() if r_mult < 0 else _theme.neu_color()
-                lines.append(f"<b>R Multiple:</b> <span style='color:{rc}'>{r_mult:+.2f}R</span>")
+        # R:R and R Multiple — math lives in trade_metrics; here we only render.
+        rr = trade_metrics.risk_reward(entry, sl, tp)
+        if rr is not None:
+            _rr_col = _theme.ACCENT if _theme.is_dark() else '#3b82f6'
+            lines.append(f"<b>R:R:</b> <span style='color:{_rr_col}'>1:{rr:.1f}</span>")
+        r_mult = trade_metrics.r_multiple(entry, sl, exit_p, direction)
+        if r_mult is not None:
+            rc = _theme.pos_color() if r_mult > 0 else _theme.neg_color() if r_mult < 0 else _theme.neu_color()
+            lines.append(f"<b>R Multiple:</b> <span style='color:{rc}'>{r_mult:+.2f}R</span>")
 
         if risk_pct: lines.append(f"<b>Risk:</b> {risk_pct:.2f}%")
 

@@ -6,54 +6,13 @@ import sqlite3
 from collections import defaultdict
 from datetime import datetime
 
+# The pure trade math lives in the headless trade_metrics module (issue #10);
+# analytics reuses it so the Stats numbers and the Trades-tab KPIs are computed
+# by one function. Re-exported here so existing `from db.analytics import ...`
+# (and the `database` star-import shim) callers keep working unchanged.
+from trade_metrics import effective_pnl, aggregate  # noqa: F401
 
-def effective_pnl(t):
-    """Return the true P/L for a trade: pnl + swap + commission.
-
-    swap and commission are broker-reported costs/credits stored separately
-    from the raw trade profit (e.g. MT4 plugin stores them apart). Including
-    them here ensures win/loss classification and totals match broker statements.
-    """
-    return ((t['pnl_account_currency'] or 0)
-            + (t['swap'] or 0)
-            + (t['commission'] or 0))
-
-
-def _compute_stats(trades):
-    """Compute stats dict from a list of trade rows. Shared by summary and breakdowns."""
-    total = len(trades)
-    if total == 0:
-        return None
-
-    winners = [t for t in trades if effective_pnl(t) > 0]
-    losers = [t for t in trades if effective_pnl(t) < 0]
-    breakeven = [t for t in trades if effective_pnl(t) == 0]
-
-    gross_profit = sum(effective_pnl(t) for t in winners)
-    gross_loss = abs(sum(effective_pnl(t) for t in losers))
-    net_pnl = sum(effective_pnl(t) for t in trades)
-
-    avg_win = gross_profit / len(winners) if winners else 0
-    avg_loss = gross_loss / len(losers) if losers else 0
-    win_rate = len(winners) / total * 100 if total else 0
-
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
-    expectancy = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
-
-    return {
-        'total_trades': total,
-        'winners': len(winners),
-        'losers': len(losers),
-        'breakeven': len(breakeven),
-        'win_rate': win_rate,
-        'gross_profit': gross_profit,
-        'gross_loss': gross_loss,
-        'net_pnl': net_pnl,
-        'avg_win': avg_win,
-        'avg_loss': avg_loss,
-        'profit_factor': profit_factor,
-        'expectancy': expectancy,
-    }
+_compute_stats = aggregate
 
 
 # ── Session definitions for time-of-day grouping ──

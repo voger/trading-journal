@@ -118,6 +118,7 @@ python3 -m PyInstaller \
     --hidden-import "executions_dialog" \
     --hidden-import "chart_widget" \
     --hidden-import "fifo_engine" \
+    --hidden-import "trade_metrics" \
     --hidden-import "import_manager" \
     --hidden-import "backup_manager" \
     --hidden-import "mplfinance" \
