@@ -67,11 +67,6 @@ def parse(file_path: str) -> contract.ParseResult:
     raise NotImplementedError("Template plugin - implement your parser here.")
 
 
-def file_hash(file_path: str) -> str:
-    """Return a hash of the file contents for deduplication."""
-    import hashlib
-    h = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
-            h.update(chunk)
-    return h.hexdigest()
+# Standard file-content hash for deduplication. Reuse the contract's default
+# unless your broker needs a custom one.
+file_hash = contract.default_file_hash

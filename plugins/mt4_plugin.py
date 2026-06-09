@@ -3,7 +3,6 @@ MT4 Detailed Statement Import Plugin
 Parses HTML detailed statements exported from MetaTrader 4.
 """
 
-import hashlib
 import re
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -94,13 +93,7 @@ def parse_mt4_datetime(dt_str: str) -> str:
     return dt_str.replace('.', '-', 2)
 
 
-def file_hash(file_path: str) -> str:
-    """Compute SHA256 hash of a file."""
-    h = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
-            h.update(chunk)
-    return h.hexdigest()
+file_hash = contract.default_file_hash
 
 
 def validate(file_path: str) -> tuple:

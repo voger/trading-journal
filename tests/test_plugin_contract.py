@@ -8,6 +8,8 @@ These tests pin the contract down:
     declared accessors, not hasattr/getattr sniffing in callers.
   - import_manager / trades_actions contain no interface-sniffing.
 """
+import hashlib
+import os
 import pathlib
 import pytest
 
@@ -161,6 +163,69 @@ class TestOptionalAccessors:
         assert len(pr.records) == 10
 
 
+# ── default_file_hash: one shared dedup hash, not copied per plugin ──────
+
+class TestDefaultFileHash:
+
+    def test_matches_hashlib(self, tmp_path):
+        data = b"hello world\n"
+        f = tmp_path / "x.bin"
+        f.write_bytes(data)
+        assert contract.default_file_hash(str(f)) == hashlib.sha256(data).hexdigest()
+
+    def test_empty_file(self, tmp_path):
+        """Boundary: an empty file hashes to the canonical empty-SHA-256."""
+        f = tmp_path / "empty.bin"
+        f.write_bytes(b"")
+        assert contract.default_file_hash(str(f)) == hashlib.sha256(b"").hexdigest()
+
+    def test_large_file_is_chunked_correctly(self, tmp_path):
+        """Boundary: content spanning many 8192-byte read chunks still hashes right."""
+        data = os.urandom(8192 * 3 + 17)
+        f = tmp_path / "big.bin"
+        f.write_bytes(data)
+        assert contract.default_file_hash(str(f)) == hashlib.sha256(data).hexdigest()
+
+    def test_shipped_plugins_reuse_the_contract_default(self):
+        """The dedup goal: plugins assign the contract's hash, never re-copy it."""
+        for name in ('trading212_csv', 'mt4_detailed_statement'):
+            mod = PLUGINS[name]
+            assert mod.file_hash is contract.default_file_hash, (
+                f"{name}.file_hash should reuse contract.default_file_hash"
+            )
+
+    def test_plugin_file_hash_produces_valid_sha256(self, tmp_path):
+        f = tmp_path / "stmt.htm"
+        f.write_text("<html></html>")
+        for name, mod in PLUGINS.items():
+            h = mod.file_hash(str(f))
+            assert len(h) == 64 and all(c in '0123456789abcdef' for c in h), (
+                f"{name}.file_hash did not return a SHA-256 hex digest"
+            )
+
+
+# ── is_executions_mode: the single home for mode classification ──────────
+
+class TestIsExecutionsMode:
+
+    def test_true_for_executions_plugin(self):
+        assert contract.is_executions_mode(PLUGINS['trading212_csv']) is True
+
+    def test_false_for_trades_plugin(self):
+        assert contract.is_executions_mode(PLUGINS['mt4_detailed_statement']) is False
+
+    def test_matches_declared_mode_for_every_plugin(self):
+        for name, mod in PLUGINS.items():
+            expected = mod.IMPORT_MODE == contract.IMPORT_MODE_EXECUTIONS
+            assert contract.is_executions_mode(mod) is expected, name
+
+    def test_modeless_object_is_not_executions(self):
+        """Defensive default: an object with no IMPORT_MODE is treated as trades."""
+        class NoMode:
+            pass
+        assert contract.is_executions_mode(NoMode()) is False
+
+
 # ── Structural guards: no interface-sniffing in callers ──────────────────
 
 class TestNoSniffingInCallers:
@@ -190,3 +255,9 @@ class TestNoSniffingInCallers:
     def test_trades_actions_no_default_asset_type_getattr(self):
         src = self._src('tabs.trades_actions')
         assert "getattr(plugin, 'DEFAULT_ASSET_TYPE'" not in src
+
+    def test_crud_classifies_mode_via_contract(self):
+        """db.crud asks the contract, not a literal IMPORT_MODE == 'executions'."""
+        src = self._src('db.crud')
+        assert "== 'executions'" not in src
+        assert 'contract.is_executions_mode' in src

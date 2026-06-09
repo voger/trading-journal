@@ -26,6 +26,7 @@ A conforming plugin module declares:
 """
 from __future__ import annotations
 
+import hashlib
 from typing import NamedTuple, Optional, Protocol, runtime_checkable
 
 
@@ -51,6 +52,19 @@ class ParseResult(NamedTuple):
     """
     records: list
     balance_events: list
+
+
+def default_file_hash(file_path: str) -> str:
+    """SHA-256 of a file's contents, streamed in chunks.
+
+    The standard ``file_hash`` implementation — plugins assign
+    ``file_hash = contract.default_file_hash`` instead of re-copying it.
+    """
+    h = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def coerce_parse_result(result) -> ParseResult:
@@ -136,3 +150,12 @@ def account_info(plugin, file_path: str) -> Optional[dict]:
 def default_asset_type(plugin) -> str:
     """The plugin's preferred asset type for newly created accounts."""
     return getattr(plugin, 'DEFAULT_ASSET_TYPE', DEFAULT_ASSET_TYPE)
+
+
+def is_executions_mode(plugin) -> bool:
+    """True if the plugin imports in executions mode (FIFO-built trades).
+
+    The single home for classifying a plugin's import mode — callers ask here
+    instead of comparing ``IMPORT_MODE`` against literal strings.
+    """
+    return getattr(plugin, 'IMPORT_MODE', IMPORT_MODE_TRADES) == IMPORT_MODE_EXECUTIONS

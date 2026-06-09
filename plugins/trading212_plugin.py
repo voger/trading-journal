@@ -11,7 +11,6 @@ Handles:
 """
 
 import csv
-import hashlib
 from pathlib import Path
 
 try:
@@ -39,12 +38,7 @@ _INTEREST_ACTIONS = {'Interest on cash'}
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-def file_hash(file_path: str) -> str:
-    h = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
-            h.update(chunk)
-    return h.hexdigest()
+file_hash = contract.default_file_hash
 
 
 def _safe_float(val: str, default=0.0) -> float:
