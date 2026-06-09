@@ -456,8 +456,9 @@ def _plugin_is_executions_mode(plugin_name: str) -> bool:
     """
     try:
         from importlib import import_module
+        from plugins import contract
         mod = import_module(f'plugins.{plugin_name}')
-        return getattr(mod, 'IMPORT_MODE', 'trades') == 'executions'
+        return contract.is_executions_mode(mod)
     except Exception:
         return plugin_name in _EXECUTIONS_MODE_PLUGINS
 

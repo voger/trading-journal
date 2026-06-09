@@ -3,10 +3,14 @@ MT4 Detailed Statement Import Plugin
 Parses HTML detailed statements exported from MetaTrader 4.
 """
 
-import hashlib
 import re
 from pathlib import Path
 from bs4 import BeautifulSoup
+
+try:
+    from . import contract
+except ImportError:  # pragma: no cover - exercised only outside the package
+    from plugins import contract
 
 
 def _safe_float(text: str, default: float = 0.0) -> float:
@@ -23,6 +27,8 @@ def _safe_float(text: str, default: float = 0.0) -> float:
 PLUGIN_NAME = "mt4_detailed_statement"
 DISPLAY_NAME = "MT4 Detailed Statement (HTML)"
 SUPPORTED_EXTENSIONS = [".htm", ".html"]
+IMPORT_MODE = contract.IMPORT_MODE_TRADES  # pre-matched trade rows (no FIFO)
+DEFAULT_ASSET_TYPE = "forex"
 
 # Symbols that are clearly not forex
 CRYPTO_SYMBOLS = {'ADAUSD', 'BTCUSD', 'ETHUSD', 'XRPUSD', 'DOTUSD', 'SOLUSD', 'LTCUSD'}
@@ -87,13 +93,7 @@ def parse_mt4_datetime(dt_str: str) -> str:
     return dt_str.replace('.', '-', 2)
 
 
-def file_hash(file_path: str) -> str:
-    """Compute SHA256 hash of a file."""
-    h = hashlib.sha256()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
-            h.update(chunk)
-    return h.hexdigest()
+file_hash = contract.default_file_hash
 
 
 def validate(file_path: str) -> tuple:
@@ -113,10 +113,10 @@ def validate(file_path: str) -> tuple:
         return False, f"Error reading file: {e}"
 
 
-def parse(file_path: str) -> tuple:
+def parse(file_path: str) -> contract.ParseResult:
     """
     Parse an MT4 detailed statement HTML file.
-    Returns a list of standardized trade dictionaries.
+    Returns a ParseResult(records=trade dicts, balance_events=deposit/withdrawal dicts).
     """
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
@@ -266,7 +266,7 @@ def parse(file_path: str) -> tuple:
             # Skip malformed rows
             continue
 
-    return trades, balance_events
+    return contract.ParseResult(trades, balance_events)
 
 
 def parse_account_info(file_path: str) -> dict:

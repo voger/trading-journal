@@ -300,6 +300,7 @@ class TradesActionsMixin:
 
     def _on_import(self):
         from import_manager import get_available_plugins, run_import, detect_plugin
+        from plugins import contract
 
         plugins = get_available_plugins()
         filters = []
@@ -332,11 +333,11 @@ class TradesActionsMixin:
             lay.addWidget(combo)
 
             plugin = detect_plugin(fp)
-            if plugin and hasattr(plugin, 'parse_account_info'):
+            if plugin is not None:
                 try:
-                    info = plugin.parse_account_info(fp)
-                    if info.get('broker'):
-                        asset_type = getattr(plugin, 'DEFAULT_ASSET_TYPE', 'forex')
+                    info = contract.account_info(plugin, fp)
+                    if info and info.get('broker'):
+                        asset_type = contract.default_asset_type(plugin)
                         btn = QPushButton(f"+ Create from statement: "
                                           f"{info.get('account_number','')} @ {info['broker']}")
                         def _ac(checked=False, info=info, asset_type=asset_type):

@@ -15,7 +15,10 @@ try:
 except ImportError:
     import database as db
 
-# Import plugins robustly — missing plugins are skipped, not fatal
+from plugins import contract
+
+# Import plugins robustly — missing or non-conforming plugins are skipped,
+# not fatal. Conformance is judged against the declared contract (issue #4).
 PLUGINS = {}
 
 def _try_import_plugin(name):
@@ -28,7 +31,7 @@ def _try_import_plugin(name):
 
 for _name in ['mt4_plugin', 'trading212_plugin']:
     _mod = _try_import_plugin(_name)
-    if _mod and hasattr(_mod, 'PLUGIN_NAME'):
+    if _mod and contract.conforms(_mod):
         PLUGINS[_mod.PLUGIN_NAME] = _mod
 
 
@@ -89,23 +92,19 @@ def run_import(conn, account_id: int, file_path: str, plugin_name: str = None,
         result['message'] = f"Validation failed: {msg}"
         return result
 
-    # Parse
+    # Parse — the contract normalizes every plugin to one ParseResult shape.
     try:
-        parse_result = plugin.parse(file_path)
-        if isinstance(parse_result, tuple):
-            raw_data, balance_events = parse_result
-        else:
-            raw_data = parse_result
-            balance_events = []
+        parse_result = contract.parse_file(plugin, file_path)
     except Exception as e:
         result['message'] = f"Parse error: {e}"
         result['errors'].append(str(e))
         return result
 
-    # Determine import mode
-    import_mode = getattr(plugin, 'IMPORT_MODE', 'trades')
+    raw_data = parse_result.records
+    balance_events = parse_result.balance_events
 
-    if import_mode == 'executions':
+    # Import mode is declared by every plugin (no accidental default).
+    if plugin.IMPORT_MODE == contract.IMPORT_MODE_EXECUTIONS:
         return _import_executions(conn, account_id, file_path, plugin, raw_data, balance_events, result, progress_cb)
     else:
         return _import_trades(conn, account_id, file_path, plugin, raw_data, balance_events, result, progress_cb)
@@ -150,7 +149,7 @@ def _import_trades(conn, account_id, file_path, plugin, raw_trades, balance_even
         result['success'] = True
         return result
 
-    fhash = plugin.file_hash(file_path) if hasattr(plugin, 'file_hash') else None
+    fhash = plugin.file_hash(file_path)
     errors = []
     imported = 0
     skipped = 0
@@ -272,7 +271,7 @@ def _import_executions(conn, account_id, file_path, plugin, raw_executions, bala
         result['success'] = True
         return result
 
-    fhash = plugin.file_hash(file_path) if hasattr(plugin, 'file_hash') else None
+    fhash = plugin.file_hash(file_path)
     errors = []
     imported = 0
     skipped = 0
