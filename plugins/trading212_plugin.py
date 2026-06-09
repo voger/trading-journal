@@ -14,6 +14,11 @@ import csv
 import hashlib
 from pathlib import Path
 
+try:
+    from . import contract
+except ImportError:  # pragma: no cover - exercised only outside the package
+    from plugins import contract
+
 
 PLUGIN_NAME = "trading212_csv"
 DISPLAY_NAME = "Trading212 CSV Export"
@@ -22,7 +27,7 @@ DEFAULT_ASSET_TYPE = "stocks"
 
 # This plugin returns raw executions, not pre-matched trades.
 # The import manager uses the FIFO engine to build trades from these.
-IMPORT_MODE = "executions"
+IMPORT_MODE = contract.IMPORT_MODE_EXECUTIONS
 
 # Action classification
 _BUY_ACTIONS = {'Market buy', 'Stop buy', 'Limit buy'}
@@ -87,12 +92,12 @@ def validate(file_path: str) -> tuple:
 
 # ── Parsing ──────────────────────────────────────────────────────────────
 
-def parse(file_path: str) -> tuple:
+def parse(file_path: str) -> contract.ParseResult:
     """
     Parse a Trading212 CSV export.
 
-    Returns (executions, balance_events) where:
-      - executions: list of raw buy/sell execution dicts
+    Returns ParseResult(records, balance_events) where:
+      - records: list of raw buy/sell execution dicts
       - balance_events: list of deposit/dividend/interest dicts
     """
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -196,4 +201,4 @@ def parse(file_path: str) -> tuple:
                 'executed_at': time_str,
             })
 
-    return executions, balance_events
+    return contract.ParseResult(executions, balance_events)

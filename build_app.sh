@@ -95,6 +95,7 @@ python3 -m PyInstaller \
     --add-data "icons:icons" \
     --add-data "fonts:fonts" \
     --hidden-import "plugins" \
+    --hidden-import "plugins.contract" \
     --hidden-import "plugins.trading212_plugin" \
     --hidden-import "plugins.mt4_plugin" \
     --hidden-import "asset_modules" \
