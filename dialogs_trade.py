@@ -20,6 +20,7 @@ from PyQt6.QtCore import Qt, QDateTime
 from PyQt6.QtGui import QPixmap, QIcon
 
 import theme as _theme
+import trade_metrics
 from database import (
     get_accounts, get_setup_types, get_setup_rules,
     get_trade_charts, get_trade_rule_checks,
@@ -409,17 +410,9 @@ class TradeDialog(QDialog):
         Only valid when the stored SL is the *initial* stop loss (fixed stops).
         Returns float or None if any required field is missing/zero.
         """
-        entry = self.entry_price.value()
-        sl = self.sl_spin.value()
-        exit_p = self.exit_price.value()
-        if entry <= 0 or sl <= 0 or exit_p <= 0:
-            return None
-        risk = abs(entry - sl)
-        if risk < 1e-10:
-            return None
-        is_long = self.dir_combo.currentText() == 'long'
-        actual = (exit_p - entry) if is_long else (entry - exit_p)
-        return actual / risk
+        return trade_metrics.r_multiple(
+            self.entry_price.value(), self.sl_spin.value(),
+            self.exit_price.value(), self.dir_combo.currentText())
 
     def _calc_risk_percent(self):
         """Auto-calculate risk % from entry/SL/size/exit/P&L and account balance.
@@ -458,22 +451,17 @@ class TradeDialog(QDialog):
         sl = self.sl_spin.value()
         tp = self.tp_spin.value()
         exit_p = self.exit_price.value()
-        is_long = self.dir_combo.currentText() == 'long'
 
-        # R:R Ratio
-        if entry > 0 and sl > 0 and tp > 0 and entry != sl:
-            risk = abs(entry - sl)
-            reward = abs(tp - entry)
-            rr = reward / risk if risk > 0 else 0
+        # R:R Ratio — math lives in trade_metrics; here we only render.
+        rr = trade_metrics.risk_reward(entry, sl, tp)
+        if rr is not None:
             self.metric_rr.set_value(f"1:{rr:.1f}", "#3b82f6")
         else:
             self.metric_rr.set_value("—")
 
         # R Multiple
-        if entry > 0 and sl > 0 and exit_p > 0 and entry != sl:
-            risk = abs(entry - sl)
-            actual = (exit_p - entry) if is_long else (entry - exit_p)
-            r_mult = actual / risk if risk > 0 else 0
+        r_mult = trade_metrics.r_multiple(entry, sl, exit_p, self.dir_combo.currentText())
+        if r_mult is not None:
             self.metric_r.set_value(f"{r_mult:+.2f}R", _theme.pnl_color(r_mult))
         else:
             self.metric_r.set_value("—")

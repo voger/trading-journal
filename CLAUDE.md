@@ -22,6 +22,7 @@ Python + PyQt6 desktop app, SQLite backend.
 
 - **`database.py`** — star-import shim; real code in `db/` (incl. `db/journal.py` — the `Journal` repository seam the UI uses instead of threading `conn`; see `/db` skill)
 - **`fifo_engine.py`** — FIFO matching for stocks (forex bypasses it)
+- **`trade_metrics.py`** — headless, Qt-free trade math: `effective_pnl`, `aggregate` (win-rate/profit-factor/expectancy), `r_multiple`, `risk_reward`. The single home for these formulas; `db.analytics`, the Trades-tab KPIs, the trade preview and the trade dialog all call in and only *render* (issue #10)
 - **`import_manager.py`** — plugin selection → validate → parse → import
 - **`main.py`** — app entry, account CRUD, backup/restore, tab wiring
 - **`theme.py`** — unified P&L color palette
